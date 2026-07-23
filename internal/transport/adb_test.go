@@ -38,6 +38,25 @@ func TestADBExecBuildsShellCommand(t *testing.T) {
 	}
 }
 
+func TestADBRunAsWrapsCommands(t *testing.T) {
+	var got []string
+	a := &adbConn{bin: "adb", serial: "SER", asPackage: "com.x", run: func(_ context.Context, name string, args ...string) ([]byte, error) {
+		got = append([]string{name}, args...)
+		return nil, nil
+	}}
+	a.Exec(context.Background(), "id", "-u")
+	want := []string{"adb", "-s", "SER", "shell", "run-as", "com.x", "id", "-u"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("run-as Exec args = %v, want %v", got, want)
+	}
+
+	a.find(context.Background(), "/data/data/com.x", "-type", "d")
+	wantFind := []string{"adb", "-s", "SER", "shell", "run-as", "com.x", "find", "/data/data/com.x", "-type", "d"}
+	if !reflect.DeepEqual(got, wantFind) {
+		t.Errorf("run-as find args = %v, want %v", got, wantFind)
+	}
+}
+
 const (
 	walkAll = `/data/data/com.x
 /data/data/com.x/files

@@ -41,6 +41,7 @@
         <div class="row-actions">
           <input id="apps-search" class="search" placeholder="filter by bundle id or name" />
           <label class="inline"><input type="checkbox" id="apps-system" /> Include system apps</label>
+          <span class="mime" id="apps-count"></span>
           <span class="mime" id="apps-device"></span>
         </div>
       </div>
@@ -60,6 +61,7 @@
         <label>Device ID <input id="ex-device" placeholder="select in Devices, or type a serial" /></label>
         <label>App / bundle id <input id="ex-bundle" placeholder="com.example.app" /></label>
         <label>Destination dir <input id="ex-dest" placeholder="/path/to/output" /></label>
+        <button class="browse" id="ex-dest-browse" type="button">Browse…</button>
         <label>iOS scope
           <select id="ex-scope">
             <option value="container">container</option>
@@ -76,7 +78,9 @@
       <h2>Scan for secrets</h2>
       <div class="form">
         <label>Extracted root <input id="sc-root" placeholder="/path/to/extraction" /></label>
+        <button class="browse" id="sc-root-browse" type="button">Browse…</button>
         <label>Known-secrets file <input id="sc-known" placeholder="(optional)" /></label>
+        <button class="browse" id="sc-known-browse" type="button">Browse…</button>
         <button class="primary" id="btn-scan">Scan</button>
       </div>
       <table class="grid" id="scan-table">
@@ -90,7 +94,9 @@
       <h2>Diff two captures</h2>
       <div class="form">
         <label>Root A <input id="df-a" placeholder="/path/to/A" /></label>
+        <button class="browse" id="df-a-browse" type="button">Browse…</button>
         <label>Root B <input id="df-b" placeholder="/path/to/B" /></label>
+        <button class="browse" id="df-b-browse" type="button">Browse…</button>
         <button class="primary" id="btn-diff">Diff</button>
       </div>
       <table class="grid" id="diff-table">
@@ -104,6 +110,7 @@
       <h2>Inspect SQLite database</h2>
       <div class="form">
         <label>Database file <input id="db-file" placeholder="/path/to/app.db" /></label>
+        <button class="browse" id="db-file-browse" type="button">Browse…</button>
         <button id="btn-db-tables">List tables</button>
         <label>Table <input id="db-table" placeholder="table name" /></label>
         <label>Limit <input id="db-limit" type="number" value="100" /></label>
@@ -118,6 +125,7 @@
       <h2>Render a file</h2>
       <div class="form">
         <label>File <input id="rn-file" placeholder="/path/to/file" /></label>
+        <button class="browse" id="rn-file-browse" type="button">Browse…</button>
         <button class="primary" id="btn-render">Render</button>
         <span class="mime" id="rn-mime"></span>
       </div>

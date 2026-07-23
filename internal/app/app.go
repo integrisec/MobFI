@@ -23,6 +23,7 @@ import (
 type App struct {
 	Detectors  *device.Registry
 	Transports *transport.Registry
+	ADB        *transport.ADBConnector // Android access (supports run-as)
 	AFC        *transport.AFCConnector // iOS app-container access (app-scoped)
 	AppListers []device.AppLister
 	Scanner    *secrets.Scanner
@@ -35,6 +36,7 @@ func New() *App {
 	return &App{
 		Detectors:  device.DefaultRegistry(),
 		Transports: transport.DefaultRegistry(),
+		ADB:        transport.NewADBConnector(),
 		AFC:        transport.NewAFCConnector(),
 		AppListers: device.DefaultAppListers(),
 		Scanner:    secrets.NewScanner(secrets.DefaultRules()),
@@ -68,7 +70,7 @@ func (a *App) ListApps(ctx context.Context, d device.Device, includeSystem bool)
 func (a *App) ExtractApp(ctx context.Context, d device.Device, bundleID, dst, afcScope string) (*extract.Result, error) {
 	switch d.Platform {
 	case device.Android:
-		conn, err := a.Transports.Connect(ctx, d)
+		conn, err := a.androidConn(ctx, d, bundleID)
 		if err != nil {
 			return nil, err
 		}
@@ -92,6 +94,21 @@ func (a *App) ExtractApp(ctx context.Context, d device.Device, bundleID, dst, af
 	default:
 		return nil, fmt.Errorf("extract: unknown platform %q", d.Platform)
 	}
+}
+
+// androidConn picks how to reach an app's private data. It prefers
+// `run-as <pkg>` (works on a non-rooted device for a debuggable app) and
+// probes that it can actually read the data dir; if not (e.g. a
+// non-debuggable app on a rooted device), it falls back to a direct shell
+// session, which succeeds when the shell user has access (root).
+func (a *App) androidConn(ctx context.Context, d device.Device, pkg string) (transport.Conn, error) {
+	if runas, err := a.ADB.ConnectAs(ctx, d, pkg); err == nil {
+		if _, probeErr := runas.Exec(ctx, "ls", "/data/data/"+pkg); probeErr == nil {
+			return runas, nil
+		}
+		runas.Close()
+	}
+	return a.ADB.Connect(ctx, d)
 }
 
 // ScanSecrets walks root and reports any secret matches.

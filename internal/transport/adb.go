@@ -37,22 +37,41 @@ func (c *ADBConnector) Supports(d device.Device) bool {
 	return d.Platform == device.Android
 }
 
-// Connect binds a session to d. It does not spawn a process; failures
-// surface when an operation actually runs.
+// Connect binds a device-wide session to d (commands run as the `shell`
+// user). It does not spawn a process; failures surface when an operation
+// actually runs.
 func (c *ADBConnector) Connect(_ context.Context, d device.Device) (Conn, error) {
+	return c.connect(d, "")
+}
+
+// ConnectAs binds a session that runs every command through
+// `run-as <pkg>`, executing as the app's own uid. This is how a
+// non-rooted device reads a debuggable app's private /data/data/<pkg>
+// files; on a device where the shell user already has access, use Connect.
+func (c *ADBConnector) ConnectAs(_ context.Context, d device.Device, pkg string) (Conn, error) {
+	if pkg == "" {
+		return nil, errors.New("adb: package required for run-as")
+	}
+	return c.connect(d, pkg)
+}
+
+func (c *ADBConnector) connect(d device.Device, pkg string) (Conn, error) {
 	if !c.Supports(d) {
 		return nil, ErrNoConnector
 	}
 	if d.ID == "" {
 		return nil, errors.New("adb: device has no serial")
 	}
-	return &adbConn{bin: c.bin(), serial: d.ID}, nil
+	return &adbConn{bin: c.bin(), serial: d.ID, asPackage: pkg}, nil
 }
 
 // adbConn is a transport.Conn backed by the adb CLI.
 type adbConn struct {
 	bin    string
 	serial string
+	// asPackage, when set, wraps every on-device command in
+	// `run-as <asPackage>` so it executes as that app's uid.
+	asPackage string
 	// run executes a command and buffers its stdout. It is a field so
 	// tests can stub adb; nil means os/exec. Streaming (Open) always uses
 	// os/exec directly.
@@ -66,9 +85,19 @@ func (a *adbConn) exec(ctx context.Context, args ...string) ([]byte, error) {
 	return exec.CommandContext(ctx, a.bin, args...).Output()
 }
 
+// shellCmd builds the on-device command, prefixing run-as when app-scoped.
+func (a *adbConn) shellCmd(cmd string, args ...string) []string {
+	out := make([]string, 0, len(args)+3)
+	if a.asPackage != "" {
+		out = append(out, "run-as", a.asPackage)
+	}
+	out = append(out, cmd)
+	return append(out, args...)
+}
+
 // Exec runs a shell command on the device via `adb shell`.
 func (a *adbConn) Exec(ctx context.Context, cmd string, args ...string) ([]byte, error) {
-	full := append([]string{"-s", a.serial, "shell", cmd}, args...)
+	full := append([]string{"-s", a.serial, "shell"}, a.shellCmd(cmd, args...)...)
 	return a.exec(ctx, full...)
 }
 
@@ -76,7 +105,8 @@ func (a *adbConn) Exec(ctx context.Context, cmd string, args ...string) ([]byte,
 // than `adb shell` so the byte stream is not mangled by pseudo-terminal
 // newline translation.
 func (a *adbConn) Open(ctx context.Context, path string) (io.ReadCloser, error) {
-	cmd := exec.CommandContext(ctx, a.bin, "-s", a.serial, "exec-out", "cat", path)
+	args := append([]string{"-s", a.serial, "exec-out"}, a.shellCmd("cat", path)...)
+	cmd := exec.CommandContext(ctx, a.bin, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -130,7 +160,7 @@ func (a *adbConn) Walk(ctx context.Context, root string, fn fs.WalkDirFunc) erro
 func (a *adbConn) Close() error { return nil }
 
 func (a *adbConn) find(ctx context.Context, root string, extra ...string) ([]string, error) {
-	args := append([]string{"-s", a.serial, "shell", "find", root}, extra...)
+	args := append([]string{"-s", a.serial, "shell"}, a.shellCmd("find", append([]string{root}, extra...)...)...)
 	out, err := a.exec(ctx, args...)
 	return parseLines(out), err
 }

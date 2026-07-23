@@ -92,6 +92,8 @@ button.primary:hover { background: var(--accent); }
   white-space: nowrap;
 }
 .grid th { color: var(--muted); font-weight: 600; }
+.grid th.sortable { cursor: pointer; user-select: none; }
+.grid th.sortable:hover { color: var(--text); }
 .grid tbody tr:hover { background: var(--panel); }
 .grid .empty td { color: var(--muted); text-align: center; padding: 20px; }
 

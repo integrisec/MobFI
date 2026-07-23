@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
+
 	"github.com/integrisec/MobFI/internal/app"
 	"github.com/integrisec/MobFI/internal/dbview"
 	"github.com/integrisec/MobFI/internal/device"
@@ -86,4 +88,21 @@ func (g *GUI) DBRead(path, table string, limit int) (*dbview.Table, error) {
 // Render produces a human-readable view of a file.
 func (g *GUI) Render(path string) (*render.View, error) {
 	return g.app.Render(g.ctx, path)
+}
+
+// PickDirectory opens a native folder chooser and returns the selected path
+// (empty if cancelled).
+func (g *GUI) PickDirectory() (string, error) {
+	return wailsruntime.OpenDirectoryDialog(g.ctx, wailsruntime.OpenDialogOptions{Title: "Select a folder"})
+}
+
+// PickFile opens a native file chooser and returns the selected path (empty
+// if cancelled).
+func (g *GUI) PickFile() (string, error) {
+	return wailsruntime.OpenFileDialog(g.ctx, wailsruntime.OpenDialogOptions{Title: "Select a file"})
+}
+
+// Copy places text on the system clipboard.
+func (g *GUI) Copy(text string) error {
+	return wailsruntime.ClipboardSetText(g.ctx, text)
 }

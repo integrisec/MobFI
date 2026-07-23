@@ -137,6 +137,11 @@ mfi extract -device <serial> -app com.example.app -out ./capture
 mfi extract -device <udid> -app com.example.app -out ./capture -scope documents
 ```
 
+On Android, an app's private `/data/data/<pkg>` is read via `run-as <pkg>`,
+which works for **debuggable** apps on a non-rooted device; on a rooted device
+it falls back to a direct shell session. Non-debuggable apps on a non-rooted
+device can't be read (that's an OS restriction, not a MobFI limitation).
+
 ### Scan for secrets
 
 ```sh
