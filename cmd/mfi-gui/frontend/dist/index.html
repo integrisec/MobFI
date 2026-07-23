@@ -166,7 +166,7 @@
         <div class="row-actions">
           <label class="inline">Device <select id="con-device"></select></label>
           <span id="con-ssh" class="hidden">
-            <input id="con-host" class="search" placeholder="ssh host" />
+            <input id="con-host" class="search" placeholder="host (blank = USB)" />
             <input id="con-port" placeholder="22" style="min-width:70px" />
             <input id="con-user" placeholder="root" style="min-width:90px" />
           </span>
@@ -174,7 +174,7 @@
           <button id="con-disconnect" disabled>Disconnect</button>
         </div>
       </div>
-      <p class="hint">Android opens an <code>adb shell</code>; iOS needs a jailbroken device running sshd — enter its host/port/user (over USB, forward a port with <code>iproxy</code> first).</p>
+      <p class="hint">Android opens an <code>adb shell</code>. iOS needs a jailbroken device running sshd: leave <em>host</em> blank to auto-forward over USB with <code>iproxy</code> (port = the device's SSH port, default 22), or set a host for network SSH.</p>
       <div class="term" id="con-term"></div>
     </section>
   </main>

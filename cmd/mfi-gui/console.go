@@ -3,8 +3,10 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
+	"strconv"
 	"sync"
 	"time"
 
@@ -22,6 +24,7 @@ func firstNonEmpty(a, b string) string {
 type consoleSession struct {
 	ptmx *os.File
 	cmd  *exec.Cmd
+	aux  *exec.Cmd // e.g. iproxy USB port-forward for iOS SSH
 }
 
 var (
@@ -35,18 +38,36 @@ var (
 // therefore needs a jailbroken device running sshd (password prompts are
 // handled interactively in the terminal). Returns the session id.
 func (g *GUI) ConsoleStart(deviceID, platform, sshUser, sshHost, sshPort string) (string, error) {
-	var cmd *exec.Cmd
+	var cmd, aux *exec.Cmd
+	sshOpts := []string{"-o", "StrictHostKeyChecking=accept-new", "-o", "UserKnownHostsFile=/dev/null"}
+
 	if platform == "ios" {
-		if sshHost == "" {
-			return "", errors.New("SSH host required — the iOS console needs a jailbroken device running sshd")
-		}
 		user := firstNonEmpty(sshUser, "root")
-		port := firstNonEmpty(sshPort, "22")
-		cmd = exec.Command("ssh",
-			"-p", port,
-			"-o", "StrictHostKeyChecking=accept-new",
-			"-o", "UserKnownHostsFile=/dev/null",
-			user+"@"+sshHost)
+		if sshHost != "" {
+			// Direct network SSH.
+			args := append([]string{"-p", firstNonEmpty(sshPort, "22")}, sshOpts...)
+			cmd = exec.Command("ssh", append(args, user+"@"+sshHost)...)
+		} else {
+			// USB: forward a local port to the device's SSH port with iproxy.
+			if deviceID == "" {
+				return "", errors.New("select a device (USB SSH forwarding needs a UDID)")
+			}
+			local, err := freePort()
+			if err != nil {
+				return "", err
+			}
+			devicePort := firstNonEmpty(sshPort, "22")
+			aux = exec.Command("iproxy", "-u", deviceID, fmt.Sprintf("%d:%s", local, devicePort))
+			if err := aux.Start(); err != nil {
+				return "", fmt.Errorf("iproxy: %w", err)
+			}
+			if err := waitPort(local, 3*time.Second); err != nil {
+				_ = aux.Process.Kill()
+				return "", fmt.Errorf("iproxy forward not ready (is the device jailbroken with sshd on %s?): %w", devicePort, err)
+			}
+			args := append([]string{"-p", strconv.Itoa(local)}, sshOpts...)
+			cmd = exec.Command("ssh", append(args, user+"@127.0.0.1")...)
+		}
 	} else {
 		if deviceID == "" {
 			return "", errors.New("select a device")
@@ -57,12 +78,15 @@ func (g *GUI) ConsoleStart(deviceID, platform, sshUser, sshHost, sshPort string)
 
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
+		if aux != nil && aux.Process != nil {
+			_ = aux.Process.Kill()
+		}
 		return "", err
 	}
 
 	id := fmt.Sprintf("con-%d", time.Now().UnixNano())
 	consolesMu.Lock()
-	consoles[id] = &consoleSession{ptmx: ptmx, cmd: cmd}
+	consoles[id] = &consoleSession{ptmx: ptmx, cmd: cmd, aux: aux}
 	consolesMu.Unlock()
 
 	go func() {
@@ -118,5 +142,34 @@ func (g *GUI) ConsoleClose(id string) error {
 	if s.cmd.Process != nil {
 		_ = s.cmd.Process.Kill()
 	}
+	if s.aux != nil && s.aux.Process != nil {
+		_ = s.aux.Process.Kill() // tear down the iproxy forward
+	}
 	return nil
+}
+
+// freePort returns an available local TCP port.
+func freePort() (int, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, err
+	}
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port, nil
+}
+
+// waitPort blocks until 127.0.0.1:port accepts a connection or the timeout
+// elapses (used to wait for iproxy's listener to come up).
+func waitPort(port int, timeout time.Duration) error {
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		c, err := net.DialTimeout("tcp", addr, 300*time.Millisecond)
+		if err == nil {
+			c.Close()
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return errors.New("timeout")
 }
