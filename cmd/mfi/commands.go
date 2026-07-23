@@ -27,6 +27,7 @@ any subcommand directly.
 Commands:
   wizard    Guided, step-by-step workflow (default)
   detect    List reachable Android/iOS devices
+  apps      List installed apps on a device (bundle ids + paths)
   extract   Copy a target app's file tree to a local directory
   scan      Scan an extracted tree for secrets
   diff      Compare two extracted file roots
@@ -75,6 +76,44 @@ func runDetect(ctx context.Context, core *app.App, args []string) error {
 		return flushErr
 	}
 	return err
+}
+
+func runApps(ctx context.Context, core *app.App, args []string) error {
+	fs := flag.NewFlagSet("apps", flag.ContinueOnError)
+	deviceID := fs.String("device", "", "device ID to list apps from")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *deviceID == "" {
+		return fmt.Errorf("apps requires -device")
+	}
+
+	devices, _ := core.DetectDevices(ctx)
+	var target *device.Device
+	for i := range devices {
+		if devices[i].ID == *deviceID {
+			target = &devices[i]
+			break
+		}
+	}
+	if target == nil {
+		return fmt.Errorf("device %q not found; run `mfi detect`", *deviceID)
+	}
+
+	apps, err := core.ListApps(ctx, *target)
+	if err != nil {
+		return err
+	}
+	if len(apps) == 0 {
+		fmt.Println("no apps found")
+		return nil
+	}
+	tw := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
+	fmt.Fprintln(tw, "BUNDLE ID\tNAME\tDATA PATH\tINSTALL PATH")
+	for _, a := range apps {
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", a.BundleID, a.Name, a.DataPath, a.InstallPath)
+	}
+	return tw.Flush()
 }
 
 func runExtract(ctx context.Context, core *app.App, args []string) error {

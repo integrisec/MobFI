@@ -31,6 +31,8 @@ func run(args []string) error {
 		return runWizard(ctx, core)
 	case "detect":
 		return runDetect(ctx, core, args[1:])
+	case "apps":
+		return runApps(ctx, core, args[1:])
 	case "extract":
 		return runExtract(ctx, core, args[1:])
 	case "scan":

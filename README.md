@@ -16,6 +16,8 @@ capability is available from both.
 - **Device discovery** — Android via `adb` (USB, emulator, adb-over-TCP) and
   iOS via `libimobiledevice` (USB + network); reports each device's pairing
   state (`device` / `unauthorized` / `unpaired`).
+- **App enumeration** — list the installed apps on a device with their bundle
+  ids and on-device paths, to pick an extraction target.
 - **App extraction** — mirror an app's on-device file tree to a local folder.
   Android uses `/data/data/<pkg>` over adb; iOS uses AFC house arrest
   (`afcclient`) with a selectable scope (`container` or `documents`).
@@ -109,6 +111,15 @@ mfi help            # list all commands
 
 ```sh
 mfi detect
+```
+
+### List installed apps
+
+Show the user-installed apps on a device with their bundle ids and on-device
+paths (handy for picking an extraction target):
+
+```sh
+mfi apps -device <serial-or-udid>
 ```
 
 ### Extract an app's data

@@ -11,6 +11,7 @@
     <div class="brand">MobFI<span class="sub">mobile-app file inspector</span></div>
     <nav class="tabs" id="tabs">
       <button class="tab" data-view="devices">Devices</button>
+      <button class="tab" data-view="apps">Apps</button>
       <button class="tab" data-view="extract">Extract</button>
       <button class="tab" data-view="scan">Scan</button>
       <button class="tab" data-view="diff">Diff</button>
@@ -31,6 +32,21 @@
         <thead><tr><th>ID</th><th>Name</th><th>Platform</th><th>Transport</th><th>State</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
+    </section>
+
+    <!-- Apps -->
+    <section class="view hidden" id="view-apps">
+      <div class="row">
+        <h2>Installed apps</h2>
+        <span class="mime" id="apps-device"></span>
+      </div>
+      <p class="hint">User-installed apps on the selected device. Detect a device first, then click “List apps”. Pick one to prefill Extract.</p>
+      <div class="scroll">
+        <table class="grid" id="apps-table">
+          <thead><tr><th>Bundle ID</th><th>Name</th><th>Data path</th><th>Install path</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </section>
 
     <!-- Extract -->

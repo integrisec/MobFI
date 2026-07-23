@@ -63,19 +63,23 @@ $("#btn-detect").addEventListener("click", async () => {
       return;
     }
     for (const d of devices) {
+      const appsBtn = el("button", { textContent: "List apps" });
+      appsBtn.addEventListener("click", () => loadApps(d.id));
       const useBtn = el("button", { textContent: "Use in Extract" });
       useBtn.addEventListener("click", () => {
         $("#ex-device").value = d.id;
         $("#ex-bundle").focus();
         showView("extract");
       });
+      const actions = el("td", {}, appsBtn);
+      actions.append(" ", useBtn);
       const tr = el("tr", {},
         el("td", { textContent: d.id }),
         el("td", { textContent: d.name }),
         el("td", { textContent: d.platform }),
         el("td", { textContent: d.transport }),
         el("td", { className: `state-${d.state}`, textContent: d.state }),
-        el("td", {}, useBtn)
+        actions
       );
       $("#devices-table tbody").append(tr);
     }
@@ -83,6 +87,37 @@ $("#btn-detect").addEventListener("click", async () => {
     fail(e);
   }
 });
+
+// --- Apps ---
+async function loadApps(deviceID) {
+  showView("apps");
+  $("#apps-device").textContent = deviceID;
+  clearRows("#apps-table tbody");
+  try {
+    const apps = await gui().ListApps(deviceID);
+    if (!apps || apps.length === 0) {
+      emptyRow("#apps-table tbody", 5, "no apps found");
+      return;
+    }
+    for (const a of apps) {
+      const useBtn = el("button", { textContent: "Use in Extract" });
+      useBtn.addEventListener("click", () => {
+        $("#ex-device").value = deviceID;
+        $("#ex-bundle").value = a.bundle_id;
+        showView("extract");
+      });
+      $("#apps-table tbody").append(el("tr", {},
+        el("td", { textContent: a.bundle_id }),
+        el("td", { textContent: a.name }),
+        el("td", { textContent: a.data_path }),
+        el("td", { textContent: a.install_path }),
+        el("td", {}, useBtn)
+      ));
+    }
+  } catch (e) {
+    fail(e);
+  }
+}
 
 // --- Extract ---
 $("#btn-extract").addEventListener("click", async () => {

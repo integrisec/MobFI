@@ -34,6 +34,17 @@ func (g *GUI) DetectDevices() ([]device.Device, error) {
 	return g.app.DetectDevices(g.ctx)
 }
 
+// ListApps enumerates the installed apps on a device (resolved by serial).
+func (g *GUI) ListApps(deviceID string) ([]device.InstalledApp, error) {
+	devices, _ := g.app.DetectDevices(g.ctx)
+	for i := range devices {
+		if devices[i].ID == deviceID {
+			return g.app.ListApps(g.ctx, devices[i])
+		}
+	}
+	return nil, fmt.Errorf("device %q not found; re-run detection", deviceID)
+}
+
 // ExtractApp resolves a device by serial and mirrors the target app's file
 // tree to dest. afcScope ("container"/"documents") applies to iOS only.
 func (g *GUI) ExtractApp(deviceID, bundleID, dest, afcScope string) (*extract.Result, error) {

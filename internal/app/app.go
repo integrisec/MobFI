@@ -24,17 +24,19 @@ type App struct {
 	Detectors  *device.Registry
 	Transports *transport.Registry
 	AFC        *transport.AFCConnector // iOS app-container access (app-scoped)
+	AppListers []device.AppLister
 	Scanner    *secrets.Scanner
 	Renderers  *render.Registry
 }
 
-// New returns an App with the default detectors, transports, rules and
-// renderers registered.
+// New returns an App with the default detectors, transports, listers, rules
+// and renderers registered.
 func New() *App {
 	return &App{
 		Detectors:  device.DefaultRegistry(),
 		Transports: transport.DefaultRegistry(),
 		AFC:        transport.NewAFCConnector(),
+		AppListers: device.DefaultAppListers(),
 		Scanner:    secrets.NewScanner(secrets.DefaultRules()),
 		Renderers:  render.DefaultRegistry(),
 	}
@@ -44,6 +46,16 @@ func New() *App {
 // registered transport.
 func (a *App) DetectDevices(ctx context.Context) ([]device.Device, error) {
 	return a.Detectors.DetectAll(ctx)
+}
+
+// ListApps enumerates the user-installed applications on a device.
+func (a *App) ListApps(ctx context.Context, d device.Device) ([]device.InstalledApp, error) {
+	for _, l := range a.AppListers {
+		if l.Supports(d) {
+			return l.List(ctx, d)
+		}
+	}
+	return nil, fmt.Errorf("no app lister for platform %q", d.Platform)
 }
 
 // ExtractApp copies the on-device file tree of the target application to
