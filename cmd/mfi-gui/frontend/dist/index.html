@@ -172,6 +172,10 @@
           </span>
           <button class="primary" id="con-connect">Connect</button>
           <button id="con-disconnect" disabled>Disconnect</button>
+          <button id="con-clear" title="Clear the terminal">Clear</button>
+          <button id="con-font-dec" title="Smaller font">A−</button>
+          <button id="con-font-inc" title="Larger font">A+</button>
+          <span class="mime" id="con-status"></span>
         </div>
       </div>
       <p class="hint">Android opens an <code>adb shell</code>. iOS needs a jailbroken device running sshd: leave <em>host</em> blank to auto-forward over USB with <code>iproxy</code> (port = the device's SSH port, default 22), or set a host for network SSH.</p>

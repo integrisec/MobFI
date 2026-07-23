@@ -1183,6 +1183,22 @@ let conTerm = null;
 let conFit = null;
 let conOff = null;
 let conExitOff = null;
+let conBaseStatus = "";
+let conFontSize = parseInt(localStorage.getItem("mobfi.console.fontSize"), 10) || 13;
+
+function setConsoleStatus(text) {
+  $("#con-status").textContent = text || "";
+}
+function applyConsoleFont() {
+  localStorage.setItem("mobfi.console.fontSize", String(conFontSize));
+  if (conTerm) {
+    conTerm.options.fontSize = conFontSize;
+    if (conFit) conFit.fit();
+  }
+}
+$("#con-clear").addEventListener("click", () => { if (conTerm) conTerm.clear(); });
+$("#con-font-dec").addEventListener("click", () => { conFontSize = Math.max(8, conFontSize - 1); applyConsoleFont(); });
+$("#con-font-inc").addEventListener("click", () => { conFontSize = Math.min(28, conFontSize + 1); applyConsoleFont(); });
 
 async function populateConsoleDevices() {
   const sel = $("#con-device");
@@ -1228,6 +1244,7 @@ async function stopConsole() {
     conId = null;
   }
   if (conTerm) { conTerm.dispose(); conTerm = null; conFit = null; }
+  setConsoleStatus("");
   setConsoleConnected(false);
 }
 
@@ -1236,20 +1253,23 @@ async function startConsole() {
   if (!d) { toast("select a device"); return; }
   await stopConsole();
 
-  let id;
+  let info;
   try {
-    id = await gui().ConsoleStart(d.id, d.platform,
+    info = await gui().ConsoleStart(d.id, d.platform,
       $("#con-user").value.trim(), $("#con-host").value.trim(), $("#con-port").value.trim());
   } catch (e) {
     fail(e);
     return;
   }
+  const id = info.id;
   conId = id;
+  conBaseStatus = info.status || "";
+  setConsoleStatus(conBaseStatus + " · connected");
 
   const container = $("#con-term");
   container.replaceChildren();
   conTerm = new Terminal({
-    fontSize: 12.5,
+    fontSize: conFontSize,
     fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
     cursorBlink: true,
     theme: { background: "#0b0f14", foreground: "#d7dee7" },
@@ -1265,6 +1285,7 @@ async function startConsole() {
   conOff = window.runtime.EventsOn("console:data:" + id, (data) => { if (conTerm) conTerm.write(data); });
   conExitOff = window.runtime.EventsOn("console:exit:" + id, () => {
     if (conTerm) conTerm.write("\r\n\x1b[90m[session ended]\x1b[0m\r\n");
+    setConsoleStatus(conBaseStatus + " · session ended");
     setConsoleConnected(false);
   });
   setConsoleConnected(true);

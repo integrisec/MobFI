@@ -37,42 +37,53 @@ var (
 // Android uses `adb -s <serial> shell`; iOS uses `ssh <user>@<host>` and
 // therefore needs a jailbroken device running sshd (password prompts are
 // handled interactively in the terminal). Returns the session id.
-func (g *GUI) ConsoleStart(deviceID, platform, sshUser, sshHost, sshPort string) (string, error) {
+// ConsoleInfo describes a started session for the frontend.
+type ConsoleInfo struct {
+	ID     string `json:"id"`
+	Status string `json:"status"` // human-readable transport summary
+}
+
+func (g *GUI) ConsoleStart(deviceID, platform, sshUser, sshHost, sshPort string) (ConsoleInfo, error) {
 	var cmd, aux *exec.Cmd
+	var status string
 	sshOpts := []string{"-o", "StrictHostKeyChecking=accept-new", "-o", "UserKnownHostsFile=/dev/null"}
 
 	if platform == "ios" {
 		user := firstNonEmpty(sshUser, "root")
 		if sshHost != "" {
 			// Direct network SSH.
-			args := append([]string{"-p", firstNonEmpty(sshPort, "22")}, sshOpts...)
+			port := firstNonEmpty(sshPort, "22")
+			args := append([]string{"-p", port}, sshOpts...)
 			cmd = exec.Command("ssh", append(args, user+"@"+sshHost)...)
+			status = fmt.Sprintf("ssh %s@%s:%s", user, sshHost, port)
 		} else {
 			// USB: forward a local port to the device's SSH port with iproxy.
 			if deviceID == "" {
-				return "", errors.New("select a device (USB SSH forwarding needs a UDID)")
+				return ConsoleInfo{}, errors.New("select a device (USB SSH forwarding needs a UDID)")
 			}
 			local, err := freePort()
 			if err != nil {
-				return "", err
+				return ConsoleInfo{}, err
 			}
 			devicePort := firstNonEmpty(sshPort, "22")
 			aux = exec.Command("iproxy", "-u", deviceID, fmt.Sprintf("%d:%s", local, devicePort))
 			if err := aux.Start(); err != nil {
-				return "", fmt.Errorf("iproxy: %w", err)
+				return ConsoleInfo{}, fmt.Errorf("iproxy: %w", err)
 			}
 			if err := waitPort(local, 3*time.Second); err != nil {
 				_ = aux.Process.Kill()
-				return "", fmt.Errorf("iproxy forward not ready (is the device jailbroken with sshd on %s?): %w", devicePort, err)
+				return ConsoleInfo{}, fmt.Errorf("iproxy forward not ready (is the device jailbroken with sshd on %s?): %w", devicePort, err)
 			}
 			args := append([]string{"-p", strconv.Itoa(local)}, sshOpts...)
 			cmd = exec.Command("ssh", append(args, user+"@127.0.0.1")...)
+			status = fmt.Sprintf("ssh %s@ USB (iproxy :%d → device:%s)", user, local, devicePort)
 		}
 	} else {
 		if deviceID == "" {
-			return "", errors.New("select a device")
+			return ConsoleInfo{}, errors.New("select a device")
 		}
 		cmd = exec.Command("adb", "-s", deviceID, "shell")
+		status = "adb shell " + deviceID
 	}
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
 
@@ -81,7 +92,7 @@ func (g *GUI) ConsoleStart(deviceID, platform, sshUser, sshHost, sshPort string)
 		if aux != nil && aux.Process != nil {
 			_ = aux.Process.Kill()
 		}
-		return "", err
+		return ConsoleInfo{}, err
 	}
 
 	id := fmt.Sprintf("con-%d", time.Now().UnixNano())
@@ -103,7 +114,7 @@ func (g *GUI) ConsoleStart(deviceID, platform, sshUser, sshHost, sshPort string)
 		g.ConsoleClose(id)
 		wailsruntime.EventsEmit(g.ctx, "console:exit:"+id, "")
 	}()
-	return id, nil
+	return ConsoleInfo{ID: id, Status: status}, nil
 }
 
 // ConsoleWrite sends keystrokes/input to a session's PTY.
