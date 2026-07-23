@@ -140,6 +140,7 @@ $("#btn-detect").addEventListener("click", async () => {
 // --- Apps ---
 let currentAppsDevice = null;
 let currentApps = [];
+let selectedBundle = null; // bundle id whose details panel is open
 
 // Column index -> app field (null = not sortable: icon and action columns).
 const APP_COLUMNS = [null, "bundle_id", "name", "version", "data_path", "install_path", null];
@@ -227,6 +228,7 @@ function applyAppMeta(row, meta) {
 
 async function loadApps(deviceID) {
   currentAppsDevice = deviceID;
+  clearDetails(); // a fresh listing (incl. system-apps toggle) resets the panel
   showView("apps");
   $("#apps-device").textContent = deviceID;
   clearRows("#apps-table tbody");
@@ -272,9 +274,12 @@ function renderApps() {
   );
   rows = sortApps(rows);
 
-  $("#apps-count").textContent = currentApps.length
-    ? `${rows.length} of ${currentApps.length} app(s)`
-    : "";
+  const total = currentApps.length;
+  $("#apps-count").textContent = !total
+    ? ""
+    : rows.length === total
+      ? `${total} app(s)`
+      : `${rows.length} of ${total} app(s) shown`;
   updateSortIndicators();
 
   clearRows("#apps-table tbody");
@@ -320,6 +325,13 @@ function renderApps() {
     // Lazily resolve the real icon + name from the APK.
     if (appMetaCache.has(a.bundle_id)) applyAppMeta(row, appMetaCache.get(a.bundle_id));
     else appMetaObserver.observe(row);
+
+    if (a.bundle_id === selectedBundle) row.classList.add("selected");
+  }
+
+  // If the selected app was filtered out, close its details panel.
+  if (selectedBundle && !rows.some((a) => a.bundle_id === selectedBundle)) {
+    clearDetails();
   }
 }
 
@@ -354,7 +366,17 @@ function humanBytes(n) {
   return `${v.toFixed(v < 10 && i > 0 ? 1 : 0)} ${u[i]}`;
 }
 
+// clearDetails hides the details panel and drops the row highlight.
+function clearDetails() {
+  selectedBundle = null;
+  document.querySelectorAll("#apps-table tbody tr.selected").forEach((r) => r.classList.remove("selected"));
+  const panel = $("#app-details");
+  panel.classList.add("hidden");
+  panel.replaceChildren();
+}
+
 async function selectApp(row, a) {
+  selectedBundle = a.bundle_id;
   document.querySelectorAll("#apps-table tbody tr.selected").forEach((r) => r.classList.remove("selected"));
   row.classList.add("selected");
   const panel = $("#app-details");
@@ -362,7 +384,7 @@ async function selectApp(row, a) {
   panel.textContent = "Loading details…";
   try {
     const d = await gui().AppDetails(currentAppsDevice, a.bundle_id, a.install_path);
-    renderDetails(a, d);
+    if (selectedBundle === a.bundle_id) renderDetails(a, d); // ignore if selection changed
   } catch (e) {
     panel.textContent = "";
     fail(e);
@@ -395,12 +417,16 @@ function renderDetails(a, d) {
     dl.append(el("dt", { textContent: k }), el("dd", { textContent: String(v) }));
   }
 
+  const closeBtn = el("button", { className: "details-close", textContent: "✕", title: "Close" });
+  closeBtn.addEventListener("click", clearDetails);
+
   panel.replaceChildren(
     el("div", { className: "details-head" },
       (appMetaCache.get(a.bundle_id) || {}).icon
         ? el("img", { className: "app-img", src: appMetaCache.get(a.bundle_id).icon, alt: "" })
         : avatar(a),
-      el("h3", { textContent: name })
+      el("h3", { textContent: name }),
+      closeBtn
     ),
     dl
   );

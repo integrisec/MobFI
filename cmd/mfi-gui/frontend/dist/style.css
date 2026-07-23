@@ -161,6 +161,14 @@ button:disabled { opacity: 0.5; cursor: default; }
 .details.hidden { display: none; }
 .details-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
 .details-head h3 { margin: 0; font-size: 18px; }
+.details-close {
+  margin-left: auto;
+  padding: 4px 10px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--muted);
+}
+.details-close:hover { color: var(--text); border-color: var(--danger); }
 .details-head .app-img { width: 40px; height: 40px; border-radius: 9px; }
 .details-head .avatar { width: 40px; height: 40px; font-size: 18px; border-radius: 9px; margin: 0; }
 
