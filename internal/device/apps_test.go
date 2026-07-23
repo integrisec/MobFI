@@ -8,8 +8,9 @@ import (
 
 func TestParseADBPackages(t *testing.T) {
 	// Note the '=' inside the modern base.apk path — the split must be on
-	// the last '='.
-	out := `package:/data/app/~~aB==/com.example.app-xY==/base.apk=com.example.app
+	// the last '='. The first line carries a versionCode suffix; the second
+	// does not (must still parse).
+	out := `package:/data/app/~~aB==/com.example.app-xY==/base.apk=com.example.app versionCode:12345
 package:/data/app/Other/base.apk=com.other.thing
 `
 	apps := parseADBPackages([]byte(out))
@@ -25,8 +26,14 @@ package:/data/app/Other/base.apk=com.other.thing
 	if apps[0].DataPath != "/data/data/com.example.app" {
 		t.Errorf("data = %q", apps[0].DataPath)
 	}
+	if apps[0].Version != "12345" {
+		t.Errorf("version = %q, want 12345", apps[0].Version)
+	}
 	if apps[0].Platform != Android {
 		t.Errorf("platform = %q", apps[0].Platform)
+	}
+	if apps[1].Version != "" {
+		t.Errorf("app1 version = %q, want empty", apps[1].Version)
 	}
 }
 

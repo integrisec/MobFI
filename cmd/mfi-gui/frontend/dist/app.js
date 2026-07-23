@@ -90,6 +90,7 @@ $("#btn-detect").addEventListener("click", async () => {
 
 // --- Apps ---
 let currentAppsDevice = null;
+let currentApps = [];
 
 async function loadApps(deviceID) {
   currentAppsDevice = deviceID;
@@ -97,32 +98,46 @@ async function loadApps(deviceID) {
   $("#apps-device").textContent = deviceID;
   clearRows("#apps-table tbody");
   try {
-    const apps = await gui().ListApps(deviceID, $("#apps-system").checked);
-    if (!apps || apps.length === 0) {
-      emptyRow("#apps-table tbody", 5, "no apps found");
-      return;
-    }
-    for (const a of apps) {
-      const useBtn = el("button", { textContent: "Use in Extract" });
-      useBtn.addEventListener("click", () => {
-        $("#ex-device").value = deviceID;
-        $("#ex-bundle").value = a.bundle_id;
-        showView("extract");
-      });
-      $("#apps-table tbody").append(el("tr", {},
-        el("td", { textContent: a.bundle_id }),
-        el("td", { textContent: a.name }),
-        el("td", { textContent: a.data_path }),
-        el("td", { textContent: a.install_path }),
-        el("td", {}, useBtn)
-      ));
-    }
+    currentApps = (await gui().ListApps(deviceID, $("#apps-system").checked)) || [];
   } catch (e) {
+    currentApps = [];
     fail(e);
+  }
+  renderApps();
+}
+
+function renderApps() {
+  const q = ($("#apps-search").value || "").trim().toLowerCase();
+  const rows = currentApps.filter((a) =>
+    !q ||
+    (a.bundle_id && a.bundle_id.toLowerCase().includes(q)) ||
+    (a.name && a.name.toLowerCase().includes(q))
+  );
+  clearRows("#apps-table tbody");
+  if (rows.length === 0) {
+    emptyRow("#apps-table tbody", 6, currentApps.length ? "no matches" : "no apps found");
+    return;
+  }
+  for (const a of rows) {
+    const useBtn = el("button", { textContent: "Use in Extract" });
+    useBtn.addEventListener("click", () => {
+      $("#ex-device").value = currentAppsDevice;
+      $("#ex-bundle").value = a.bundle_id;
+      showView("extract");
+    });
+    $("#apps-table tbody").append(el("tr", {},
+      el("td", { textContent: a.bundle_id }),
+      el("td", { textContent: a.name }),
+      el("td", { textContent: a.version || "" }),
+      el("td", { textContent: a.data_path }),
+      el("td", { textContent: a.install_path }),
+      el("td", {}, useBtn)
+    ));
   }
 }
 
-// Re-list when the system-apps toggle changes (if a device is loaded).
+// Filter as you type; re-list when the system-apps toggle changes.
+$("#apps-search").addEventListener("input", renderApps);
 $("#apps-system").addEventListener("change", () => {
   if (currentAppsDevice) loadApps(currentAppsDevice);
 });

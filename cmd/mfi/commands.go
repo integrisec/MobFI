@@ -110,9 +110,9 @@ func runApps(ctx context.Context, core *app.App, args []string) error {
 		return nil
 	}
 	tw := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
-	fmt.Fprintln(tw, "BUNDLE ID\tNAME\tDATA PATH\tINSTALL PATH")
+	fmt.Fprintln(tw, "BUNDLE ID\tNAME\tVERSION\tDATA PATH\tINSTALL PATH")
 	for _, a := range apps {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", a.BundleID, a.Name, a.DataPath, a.InstallPath)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", a.BundleID, a.Name, a.Version, a.DataPath, a.InstallPath)
 	}
 	return tw.Flush()
 }

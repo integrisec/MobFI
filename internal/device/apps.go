@@ -66,7 +66,8 @@ func (l *ADBAppLister) exec(ctx context.Context, args ...string) ([]byte, error)
 // List returns installed apps (third-party only unless includeSystem). A
 // missing adb yields no apps rather than an error.
 func (l *ADBAppLister) List(ctx context.Context, d Device, includeSystem bool) ([]InstalledApp, error) {
-	args := []string{"-s", d.ID, "shell", "pm", "list", "packages", "-f"}
+	// --show-versioncode (API 26+) appends " versionCode:<n>" per line.
+	args := []string{"-s", d.ID, "shell", "pm", "list", "packages", "-f", "--show-versioncode"}
 	if !includeSystem {
 		args = append(args, "-3") // third-party only
 	}
@@ -80,9 +81,10 @@ func (l *ADBAppLister) List(ctx context.Context, d Device, includeSystem bool) (
 	return parseADBPackages(out), nil
 }
 
-// parseADBPackages parses `pm list packages -f` lines of the form
-// "package:<apkPath>=<packageName>". The APK path may itself contain '=',
-// so the split is on the last '='.
+// parseADBPackages parses `pm list packages -f --show-versioncode` lines of
+// the form "package:<apkPath>=<packageName> versionCode:<n>". The APK path
+// may itself contain '=', so the split is on the last '='; the versionCode
+// suffix (if present) is stripped first.
 func parseADBPackages(out []byte) []InstalledApp {
 	var apps []InstalledApp
 	sc := bufio.NewScanner(bytes.NewReader(out))
@@ -90,6 +92,11 @@ func parseADBPackages(out []byte) []InstalledApp {
 		line := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(sc.Text()), "package:"))
 		if line == "" {
 			continue
+		}
+		version := ""
+		if i := strings.Index(line, " versionCode:"); i >= 0 {
+			version = firstField(line[i+len(" versionCode:"):])
+			line = line[:i]
 		}
 		apk, pkg := "", line
 		if i := strings.LastIndex(line, "="); i >= 0 {
@@ -103,9 +110,18 @@ func parseADBPackages(out []byte) []InstalledApp {
 			Platform:    Android,
 			DataPath:    "/data/data/" + pkg,
 			InstallPath: apk,
+			Version:     version,
 		})
 	}
 	return apps
+}
+
+// firstField returns s up to the first whitespace.
+func firstField(s string) string {
+	if i := strings.IndexAny(s, " \t"); i >= 0 {
+		return s[:i]
+	}
+	return s
 }
 
 // --- iOS (ideviceinstaller) ---
