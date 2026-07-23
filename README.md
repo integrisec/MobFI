@@ -200,6 +200,11 @@ The window opens on the **Devices** step, which auto-refreshes (a manual
 Detect button forces a re-check) and shows each device's rooted/jailbroken
 status, with tabs for Apps, Extract, Scan, Diff, Database and Render.
 
+The **Render** tab opens a single file or a whole folder (an Explorer-style
+tree on the left, render pane on the right). It detects the type and renders
+natively — images and PDFs inline, code (XML/JSON/JS/…) with syntax
+highlighting, property lists decoded — with a Hex-view toggle.
+
 ---
 
 ## Updating

@@ -125,14 +125,22 @@
 
     <!-- Render -->
     <section class="view hidden" id="view-render">
-      <h2>Render a file</h2>
-      <div class="form">
-        <label>File <input id="rn-file" placeholder="/path/to/file" /></label>
-        <button class="browse" id="rn-file-browse" type="button">Browse…</button>
-        <button class="primary" id="btn-render">Render</button>
-        <span class="mime" id="rn-mime"></span>
+      <div class="row">
+        <h2>Render</h2>
+        <div class="row-actions">
+          <button id="btn-render-file">Open file…</button>
+          <button id="btn-render-folder">Open folder…</button>
+          <label class="inline"><input type="checkbox" id="rn-hex" /> Hex view</label>
+          <span class="mime" id="rn-mime"></span>
+        </div>
       </div>
-      <pre class="output" id="render-out"></pre>
+      <div class="render-split">
+        <div class="render-tree hidden" id="render-tree"></div>
+        <div class="render-hsplit hidden" id="render-hsplit"></div>
+        <div class="render-pane" id="render-pane">
+          <div class="render-empty">Open a file, or a folder to browse it as a tree.</div>
+        </div>
+      </div>
     </section>
   </main>
 

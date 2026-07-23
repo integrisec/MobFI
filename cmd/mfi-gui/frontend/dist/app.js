@@ -675,17 +675,155 @@ async function readTable() {
 $("#btn-db-tables").addEventListener("click", loadTables);
 $("#btn-db-read").addEventListener("click", readTable);
 
-// --- Render ---
-$("#btn-render").addEventListener("click", async () => {
+// --- Render (file/folder explorer) ---
+let currentRenderPath = null;
+
+function renderMode() {
+  return $("#rn-hex").checked ? "hex" : "auto";
+}
+
+function dataURLToBlobURL(dataURL) {
+  const comma = dataURL.indexOf(",");
+  const mime = dataURL.substring(5, dataURL.indexOf(";"));
+  const bin = atob(dataURL.substring(comma + 1));
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return URL.createObjectURL(new Blob([arr], { type: mime }));
+}
+
+function displayRender(res) {
+  const pane = $("#render-pane");
+  $("#rn-mime").textContent = res.mime || "";
+  pane.replaceChildren();
+  switch (res.kind) {
+    case "image":
+      pane.append(el("img", { className: "render-img", src: res.data_url, alt: res.name }));
+      break;
+    case "pdf":
+      pane.append(el("iframe", { className: "render-pdf", src: dataURLToBlobURL(res.data_url) }));
+      break;
+    case "code": {
+      const box = el("div", { className: "code-view" });
+      box.innerHTML = res.html; // Chroma output for a local file
+      pane.append(box);
+      break;
+    }
+    default: // text | hex | error
+      pane.append(el("pre", { className: "render-text", textContent: res.text }));
+  }
+}
+
+async function renderInPane(path) {
+  currentRenderPath = path;
+  const pane = $("#render-pane");
+  pane.replaceChildren(el("div", { className: "render-empty", textContent: "Rendering…" }));
   try {
-    const v = await gui().Render($("#rn-file").value.trim());
-    $("#rn-mime").textContent = v.mime;
-    $("#render-out").textContent = v.text;
+    displayRender(await gui().RenderPath(path, renderMode()));
   } catch (e) {
-    $("#render-out").textContent = "";
+    pane.replaceChildren();
+    fail(e);
+  }
+}
+
+function treeNode(entry, depth) {
+  const row = el("div", { className: "tree-row" });
+  row.style.paddingLeft = 8 + depth * 14 + "px";
+  const caret = el("span", { className: "tree-caret", textContent: entry.dir ? "▸" : "" });
+  const icon = el("span", { className: "tree-icon", textContent: entry.dir ? "📁" : "📄" });
+  row.append(caret, icon, el("span", { className: "tree-label", textContent: entry.name }));
+
+  if (entry.dir) {
+    const children = el("div", { className: "tree-children hidden" });
+    let loaded = false;
+    row.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const nowHidden = children.classList.toggle("hidden");
+      caret.textContent = nowHidden ? "▸" : "▾";
+      if (!loaded && !nowHidden) {
+        loaded = true;
+        try {
+          for (const k of (await gui().ListDir(entry.path)) || []) children.append(treeNode(k, depth + 1));
+        } catch (err) {
+          fail(err);
+        }
+      }
+    });
+    return el("div", {}, row, children);
+  }
+
+  row.addEventListener("click", (e) => {
+    e.stopPropagation();
+    document.querySelectorAll("#render-tree .tree-row.selected").forEach((r) => r.classList.remove("selected"));
+    row.classList.add("selected");
+    renderInPane(entry.path);
+  });
+  return row;
+}
+
+async function openRenderFolder(root) {
+  currentRenderPath = null;
+  $("#render-tree").classList.remove("hidden");
+  $("#render-hsplit").classList.remove("hidden");
+  const tree = $("#render-tree");
+  tree.replaceChildren(el("div", { className: "render-empty", textContent: "Loading…" }));
+  try {
+    const entries = (await gui().ListDir(root)) || [];
+    tree.replaceChildren(el("div", { className: "tree-root", textContent: root }));
+    for (const e of entries) tree.append(treeNode(e, 0));
+  } catch (err) {
+    fail(err);
+  }
+  $("#render-pane").replaceChildren(el("div", { className: "render-empty", textContent: "Select a file from the tree." }));
+}
+
+$("#btn-render-file").addEventListener("click", async () => {
+  try {
+    const p = await gui().PickFile();
+    if (!p) return;
+    $("#render-tree").classList.add("hidden");
+    $("#render-hsplit").classList.add("hidden");
+    renderInPane(p);
+  } catch (e) {
     fail(e);
   }
 });
+$("#btn-render-folder").addEventListener("click", async () => {
+  try {
+    const p = await gui().PickDirectory();
+    if (p) openRenderFolder(p);
+  } catch (e) {
+    fail(e);
+  }
+});
+$("#rn-hex").addEventListener("change", () => {
+  if (currentRenderPath) renderInPane(currentRenderPath);
+});
+
+function makeHResizer(divider, target, storeKey) {
+  if (!divider || !target) return;
+  if (storeKey) {
+    const saved = parseInt(localStorage.getItem(storeKey), 10);
+    if (saved > 0) target.style.width = saved + "px";
+  }
+  divider.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    const startX = e.pageX;
+    const startW = target.offsetWidth;
+    const onMove = (ev) => {
+      target.style.width = Math.max(140, startW + (ev.pageX - startX)) + "px";
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      if (storeKey) localStorage.setItem(storeKey, target.offsetWidth);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    document.body.style.cursor = "col-resize";
+  });
+}
+makeHResizer($("#render-hsplit"), $("#render-tree"), "mobfi.render.treeWidth");
 
 // --- native path pickers ---
 function wireBrowse(btnId, inputId, kind) {
@@ -706,7 +844,6 @@ wireBrowse("sc-known-browse", "sc-known", "file");
 wireBrowse("df-a-browse", "df-a", "dir");
 wireBrowse("df-b-browse", "df-b", "dir");
 wireBrowse("db-file-browse", "db-file", "file");
-wireBrowse("rn-file-browse", "rn-file", "file");
 
 // Resizable columns on the remaining static-header tables (widths persisted).
 makeResizable($("#devices-table"), "mobfi.cols.devices");

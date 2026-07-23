@@ -233,6 +233,72 @@ ul.perms li { break-inside: avoid; }
 
 .mime { color: var(--muted); font-size: 12px; align-self: center; }
 
+/* Render explorer: tree | divider | pane */
+.render-split {
+  display: flex;
+  height: 70vh;
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.render-tree {
+  width: 300px;
+  flex: none;
+  overflow: auto;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  padding: 4px 0;
+}
+.render-tree.hidden { display: none; }
+.render-hsplit { width: 6px; flex: none; cursor: col-resize; background: var(--line); }
+.render-hsplit.hidden { display: none; }
+.render-hsplit:hover { background: var(--accent); }
+.render-pane { flex: 1; overflow: auto; background: var(--bg); }
+.render-empty { color: var(--muted); padding: 24px; }
+
+.tree-root {
+  padding: 6px 10px;
+  color: var(--muted);
+  font-size: 11px;
+  word-break: break-all;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.tree-row:hover { background: var(--panel-2); }
+.tree-row.selected { background: rgba(76, 159, 254, 0.15); }
+.tree-caret { width: 12px; color: var(--muted); font-size: 10px; flex: none; }
+.tree-icon { font-size: 12px; flex: none; }
+.tree-children.hidden { display: none; }
+
+.render-img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 12px;
+  background: repeating-conic-gradient(#2a2f37 0% 25%, #333a44 0% 50%) 50% / 20px 20px;
+}
+.render-pdf { width: 100%; height: 100%; border: 0; }
+.render-text {
+  margin: 0;
+  padding: 14px;
+  white-space: pre;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12.5px;
+  color: var(--text);
+}
+.code-view { font-size: 12.5px; }
+.code-view pre { margin: 0; padding: 14px; overflow: auto; }
+
 .row-actions { display: flex; align-items: center; gap: 16px; }
 label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--text); font-size: 13px; cursor: pointer; }
 label.inline input { min-width: 0; }
