@@ -67,7 +67,7 @@ func Trees(ctx context.Context, a, b string) (*Result, error) {
 		case !inA && inB:
 			res.Changes = append(res.Changes, Change{Path: rel, Kind: Added})
 		default:
-			changed, detail, err := compare(ma, mb)
+			changed, detail, err := compare(ctx, ma, mb, defaultFileDiffers)
 			if err != nil {
 				res.Changes = append(res.Changes, Change{Path: rel, Kind: Modified, Detail: "unreadable: " + err.Error()})
 				continue
@@ -114,27 +114,62 @@ func indexTree(root string) (map[string]fileMeta, error) {
 	return idx, err
 }
 
+// FileDiffer produces a structural, human-readable description of the
+// differences between two files it recognises (e.g. SQLite row changes).
+type FileDiffer interface {
+	Handles(path string) bool
+	Diff(ctx context.Context, a, b string) (string, error)
+}
+
+// defaultFileDiffers are consulted, in order, for files that differ.
+var defaultFileDiffers = []FileDiffer{sqliteDiffer{}, jsonDiffer{}}
+
 // compare reports whether two files differ and a human-readable reason.
-// Differing sizes are decisive; equal sizes fall back to a content hash.
-//
-// TODO: dispatch same-type pairs (SQLite, XML/plist, config) to a
-// format-aware differ here before the byte-level fallback.
-func compare(a, b fileMeta) (bool, string, error) {
+// Identical files short-circuit on size then content hash. When they
+// differ and a structural differ recognises the type, its richer detail is
+// used; otherwise a byte-level summary is returned.
+func compare(ctx context.Context, a, b fileMeta, differs []FileDiffer) (bool, string, error) {
+	equal, err := filesEqual(a, b)
+	if err != nil {
+		return false, "", err
+	}
+	if equal {
+		return false, "", nil
+	}
+	for _, fd := range differs {
+		if fd.Handles(a.full) && fd.Handles(b.full) {
+			detail, derr := fd.Diff(ctx, a.full, b.full)
+			if derr != nil {
+				return true, byteDetail(a, b) + " (structural diff failed: " + derr.Error() + ")", nil
+			}
+			return true, detail, nil
+		}
+	}
+	return true, byteDetail(a, b), nil
+}
+
+// filesEqual reports whether two files have identical contents (size first,
+// then SHA-256).
+func filesEqual(a, b fileMeta) (bool, error) {
 	if a.size != b.size {
-		return true, fmt.Sprintf("size %d -> %d bytes", a.size, b.size), nil
+		return false, nil
 	}
 	ha, err := hashFile(a.full)
 	if err != nil {
-		return false, "", err
+		return false, err
 	}
 	hb, err := hashFile(b.full)
 	if err != nil {
-		return false, "", err
+		return false, err
 	}
-	if ha != hb {
-		return true, "content differs", nil
+	return ha == hb, nil
+}
+
+func byteDetail(a, b fileMeta) string {
+	if a.size != b.size {
+		return fmt.Sprintf("size %d -> %d bytes", a.size, b.size)
 	}
-	return false, "", nil
+	return "content differs"
 }
 
 func hashFile(path string) (string, error) {
