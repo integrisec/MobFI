@@ -105,7 +105,7 @@
         <label class="inline"><input type="checkbox" id="df-wrap" /> Wrap</label>
       </div>
       <table class="grid" id="diff-table">
-        <thead><tr><th>Kind</th><th>Path</th><th>Detail</th></tr></thead>
+        <thead><tr><th>Kind</th><th>Path</th><th>Detail</th><th class="no-resize col-actions"></th></tr></thead>
         <tbody></tbody>
       </table>
     </section>
@@ -148,6 +148,20 @@
       </div>
     </section>
   </main>
+
+  <!-- Side-by-side file diff overlay -->
+  <div class="filediff hidden" id="filediff">
+    <div class="filediff-bar">
+      <span class="filediff-title" id="filediff-title"></span>
+      <span class="filediff-count" id="filediff-count"></span>
+      <div class="filediff-actions">
+        <button id="filediff-prev" title="Previous difference (↑ / p)">↑ Prev</button>
+        <button id="filediff-next" title="Next difference (↓ / n)">↓ Next</button>
+        <button id="filediff-close" title="Close (Esc)">✕</button>
+      </div>
+    </div>
+    <div class="filediff-scroll" id="filediff-scroll"></div>
+  </div>
 
   <div class="toast hidden" id="toast"></div>
   <script src="app.js"></script>

@@ -198,7 +198,9 @@ wails build    # package a native app (e.g. build/bin/MobFI.app on macOS)
 
 The window opens on the **Devices** step, which auto-refreshes (a manual
 Detect button forces a re-check) and shows each device's rooted/jailbroken
-status, with tabs for Apps, Extract, Scan, Diff, Database and Render.
+status, with tabs for Apps, Extract, Scan, Diff, Database and Render. In the
+**Diff** view each changed file can be sent to Render, and modified files open
+a side-by-side line diff (highlighting, synced scroll, jump between changes).
 
 The **Render** tab opens a single file or a whole folder (an Explorer-style
 tree on the left, render pane on the right, with a resizable divider). It

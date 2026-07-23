@@ -611,24 +611,122 @@ $("#btn-scan").addEventListener("click", async () => {
 });
 
 // --- Diff ---
+function joinPath(root, rel) {
+  if (!root) return rel;
+  return root.endsWith("/") ? root + rel : root + "/" + rel;
+}
+
+// Send a file to the Render tab (single-file mode).
+function sendToRender(path) {
+  $("#render-tree").classList.add("hidden");
+  $("#render-hsplit").classList.add("hidden");
+  showView("render");
+  renderInPane(path);
+}
+
 $("#btn-diff").addEventListener("click", async () => {
   clearRows("#diff-table tbody");
   try {
     const res = await gui().Diff($("#df-a").value.trim(), $("#df-b").value.trim());
     if (!res.changes || res.changes.length === 0) {
-      emptyRow("#diff-table tbody", 3, "no differences");
+      emptyRow("#diff-table tbody", 4, "no differences");
       return;
     }
     for (const c of res.changes) {
+      const aPath = joinPath(res.root_a, c.path);
+      const bPath = joinPath(res.root_b, c.path);
+      const target = c.kind === "removed" ? aPath : bPath; // the surviving side
+
+      const actions = el("td", { className: "col-actions" });
+      const renderBtn = el("button", { textContent: "Render →" });
+      renderBtn.addEventListener("click", () => sendToRender(target));
+      actions.append(renderBtn);
+      if (c.kind === "modified") {
+        const cmpBtn = el("button", { textContent: "Compare" });
+        cmpBtn.addEventListener("click", () => openFileDiff(aPath, bPath, c.path));
+        actions.append(" ", cmpBtn);
+      }
+
       $("#diff-table tbody").append(el("tr", {},
         el("td", {}, el("span", { className: `pill ${c.kind}`, textContent: c.kind })),
         el("td", { textContent: c.path }),
-        el("td", { textContent: c.detail || "" })
+        el("td", { textContent: c.detail || "" }),
+        actions
       ));
     }
   } catch (e) {
     fail(e);
   }
+});
+
+// --- side-by-side file diff overlay ---
+let fileDiffHunks = [];
+let fileDiffHunkIdx = -1;
+
+function fdRow(r) {
+  return el("div", { className: "fd-row type-" + r.type },
+    el("div", { className: "fd-ln", textContent: r.left_num || "" }),
+    el("div", { className: "fd-left", textContent: r.left }),
+    el("div", { className: "fd-ln", textContent: r.right_num || "" }),
+    el("div", { className: "fd-right", textContent: r.right })
+  );
+}
+
+async function openFileDiff(aPath, bPath, title) {
+  const scroll = $("#filediff-scroll");
+  $("#filediff-title").textContent = title;
+  $("#filediff-count").textContent = "";
+  scroll.replaceChildren(el("div", { className: "render-empty", textContent: "Diffing…" }));
+  $("#filediff").classList.remove("hidden");
+  fileDiffHunks = [];
+  fileDiffHunkIdx = -1;
+  try {
+    const res = await gui().FileDiff(aPath, bPath);
+    scroll.replaceChildren();
+    if (res.binary) {
+      scroll.append(el("div", { className: "render-empty", textContent: "Binary file — cannot show a line diff." }));
+      return;
+    }
+    if (res.too_large) {
+      scroll.append(el("div", { className: "render-empty", textContent: "File too large to diff inline." }));
+      return;
+    }
+    let inHunk = false;
+    for (const r of res.rows || []) {
+      const row = fdRow(r);
+      if (r.type !== "same") {
+        if (!inHunk) fileDiffHunks.push(row);
+        inHunk = true;
+      } else {
+        inHunk = false;
+      }
+      scroll.append(row);
+    }
+    $("#filediff-count").textContent = `${fileDiffHunks.length} difference${fileDiffHunks.length === 1 ? "" : "s"}`;
+    if (fileDiffHunks.length) gotoHunk(0);
+  } catch (e) {
+    scroll.replaceChildren();
+    fail(e);
+  }
+}
+
+function gotoHunk(i) {
+  if (!fileDiffHunks.length) return;
+  fileDiffHunkIdx = (i + fileDiffHunks.length) % fileDiffHunks.length;
+  fileDiffHunks.forEach((h) => h.classList.remove("hunk-current"));
+  const h = fileDiffHunks[fileDiffHunkIdx];
+  h.classList.add("hunk-current");
+  h.scrollIntoView({ block: "center" });
+}
+
+$("#filediff-next").addEventListener("click", () => gotoHunk(fileDiffHunkIdx + 1));
+$("#filediff-prev").addEventListener("click", () => gotoHunk(fileDiffHunkIdx - 1));
+$("#filediff-close").addEventListener("click", () => $("#filediff").classList.add("hidden"));
+document.addEventListener("keydown", (e) => {
+  if ($("#filediff").classList.contains("hidden")) return;
+  if (e.key === "Escape") $("#filediff").classList.add("hidden");
+  else if (e.key === "ArrowDown" || e.key === "n") { e.preventDefault(); gotoHunk(fileDiffHunkIdx + 1); }
+  else if (e.key === "ArrowUp" || e.key === "p") { e.preventDefault(); gotoHunk(fileDiffHunkIdx - 1); }
 });
 
 // --- Database ---
