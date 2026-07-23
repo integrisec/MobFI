@@ -25,13 +25,14 @@ const (
 	Emulator Transport = "emulator"
 )
 
-// Device is a single reachable Android/iOS target.
+// Device is a single Android/iOS target seen by a detector.
 type Device struct {
 	ID        string // stable identifier (adb serial, iOS UDID, ...)
 	Name      string // human-friendly label
 	Platform  Platform
 	Transport Transport
 	Address   string // host:port for TCP transports; empty otherwise
+	State     string // reachability, e.g. "device", "offline", "unauthorized"
 }
 
 // Detector discovers devices reachable via one mechanism. Implementations
@@ -49,9 +50,11 @@ type Registry struct {
 }
 
 // DefaultRegistry returns the registry with all built-in detectors.
-// TODO: register adb, libimobiledevice, emulator and TCP-bridge detectors.
+// TODO: also register libimobiledevice (iOS) and TCP-bridge detectors.
 func DefaultRegistry() *Registry {
-	return &Registry{}
+	r := &Registry{}
+	r.Add(NewADBDetector())
+	return r
 }
 
 // Add registers a detector.
