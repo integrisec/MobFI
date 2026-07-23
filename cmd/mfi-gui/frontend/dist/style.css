@@ -236,6 +236,10 @@ label.inline input { min-width: 0; }
 .state-device { color: var(--ok); }
 .state-unauthorized, .state-unpaired, .state-offline { color: var(--danger); }
 
+.root-cell { color: var(--muted); }
+.root-cell.root-yes { color: var(--danger); font-weight: 600; }
+.root-cell.root-no { color: var(--muted); }
+
 .link { color: var(--accent); cursor: pointer; }
 
 .toast {

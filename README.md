@@ -196,8 +196,9 @@ wails dev      # live-reload development window
 wails build    # package a native app (e.g. build/bin/MobFI.app on macOS)
 ```
 
-The window opens on the **Devices** step of the wizard, with tabs for Extract,
-Scan, Diff, Database and Render.
+The window opens on the **Devices** step, which auto-refreshes (a manual
+Detect button forces a re-check) and shows each device's rooted/jailbroken
+status, with tabs for Apps, Extract, Scan, Diff, Database and Render.
 
 ---
 

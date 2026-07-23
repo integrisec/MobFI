@@ -86,11 +86,18 @@ function showView(name) {
   document.querySelectorAll(".tab").forEach((t) =>
     t.classList.toggle("active", t.dataset.view === name)
   );
+  onViewChange(name);
 }
 
 document.querySelectorAll(".tab").forEach((t) =>
   t.addEventListener("click", () => showView(t.dataset.view))
 );
+
+// Poll for devices only while the Devices view is active.
+function onViewChange(name) {
+  if (name === "devices") startDevicePolling();
+  else stopDevicePolling();
+}
 
 function clearRows(tbodySel) {
   $(tbodySel).replaceChildren();
@@ -102,39 +109,96 @@ function emptyRow(tbodySel, cols, text) {
   $(tbodySel).append(tr);
 }
 
-// --- Devices ---
-$("#btn-detect").addEventListener("click", async () => {
-  clearRows("#devices-table tbody");
-  try {
-    const devices = await gui().DetectDevices();
-    if (!devices || devices.length === 0) {
-      emptyRow("#devices-table tbody", 6, "no devices detected");
-      return;
-    }
-    for (const d of devices) {
-      const appsBtn = el("button", { textContent: "List apps" });
-      appsBtn.addEventListener("click", () => loadApps(d.id));
-      const useBtn = el("button", { textContent: "Use in Extract" });
-      useBtn.addEventListener("click", () => {
-        $("#ex-device").value = d.id;
-        $("#ex-bundle").focus();
-        showView("extract");
-      });
-      const actions = el("td", { className: "col-actions" }, appsBtn);
-      actions.append(" ", useBtn);
-      const tr = el("tr", {},
-        el("td", { textContent: d.id }),
-        el("td", { textContent: d.name }),
-        el("td", { textContent: d.platform }),
-        el("td", { textContent: d.transport }),
-        el("td", { className: `state-${d.state}`, textContent: d.state }),
-        actions
-      );
-      $("#devices-table tbody").append(tr);
-    }
-  } catch (e) {
-    fail(e);
+// --- Devices (auto-refreshing) ---
+const rootCache = new Map(); // deviceID -> "rooted"/"jailbroken"/...
+let devicePollTimer = null;
+let lastDevicesSig = null;
+
+function startDevicePolling() {
+  refreshDevices();
+  if (!devicePollTimer) devicePollTimer = setInterval(refreshDevices, 2500);
+}
+function stopDevicePolling() {
+  if (devicePollTimer) {
+    clearInterval(devicePollTimer);
+    devicePollTimer = null;
   }
+}
+
+async function refreshDevices(force) {
+  let devices;
+  try {
+    devices = (await gui().DetectDevices()) || [];
+  } catch (e) {
+    if (force) fail(e); // stay silent during background polling
+    return;
+  }
+  const sig = JSON.stringify(devices.map((d) => [d.id, d.platform, d.transport, d.state, d.name]));
+  if (!force && sig === lastDevicesSig) return; // nothing changed
+  lastDevicesSig = sig;
+  renderDevices(devices);
+}
+
+function applyRootCell(cell, status) {
+  if (!status) {
+    cell.textContent = "…";
+    cell.className = "root-cell";
+    return;
+  }
+  cell.textContent = status;
+  const flagged = status === "rooted" || status === "jailbroken";
+  cell.className = "root-cell " + (flagged ? "root-yes" : "root-no");
+}
+
+async function fetchDeviceRoot(d, cell) {
+  try {
+    const status = await gui().DeviceRoot(d.id, d.platform);
+    rootCache.set(d.id, status);
+    applyRootCell(cell, status);
+  } catch (e) {
+    applyRootCell(cell, "unknown");
+  }
+}
+
+function renderDevices(devices) {
+  clearRows("#devices-table tbody");
+  if (devices.length === 0) {
+    emptyRow("#devices-table tbody", 7, "no devices detected");
+    return;
+  }
+  for (const d of devices) {
+    const appsBtn = el("button", { textContent: "List apps" });
+    appsBtn.addEventListener("click", () => loadApps(d.id));
+    const useBtn = el("button", { textContent: "Use in Extract" });
+    useBtn.addEventListener("click", () => {
+      $("#ex-device").value = d.id;
+      $("#ex-bundle").focus();
+      showView("extract");
+    });
+    const actions = el("td", { className: "col-actions" }, appsBtn);
+    actions.append(" ", useBtn);
+
+    const rootCell = el("td", {});
+    applyRootCell(rootCell, rootCache.get(d.id));
+
+    $("#devices-table tbody").append(el("tr", {},
+      el("td", { textContent: d.id }),
+      el("td", { textContent: d.name }),
+      el("td", { textContent: d.platform }),
+      el("td", { textContent: d.transport }),
+      el("td", { className: `state-${d.state}`, textContent: d.state }),
+      rootCell,
+      actions
+    ));
+
+    if (!rootCache.has(d.id)) fetchDeviceRoot(d, rootCell);
+  }
+}
+
+// Manual Detect re-checks everything, including root/jailbreak status.
+$("#btn-detect").addEventListener("click", () => {
+  rootCache.clear();
+  refreshDevices(true);
 });
 
 // --- Apps ---
