@@ -30,7 +30,7 @@ wails build    # package build/bin/MobFI.app (macOS); cgo/WebKit toolchain requi
 
 The GUI frontend under `cmd/mfi-gui/frontend/dist/` is **vanilla HTML/JS/CSS** — no npm/build step. It calls the Go bindings at `window.go.main.GUI.*`, which the Wails runtime injects from the exported methods on the `GUI` type (`cmd/mfi-gui/gui.go`). Generated `wailsjs/` bindings are gitignored; don't rely on them.
 
-External dependencies: `modernc.org/sqlite` (`internal/dbview`, **cgo-free**) and `github.com/alecthomas/chroma/v2` (GUI syntax highlighting, pure Go). The GUI itself links Wails (cgo/WebKit). Keep **core** (`internal/`) deps cgo-free so cross-compiling the CLI stays toolchain-free; cgo is acceptable in `cmd/mfi-gui`. After changing imports, run `make tidy`.
+External dependencies: `modernc.org/sqlite` (`internal/dbview`, **cgo-free**) and `github.com/alecthomas/chroma/v2` (GUI syntax highlighting, pure Go). The GUI also uses `github.com/creack/pty` (Console PTY sessions) and vendors xterm.js under `cmd/mfi-gui/frontend/dist/vendor/` (committed static files, no npm). The GUI itself links Wails (cgo/WebKit). Keep **core** (`internal/`) deps cgo-free so cross-compiling the CLI stays toolchain-free; cgo is acceptable in `cmd/mfi-gui`. After changing imports, run `make tidy`.
 
 ## Repository layout
 

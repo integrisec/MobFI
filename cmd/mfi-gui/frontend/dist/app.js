@@ -148,6 +148,7 @@ document.querySelectorAll(".tab").forEach((t) =>
 function onViewChange(name) {
   if (name === "devices") startDevicePolling();
   else stopDevicePolling();
+  if (name === "console") populateConsoleDevices();
 }
 
 function clearRows(tbodySel) {
@@ -1174,6 +1175,104 @@ function wireWrapToggle(checkboxId, tableSel, storeKey) {
 }
 wireWrapToggle("sc-wrap", "#scan-table", "mobfi.scan.wrap");
 wireWrapToggle("df-wrap", "#diff-table", "mobfi.diff.wrap");
+
+// --- Console (adb shell / SSH via a PTY, rendered with xterm.js) ---
+let consoleDevices = [];
+let conId = null;
+let conTerm = null;
+let conFit = null;
+let conOff = null;
+let conExitOff = null;
+
+async function populateConsoleDevices() {
+  const sel = $("#con-device");
+  const prev = sel.value;
+  try {
+    consoleDevices = (await gui().DetectDevices()) || [];
+  } catch (e) {
+    consoleDevices = [];
+  }
+  sel.replaceChildren();
+  if (!consoleDevices.length) {
+    sel.append(el("option", { value: "", textContent: "(no devices — Detect first)" }));
+  } else {
+    consoleDevices.forEach((d, i) =>
+      sel.append(el("option", { value: String(i), textContent: `${d.name || d.id} — ${d.platform}` }))
+    );
+    if (prev && sel.querySelector(`option[value="${prev}"]`)) sel.value = prev;
+  }
+  updateConsoleSsh();
+}
+
+function selectedConsoleDevice() {
+  const i = parseInt($("#con-device").value, 10);
+  return isNaN(i) ? null : consoleDevices[i];
+}
+
+function updateConsoleSsh() {
+  const d = selectedConsoleDevice();
+  $("#con-ssh").classList.toggle("hidden", !(d && d.platform === "ios"));
+}
+$("#con-device").addEventListener("change", updateConsoleSsh);
+
+function setConsoleConnected(on) {
+  $("#con-connect").disabled = on;
+  $("#con-disconnect").disabled = !on;
+}
+
+async function stopConsole() {
+  if (conOff) { conOff(); conOff = null; }
+  if (conExitOff) { conExitOff(); conExitOff = null; }
+  if (conId) {
+    try { await gui().ConsoleClose(conId); } catch (e) { /* already gone */ }
+    conId = null;
+  }
+  if (conTerm) { conTerm.dispose(); conTerm = null; conFit = null; }
+  setConsoleConnected(false);
+}
+
+async function startConsole() {
+  const d = selectedConsoleDevice();
+  if (!d) { toast("select a device"); return; }
+  await stopConsole();
+
+  let id;
+  try {
+    id = await gui().ConsoleStart(d.id, d.platform,
+      $("#con-user").value.trim(), $("#con-host").value.trim(), $("#con-port").value.trim());
+  } catch (e) {
+    fail(e);
+    return;
+  }
+  conId = id;
+
+  const container = $("#con-term");
+  container.replaceChildren();
+  conTerm = new Terminal({
+    fontSize: 12.5,
+    fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
+    cursorBlink: true,
+    theme: { background: "#0b0f14", foreground: "#d7dee7" },
+  });
+  conFit = new FitAddon.FitAddon();
+  conTerm.loadAddon(conFit);
+  conTerm.open(container);
+  conFit.fit();
+  conTerm.focus();
+  conTerm.onData((data) => gui().ConsoleWrite(id, data));
+  conTerm.onResize(({ rows, cols }) => gui().ConsoleResize(id, rows, cols));
+  gui().ConsoleResize(id, conTerm.rows, conTerm.cols);
+  conOff = window.runtime.EventsOn("console:data:" + id, (data) => { if (conTerm) conTerm.write(data); });
+  conExitOff = window.runtime.EventsOn("console:exit:" + id, () => {
+    if (conTerm) conTerm.write("\r\n\x1b[90m[session ended]\x1b[0m\r\n");
+    setConsoleConnected(false);
+  });
+  setConsoleConnected(true);
+}
+
+$("#con-connect").addEventListener("click", startConsole);
+$("#con-disconnect").addEventListener("click", stopConsole);
+window.addEventListener("resize", () => { if (conFit) conFit.fit(); });
 
 // Scroll-to-top/bottom buttons for the main content area.
 const mainEl = document.querySelector("main");

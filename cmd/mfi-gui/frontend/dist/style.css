@@ -254,6 +254,16 @@ ul.perms li { break-inside: avoid; }
 }
 .v-resizer:hover::before { background: var(--accent); }
 
+.term {
+  height: 66vh;
+  background: #0b0f14;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+  overflow: hidden;
+}
+.term .xterm { height: 100%; }
+
 .output {
   background: #0b0f14;
   border: 1px solid var(--line);
