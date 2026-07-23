@@ -232,3 +232,9 @@ careful:
   are not committed by accident.
 
 Only use MobFI on devices and applications you are **authorized** to inspect.
+
+---
+
+## License
+
+Released under the [MIT License](./LICENSE) — Copyright (c) 2026 integrisec.
