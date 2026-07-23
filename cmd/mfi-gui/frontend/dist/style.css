@@ -21,6 +21,9 @@ html, body {
   font: 14px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
+/* App shell: fixed top bar, scrollable content area. */
+body { display: flex; flex-direction: column; overflow: hidden; }
+
 .topbar {
   display: flex;
   align-items: center;
@@ -28,8 +31,7 @@ html, body {
   padding: 12px 20px;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
-  position: sticky;
-  top: 0;
+  flex: none;
   z-index: 5;
 }
 
@@ -49,8 +51,33 @@ html, body {
 .tab:hover { color: var(--text); background: var(--panel-2); }
 .tab.active { color: #fff; background: var(--accent-2); }
 
-main { padding: 22px; }
+main { padding: 22px; flex: 1; overflow-y: auto; position: relative; }
 .view.hidden { display: none; }
+
+/* Floating scroll-to-top/bottom buttons */
+.jumpers {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 20;
+}
+.jumpers.hidden { display: none; }
+.jumpers button {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  opacity: 0.85;
+}
+.jumpers button:hover { opacity: 1; border-color: var(--accent); }
 
 h2 { margin: 0 0 6px; font-size: 17px; }
 .hint { color: var(--muted); margin: 0 0 16px; }

@@ -1024,5 +1024,18 @@ function wireWrapToggle(checkboxId, tableSel, storeKey) {
 wireWrapToggle("sc-wrap", "#scan-table", "mobfi.scan.wrap");
 wireWrapToggle("df-wrap", "#diff-table", "mobfi.diff.wrap");
 
+// Scroll-to-top/bottom buttons for the main content area.
+const mainEl = document.querySelector("main");
+function updateJumpers() {
+  const scrollable = mainEl.scrollHeight > mainEl.clientHeight + 24;
+  $("#jumpers").classList.toggle("hidden", !scrollable);
+}
+$("#jump-top").addEventListener("click", () => mainEl.scrollTo({ top: 0, behavior: "smooth" }));
+$("#jump-bottom").addEventListener("click", () => mainEl.scrollTo({ top: mainEl.scrollHeight, behavior: "smooth" }));
+mainEl.addEventListener("scroll", updateJumpers);
+// Re-check whenever the content changes size (view switches, list renders, …).
+new ResizeObserver(updateJumpers).observe(mainEl);
+new MutationObserver(updateJumpers).observe(mainEl, { childList: true, subtree: true });
+
 // Start on the Devices step of the wizard.
 showView("devices");
