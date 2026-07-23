@@ -38,8 +38,12 @@ type Registry struct {
 }
 
 // DefaultRegistry returns the registry with all built-in connectors.
-// TODO: register adb, ssh and TCP-bridge connectors.
-func DefaultRegistry() *Registry { return &Registry{} }
+// TODO: register ssh (iOS) and TCP-bridge connectors.
+func DefaultRegistry() *Registry {
+	r := &Registry{}
+	r.Add(NewADBConnector())
+	return r
+}
 
 // Add registers a connector.
 func (r *Registry) Add(c Connector) { r.connectors = append(r.connectors, c) }
