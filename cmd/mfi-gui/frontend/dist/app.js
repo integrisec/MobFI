@@ -269,6 +269,27 @@ $("#tcp-addr").addEventListener("keydown", (e) => {
   if (e.key === "Enter") connectTCP();
 });
 
+// Pair with an Android 11+ device for wireless debugging (host:port + code).
+async function pairTCP() {
+  const addr = $("#pair-addr").value.trim();
+  const code = $("#pair-code").value.trim();
+  if (!addr || !code) {
+    toast("enter the pairing host:port and code");
+    return;
+  }
+  try {
+    const msg = await gui().PairTCP(addr, code);
+    toast(msg || "paired", true);
+    $("#pair-code").value = "";
+  } catch (e) {
+    fail(e);
+  }
+}
+$("#btn-pair").addEventListener("click", pairTCP);
+$("#pair-code").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") pairTCP();
+});
+
 // --- Apps ---
 let currentAppsDevice = null;
 let currentApps = [];

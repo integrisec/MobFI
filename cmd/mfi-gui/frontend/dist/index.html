@@ -32,6 +32,12 @@
         </div>
       </div>
       <p class="hint">Android (adb) and iOS (libimobiledevice) devices over USB, emulator, or TCP. The list refreshes automatically; Detect forces a re-check (including root/jailbreak).</p>
+      <div class="form">
+        <label>Pair (Android 11+ wireless) <input id="pair-addr" placeholder="pairing host:port" /></label>
+        <label>Pairing code <input id="pair-code" placeholder="6 digits" /></label>
+        <button id="btn-pair">Pair</button>
+      </div>
+      <p class="hint">Wireless debugging → “Pair device with pairing code” gives the pairing host:port and code above. After pairing, Connect using the host:port shown on the main Wireless debugging screen (a different port).</p>
       <table class="grid" id="devices-table">
         <thead><tr><th>ID</th><th>Name</th><th>Platform</th><th>Transport</th><th>State</th><th>Root / JB</th><th class="no-resize col-actions"></th></tr></thead>
         <tbody></tbody>
