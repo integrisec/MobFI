@@ -25,6 +25,7 @@ type consoleSession struct {
 	ptmx *os.File
 	cmd  *exec.Cmd
 	aux  *exec.Cmd // e.g. iproxy USB port-forward for iOS SSH
+	log  *os.File  // optional session transcript
 }
 
 var (
@@ -43,7 +44,7 @@ type ConsoleInfo struct {
 	Status string `json:"status"` // human-readable transport summary
 }
 
-func (g *GUI) ConsoleStart(deviceID, platform, sshUser, sshHost, sshPort string) (ConsoleInfo, error) {
+func (g *GUI) ConsoleStart(deviceID, platform, sshUser, sshHost, sshPort, logPath string) (ConsoleInfo, error) {
 	var cmd, aux *exec.Cmd
 	var status string
 	sshOpts := []string{"-o", "StrictHostKeyChecking=accept-new", "-o", "UserKnownHostsFile=/dev/null"}
@@ -95,9 +96,17 @@ func (g *GUI) ConsoleStart(deviceID, platform, sshUser, sshHost, sshPort string)
 		return ConsoleInfo{}, err
 	}
 
+	var logFile *os.File
+	if logPath != "" {
+		if f, err := os.Create(logPath); err == nil { // best-effort transcript
+			logFile = f
+			status += " · logging"
+		}
+	}
+
 	id := fmt.Sprintf("con-%d", time.Now().UnixNano())
 	consolesMu.Lock()
-	consoles[id] = &consoleSession{ptmx: ptmx, cmd: cmd, aux: aux}
+	consoles[id] = &consoleSession{ptmx: ptmx, cmd: cmd, aux: aux, log: logFile}
 	consolesMu.Unlock()
 
 	go func() {
@@ -106,6 +115,9 @@ func (g *GUI) ConsoleStart(deviceID, platform, sshUser, sshHost, sshPort string)
 			n, err := ptmx.Read(buf)
 			if n > 0 {
 				wailsruntime.EventsEmit(g.ctx, "console:data:"+id, string(buf[:n]))
+				if logFile != nil {
+					logFile.Write(buf[:n])
+				}
 			}
 			if err != nil {
 				break
@@ -155,6 +167,9 @@ func (g *GUI) ConsoleClose(id string) error {
 	}
 	if s.aux != nil && s.aux.Process != nil {
 		_ = s.aux.Process.Kill() // tear down the iproxy forward
+	}
+	if s.log != nil {
+		_ = s.log.Close()
 	}
 	return nil
 }

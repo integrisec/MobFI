@@ -13,6 +13,8 @@
 
 * { box-sizing: border-box; }
 
+.hidden { display: none !important; }
+
 html, body {
   margin: 0;
   height: 100%;
@@ -254,8 +256,11 @@ ul.perms li { break-inside: avoid; }
 }
 .v-resizer:hover::before { background: var(--accent); }
 
+.term-bar { display: flex; align-items: center; gap: 8px; margin: 10px 0 6px; }
+.term-bar .mime { margin-left: auto; }
+
 .term {
-  height: 66vh;
+  height: 62vh;
   background: #0b0f14;
   border: 1px solid var(--line);
   border-radius: 8px;

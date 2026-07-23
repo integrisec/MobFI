@@ -165,20 +165,30 @@
         <h2>Console</h2>
         <div class="row-actions">
           <label class="inline">Device <select id="con-device"></select></label>
-          <span id="con-ssh" class="hidden">
-            <input id="con-host" class="search" placeholder="host (blank = USB)" />
-            <input id="con-port" placeholder="22" style="min-width:70px" />
-            <input id="con-user" placeholder="root" style="min-width:90px" />
-          </span>
+          <label class="inline"><input type="checkbox" id="con-log" /> Log to file</label>
           <button class="primary" id="con-connect">Connect</button>
           <button id="con-disconnect" disabled>Disconnect</button>
-          <button id="con-clear" title="Clear the terminal">Clear</button>
-          <button id="con-font-dec" title="Smaller font">A−</button>
-          <button id="con-font-inc" title="Larger font">A+</button>
-          <span class="mime" id="con-status"></span>
         </div>
       </div>
-      <p class="hint">Android opens an <code>adb shell</code>. iOS needs a jailbroken device running sshd: leave <em>host</em> blank to auto-forward over USB with <code>iproxy</code> (port = the device's SSH port, default 22), or set a host for network SSH.</p>
+
+      <!-- iOS SSH options (shown only when an iOS device is selected) -->
+      <div class="form hidden" id="con-ssh">
+        <label>SSH host <input id="con-host" placeholder="blank = USB via iproxy" /></label>
+        <label>Port <input id="con-port" placeholder="22" style="min-width:90px" /></label>
+        <label>User <input id="con-user" placeholder="root" style="min-width:120px" /></label>
+      </div>
+
+      <p class="hint">Android opens an <code>adb shell</code>. For iOS (jailbroken, sshd running): leave the SSH host blank to auto-forward over USB with <code>iproxy</code>, or set a host for network SSH.</p>
+
+      <div class="term-bar">
+        <select id="con-history" title="Command history"><option value="">History…</option></select>
+        <button id="con-copy" title="Copy selection">Copy</button>
+        <button id="con-paste" title="Paste from clipboard">Paste</button>
+        <button id="con-clear" title="Clear the terminal">Clear</button>
+        <button id="con-font-dec" title="Smaller font">A−</button>
+        <button id="con-font-inc" title="Larger font">A+</button>
+        <span class="mime" id="con-status"></span>
+      </div>
       <div class="term" id="con-term"></div>
     </section>
   </main>

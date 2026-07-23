@@ -1200,6 +1200,63 @@ $("#con-clear").addEventListener("click", () => { if (conTerm) conTerm.clear(); 
 $("#con-font-dec").addEventListener("click", () => { conFontSize = Math.max(8, conFontSize - 1); applyConsoleFont(); });
 $("#con-font-inc").addEventListener("click", () => { conFontSize = Math.min(28, conFontSize + 1); applyConsoleFont(); });
 
+// Copy the terminal selection / paste into the PTY.
+$("#con-copy").addEventListener("click", async () => {
+  const sel = conTerm && conTerm.getSelection();
+  if (!sel) { toast("nothing selected"); return; }
+  try { await gui().Copy(sel); toast("copied", true); } catch (e) { fail(e); }
+});
+$("#con-paste").addEventListener("click", async () => {
+  if (!conId) return;
+  try {
+    const text = await gui().ClipboardGet();
+    if (text) await gui().ConsoleWrite(conId, text);
+    if (conTerm) conTerm.focus();
+  } catch (e) { fail(e); }
+});
+
+// Command history (reconstructed from typed lines; persisted, deduped).
+let conHistory = JSON.parse(localStorage.getItem("mobfi.console.history") || "[]");
+let conLineBuf = "";
+function trackHistory(data) {
+  for (const ch of data) {
+    if (ch === "\r" || ch === "\n") {
+      const line = conLineBuf.trim();
+      if (line) addHistory(line);
+      conLineBuf = "";
+    } else if (ch === "\x7f" || ch === "\b") {
+      conLineBuf = conLineBuf.slice(0, -1);
+    } else if (ch === "\x1b" || ch === "\x03" || ch === "\x15") {
+      conLineBuf = ""; // escape sequence / Ctrl-C / Ctrl-U — abandon the line
+    } else if (ch >= " ") {
+      conLineBuf += ch;
+    }
+  }
+}
+function addHistory(cmd) {
+  conHistory = conHistory.filter((c) => c !== cmd);
+  conHistory.unshift(cmd);
+  if (conHistory.length > 50) conHistory.length = 50;
+  localStorage.setItem("mobfi.console.history", JSON.stringify(conHistory));
+  refreshHistoryDropdown();
+}
+function refreshHistoryDropdown() {
+  const sel = $("#con-history");
+  sel.replaceChildren(el("option", { value: "", textContent: "History…" }));
+  for (const c of conHistory) {
+    sel.append(el("option", { value: c, textContent: c.length > 60 ? c.slice(0, 57) + "…" : c }));
+  }
+}
+$("#con-history").addEventListener("change", () => {
+  const cmd = $("#con-history").value;
+  if (cmd && conId) {
+    gui().ConsoleWrite(conId, cmd);
+    if (conTerm) conTerm.focus();
+  }
+  $("#con-history").value = "";
+});
+refreshHistoryDropdown();
+
 async function populateConsoleDevices() {
   const sel = $("#con-device");
   const prev = sel.value;
@@ -1253,10 +1310,15 @@ async function startConsole() {
   if (!d) { toast("select a device"); return; }
   await stopConsole();
 
+  let logPath = "";
+  if ($("#con-log").checked) {
+    try { logPath = await gui().PickSaveFile("mobfi-console.log"); } catch (e) { logPath = ""; }
+  }
+
   let info;
   try {
     info = await gui().ConsoleStart(d.id, d.platform,
-      $("#con-user").value.trim(), $("#con-host").value.trim(), $("#con-port").value.trim());
+      $("#con-user").value.trim(), $("#con-host").value.trim(), $("#con-port").value.trim(), logPath);
   } catch (e) {
     fail(e);
     return;
@@ -1279,7 +1341,7 @@ async function startConsole() {
   conTerm.open(container);
   conFit.fit();
   conTerm.focus();
-  conTerm.onData((data) => gui().ConsoleWrite(id, data));
+  conTerm.onData((data) => { trackHistory(data); gui().ConsoleWrite(id, data); });
   conTerm.onResize(({ rows, cols }) => gui().ConsoleResize(id, rows, cols));
   gui().ConsoleResize(id, conTerm.rows, conTerm.cols);
   conOff = window.runtime.EventsOn("console:data:" + id, (data) => { if (conTerm) conTerm.write(data); });

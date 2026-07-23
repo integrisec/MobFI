@@ -117,3 +117,17 @@ func (g *GUI) PickFile() (string, error) {
 func (g *GUI) Copy(text string) error {
 	return wailsruntime.ClipboardSetText(g.ctx, text)
 }
+
+// ClipboardGet returns the current clipboard text.
+func (g *GUI) ClipboardGet() (string, error) {
+	return wailsruntime.ClipboardGetText(g.ctx)
+}
+
+// PickSaveFile opens a native save dialog and returns the chosen path (empty
+// if cancelled).
+func (g *GUI) PickSaveFile(defaultName string) (string, error) {
+	return wailsruntime.SaveFileDialog(g.ctx, wailsruntime.SaveDialogOptions{
+		Title:           "Save session log",
+		DefaultFilename: defaultName,
+	})
+}
