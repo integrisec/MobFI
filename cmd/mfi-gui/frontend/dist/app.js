@@ -691,10 +691,35 @@ function dataURLToBlobURL(dataURL) {
   return URL.createObjectURL(new Blob([arr], { type: mime }));
 }
 
+function humanSize(n) {
+  if (!n) return "";
+  const u = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  let v = n;
+  while (v >= 1024 && i < u.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(i && v < 10 ? 1 : 0)} ${u[i]}`;
+}
+
 function displayRender(res) {
   const pane = $("#render-pane");
-  $("#rn-mime").textContent = res.mime || "";
+  $("#rn-mime").textContent = [res.mime, humanSize(res.size)].filter(Boolean).join(" · ");
+  $("#btn-render-external").disabled = !currentRenderPath;
   pane.replaceChildren();
+
+  // A database file: offer opening it in the Database tab.
+  if (res.mime === "application/vnd.sqlite3" && currentRenderPath) {
+    const openDb = el("button", { className: "primary", textContent: "Open in Database →" });
+    openDb.addEventListener("click", () => {
+      $("#db-file").value = currentRenderPath;
+      showView("db");
+      loadTables();
+    });
+    pane.append(el("div", { className: "render-actions" }, openDb));
+  }
+
   switch (res.kind) {
     case "image":
       pane.append(el("img", { className: "render-img", src: res.data_url, alt: res.name }));
@@ -708,6 +733,12 @@ function displayRender(res) {
       pane.append(box);
       break;
     }
+    case "toolarge":
+      pane.append(el("div", { className: "render-empty" },
+        el("div", { textContent: `${res.name} — ${humanSize(res.size)} is too large to preview inline.` }),
+        el("div", { className: "hint", textContent: "Use the Hex view toggle, or Open externally." })
+      ));
+      break;
     default: // text | hex | error
       pane.append(el("pre", { className: "render-text", textContent: res.text }));
   }
@@ -715,6 +746,7 @@ function displayRender(res) {
 
 async function renderInPane(path) {
   currentRenderPath = path;
+  $("#btn-render-external").disabled = false;
   const pane = $("#render-pane");
   pane.replaceChildren(el("div", { className: "render-empty", textContent: "Rendering…" }));
   try {
@@ -762,6 +794,7 @@ function treeNode(entry, depth) {
 
 async function openRenderFolder(root) {
   currentRenderPath = null;
+  $("#btn-render-external").disabled = true;
   $("#render-tree").classList.remove("hidden");
   $("#render-hsplit").classList.remove("hidden");
   const tree = $("#render-tree");
@@ -797,6 +830,14 @@ $("#btn-render-folder").addEventListener("click", async () => {
 });
 $("#rn-hex").addEventListener("change", () => {
   if (currentRenderPath) renderInPane(currentRenderPath);
+});
+$("#btn-render-external").addEventListener("click", async () => {
+  if (!currentRenderPath) return;
+  try {
+    await gui().OpenExternally(currentRenderPath);
+  } catch (e) {
+    fail(e);
+  }
 });
 
 function makeHResizer(divider, target, storeKey) {

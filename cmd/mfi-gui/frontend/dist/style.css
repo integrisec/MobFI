@@ -256,6 +256,7 @@ ul.perms li { break-inside: avoid; }
 .render-hsplit:hover { background: var(--accent); }
 .render-pane { flex: 1; overflow: auto; background: var(--bg); }
 .render-empty { color: var(--muted); padding: 24px; }
+.render-actions { padding: 10px 14px; border-bottom: 1px solid var(--line); }
 
 .tree-root {
   padding: 6px 10px;

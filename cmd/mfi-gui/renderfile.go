@@ -5,7 +5,9 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -26,6 +28,23 @@ type FSEntry struct {
 	Name string `json:"name"`
 	Path string `json:"path"`
 	Dir  bool   `json:"dir"`
+}
+
+// OpenExternally opens a path in the OS default application.
+func (g *GUI) OpenExternally(path string) error {
+	if path == "" {
+		return fmt.Errorf("no path")
+	}
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", path)
+	case "windows":
+		cmd = exec.Command("cmd", "/c", "start", "", path)
+	default: // linux, bsd, …
+		cmd = exec.Command("xdg-open", path)
+	}
+	return cmd.Start()
 }
 
 // ListDir lists a directory (directories first, then files, case-insensitive).
@@ -49,12 +68,13 @@ func (g *GUI) ListDir(path string) ([]FSEntry, error) {
 
 // RenderResult is a rendered view of a file for the GUI.
 type RenderResult struct {
-	Kind    string `json:"kind"` // image | pdf | code | text | hex | error
+	Kind    string `json:"kind"` // image | pdf | code | text | hex | toolarge | error
 	MIME    string `json:"mime"`
 	Text    string `json:"text"`     // plain text or hex dump
 	HTML    string `json:"html"`     // syntax-highlighted code
 	DataURL string `json:"data_url"` // image / pdf
 	Name    string `json:"name"`
+	Size    int64  `json:"size"` // file size in bytes
 }
 
 // RenderPath renders a file. mode "hex" forces a hex dump; "auto" detects the
@@ -72,22 +92,35 @@ func (g *GUI) RenderPath(path, mode string) (RenderResult, error) {
 		r.Kind, r.Text = "text", "(folder — select a file)"
 		return r, nil
 	}
+	r.Size = info.Size()
 	ext := strings.ToLower(filepath.Ext(path))
 
 	if mode == "hex" {
-		return hexResult(path), nil
+		res := hexResult(path)
+		res.Size = r.Size
+		return res, nil
 	}
 
 	if mime := imageMIME(ext); mime != "" {
+		r.MIME = mime
+		if info.Size() > maxImageBytes {
+			r.Kind = "toolarge"
+			return r, nil
+		}
 		if b, err := readCapped(path, maxImageBytes); err == nil {
-			r.Kind, r.MIME = "image", mime
+			r.Kind = "image"
 			r.DataURL = "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(b)
 			return r, nil
 		}
 	}
 	if ext == ".pdf" || fileHasPrefix(path, "%PDF") {
+		r.MIME = "application/pdf"
+		if info.Size() > maxPDFBytes {
+			r.Kind = "toolarge"
+			return r, nil
+		}
 		if b, err := readCapped(path, maxPDFBytes); err == nil {
-			r.Kind, r.MIME = "pdf", "application/pdf"
+			r.Kind = "pdf"
 			r.DataURL = "data:application/pdf;base64," + base64.StdEncoding.EncodeToString(b)
 			return r, nil
 		}
