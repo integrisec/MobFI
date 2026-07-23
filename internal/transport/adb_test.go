@@ -71,13 +71,22 @@ const (
 /data/data/com.x/cache
 /data/data/com.x/shared_prefs
 `
+	walkFiles = `/data/data/com.x/files/a.txt
+/data/data/com.x/cache/c.bin
+/data/data/com.x/shared_prefs/p.xml
+`
 )
 
 func walkConn() *adbConn {
 	return &adbConn{bin: "adb", serial: "SER", run: func(_ context.Context, _ string, args ...string) ([]byte, error) {
-		for _, a := range args {
-			if a == "-type" {
-				return []byte(walkDirs), nil
+		for i, a := range args {
+			if a == "-type" && i+1 < len(args) {
+				switch args[i+1] {
+				case "d":
+					return []byte(walkDirs), nil
+				case "f":
+					return []byte(walkFiles), nil
+				}
 			}
 		}
 		return []byte(walkAll), nil

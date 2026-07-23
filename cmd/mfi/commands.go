@@ -12,6 +12,7 @@ import (
 	"github.com/integrisec/MobFI/internal/app"
 	"github.com/integrisec/MobFI/internal/device"
 	"github.com/integrisec/MobFI/internal/diff"
+	"github.com/integrisec/MobFI/internal/extract"
 	"github.com/integrisec/MobFI/internal/secrets"
 )
 
@@ -145,10 +146,16 @@ func runExtract(ctx context.Context, core *app.App, args []string) error {
 		return fmt.Errorf("device %q not found; run `mfi detect`", *deviceID)
 	}
 
-	res, err := core.ExtractApp(ctx, *target, *bundle, *dst, *scope)
+	// Live progress on stderr so stdout stays a clean summary.
+	progress := func(p extract.Progress) {
+		fmt.Fprintf(os.Stderr, "\r  %d file(s), %d byte(s)…", p.Files, p.Bytes)
+	}
+	res, err := core.ExtractApp(ctx, *target, *bundle, *dst, *scope, progress)
 	if err != nil {
+		fmt.Fprintln(os.Stderr)
 		return err
 	}
+	fmt.Fprintln(os.Stderr)
 	fmt.Printf("extracted %d file(s), %d byte(s) to %s\n", res.FileCount, res.ByteCount, res.Root)
 	if len(res.Skipped) > 0 {
 		fmt.Printf("skipped %d path(s):\n", len(res.Skipped))

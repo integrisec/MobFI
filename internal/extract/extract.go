@@ -15,11 +15,21 @@ import (
 	"github.com/integrisec/MobFI/internal/transport"
 )
 
+// Progress reports cumulative extraction progress after each file.
+type Progress struct {
+	Files int    `json:"files"`
+	Bytes int64  `json:"bytes"`
+	Path  string `json:"path"` // the file just copied
+}
+
 // Request describes an extraction job.
 type Request struct {
 	BundleID   string // target app package/bundle id (metadata for the report)
 	SourceRoot string // on-device directory to copy (e.g. /data/data/<pkg>)
 	Dest       string // local destination directory
+	// Progress, if set, is called after each file is copied. It runs on the
+	// extraction goroutine, so it must not block for long.
+	Progress func(Progress)
 }
 
 // SkippedFile records a path that could not be copied (typically a
@@ -85,6 +95,9 @@ func Run(ctx context.Context, conn transport.Conn, req Request) (*Result, error)
 		}
 		res.FileCount++
 		res.ByteCount += n
+		if req.Progress != nil {
+			req.Progress(Progress{Files: res.FileCount, Bytes: res.ByteCount, Path: p})
+		}
 		return nil
 	})
 	if walkErr != nil {

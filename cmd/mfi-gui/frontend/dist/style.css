@@ -82,6 +82,7 @@ button {
 button:hover { border-color: var(--accent); }
 button.primary { background: var(--accent-2); border-color: var(--accent-2); color: #fff; }
 button.primary:hover { background: var(--accent); }
+button:disabled { opacity: 0.5; cursor: default; }
 
 .grid { width: 100%; border-collapse: collapse; margin-top: 8px; }
 .grid th, .grid td {

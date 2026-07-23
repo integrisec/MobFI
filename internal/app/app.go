@@ -67,7 +67,7 @@ func (a *App) ListApps(ctx context.Context, d device.Device, includeSystem bool)
 // AFC house arrest for iOS (the app container root "/", scoped to the
 // bundle id). afcScope selects the iOS house-arrest area ("container" or
 // "documents"); it is ignored for Android.
-func (a *App) ExtractApp(ctx context.Context, d device.Device, bundleID, dst, afcScope string) (*extract.Result, error) {
+func (a *App) ExtractApp(ctx context.Context, d device.Device, bundleID, dst, afcScope string, progress func(extract.Progress)) (*extract.Result, error) {
 	switch d.Platform {
 	case device.Android:
 		conn, err := a.androidConn(ctx, d, bundleID)
@@ -79,6 +79,7 @@ func (a *App) ExtractApp(ctx context.Context, d device.Device, bundleID, dst, af
 			BundleID:   bundleID,
 			SourceRoot: "/data/data/" + bundleID,
 			Dest:       dst,
+			Progress:   progress,
 		})
 	case device.IOS:
 		conn, err := a.AFC.Connect(ctx, d, bundleID, afcScope)
@@ -90,6 +91,7 @@ func (a *App) ExtractApp(ctx context.Context, d device.Device, bundleID, dst, af
 			BundleID:   bundleID,
 			SourceRoot: "/",
 			Dest:       dst,
+			Progress:   progress,
 		})
 	default:
 		return nil, fmt.Errorf("extract: unknown platform %q", d.Platform)

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"time"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -50,11 +51,21 @@ func (g *GUI) ListApps(deviceID string, includeSystem bool) ([]device.InstalledA
 
 // ExtractApp resolves a device by serial and mirrors the target app's file
 // tree to dest. afcScope ("container"/"documents") applies to iOS only.
+// Progress is streamed to the frontend as "extract:progress" events
+// (throttled) so a long extraction shows a live count.
 func (g *GUI) ExtractApp(deviceID, bundleID, dest, afcScope string) (*extract.Result, error) {
 	devices, _ := g.app.DetectDevices(g.ctx)
 	for i := range devices {
 		if devices[i].ID == deviceID {
-			return g.app.ExtractApp(g.ctx, devices[i], bundleID, dest, afcScope)
+			var last time.Time
+			progress := func(p extract.Progress) {
+				if time.Since(last) < 120*time.Millisecond {
+					return
+				}
+				last = time.Now()
+				wailsruntime.EventsEmit(g.ctx, "extract:progress", p)
+			}
+			return g.app.ExtractApp(g.ctx, devices[i], bundleID, dest, afcScope, progress)
 		}
 	}
 	return nil, fmt.Errorf("device %q not found; re-run detection", deviceID)

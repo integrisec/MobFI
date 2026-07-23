@@ -126,11 +126,8 @@ func (a *adbConn) Walk(ctx context.Context, root string, fn fs.WalkDirFunc) erro
 	if len(all) == 0 && err != nil {
 		return fn(root, nil, err)
 	}
-	dirs, _ := a.find(ctx, root, "-type", "d")
-	isDir := make(map[string]bool, len(dirs))
-	for _, d := range dirs {
-		isDir[d] = true
-	}
+	isDir := toBoolSet(a.mustFind(ctx, root, "-type", "d"))
+	isFile := toBoolSet(a.mustFind(ctx, root, "-type", "f"))
 
 	skipPrefix := ""
 	for _, p := range all {
@@ -138,7 +135,14 @@ func (a *adbConn) Walk(ctx context.Context, root string, fn fs.WalkDirFunc) erro
 			continue
 		}
 		skipPrefix = ""
-		entry := &adbDirEntry{name: deviceBase(p), dir: isDir[p]}
+		dir := isDir[p]
+		// Only visit directories and regular files. Skipping symlinks,
+		// sockets and FIFOs avoids `cat` blocking forever on a special file
+		// (and avoids following symlinks out of the tree).
+		if !dir && !isFile[p] {
+			continue
+		}
+		entry := &adbDirEntry{name: deviceBase(p), dir: dir}
 		switch werr := fn(p, entry, nil); werr {
 		case nil:
 			// continue
@@ -163,6 +167,21 @@ func (a *adbConn) find(ctx context.Context, root string, extra ...string) ([]str
 	args := append([]string{"-s", a.serial, "shell"}, a.shellCmd("find", append([]string{root}, extra...)...)...)
 	out, err := a.exec(ctx, args...)
 	return parseLines(out), err
+}
+
+// mustFind runs find and returns whatever paths it listed, ignoring errors
+// (a partial listing due to permission denials is still useful).
+func (a *adbConn) mustFind(ctx context.Context, root string, extra ...string) []string {
+	paths, _ := a.find(ctx, root, extra...)
+	return paths
+}
+
+func toBoolSet(xs []string) map[string]bool {
+	m := make(map[string]bool, len(xs))
+	for _, x := range xs {
+		m[x] = true
+	}
+	return m
 }
 
 // cmdReader adapts a running command's stdout to an io.ReadCloser, reaping

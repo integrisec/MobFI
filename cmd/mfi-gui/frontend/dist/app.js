@@ -210,7 +210,16 @@ $("#apps-system").addEventListener("change", () => {
 // --- Extract ---
 $("#btn-extract").addEventListener("click", async () => {
   const out = $("#extract-out");
-  out.textContent = "extracting…";
+  const btn = $("#btn-extract");
+  out.textContent = "Extracting… (starting)";
+  btn.disabled = true;
+
+  // Live progress from the backend.
+  const off = window.runtime.EventsOn("extract:progress", (p) => {
+    out.textContent =
+      `Extracting… ${p.files} file(s), ${p.bytes.toLocaleString()} byte(s)\n${p.path}`;
+  });
+
   try {
     const res = await gui().ExtractApp(
       $("#ex-device").value.trim(),
@@ -218,7 +227,7 @@ $("#btn-extract").addEventListener("click", async () => {
       $("#ex-dest").value.trim(),
       $("#ex-scope").value
     );
-    let text = `Extracted ${res.file_count} file(s), ${res.byte_count} byte(s)\nto ${res.root}\n`;
+    let text = `Extracted ${res.file_count} file(s), ${res.byte_count.toLocaleString()} byte(s)\nto ${res.root}\n`;
     if (res.skipped && res.skipped.length) {
       text += `\nSkipped ${res.skipped.length} path(s):\n`;
       for (const s of res.skipped) text += `  ${s.path}: ${s.reason}\n`;
@@ -227,6 +236,9 @@ $("#btn-extract").addEventListener("click", async () => {
   } catch (e) {
     out.textContent = "";
     fail(e);
+  } finally {
+    off();
+    btn.disabled = false;
   }
 });
 
