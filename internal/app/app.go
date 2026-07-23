@@ -6,6 +6,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/integrisec/MobFI/internal/device"
 	"github.com/integrisec/MobFI/internal/diff"
@@ -42,12 +43,35 @@ func (a *App) DetectDevices(ctx context.Context) ([]device.Device, error) {
 // ExtractApp copies the on-device file tree of the target application to
 // dst, using the transport appropriate for the device.
 func (a *App) ExtractApp(ctx context.Context, d device.Device, bundleID, dst string) (*extract.Result, error) {
+	root, err := appDataRoot(d.Platform, bundleID)
+	if err != nil {
+		return nil, err
+	}
 	conn, err := a.Transports.Connect(ctx, d)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
-	return extract.Run(ctx, conn, extract.Request{BundleID: bundleID, Dest: dst})
+	return extract.Run(ctx, conn, extract.Request{
+		BundleID:   bundleID,
+		SourceRoot: root,
+		Dest:       dst,
+	})
+}
+
+// appDataRoot returns the on-device directory holding an app's private
+// data. The Android path requires root or a debuggable app (run-as); iOS
+// containers are reached differently (house arrest over AFC) and are not
+// wired up yet.
+func appDataRoot(p device.Platform, bundleID string) (string, error) {
+	switch p {
+	case device.Android:
+		return "/data/data/" + bundleID, nil
+	case device.IOS:
+		return "", fmt.Errorf("extract: iOS app extraction not yet supported")
+	default:
+		return "", fmt.Errorf("extract: unknown platform %q", p)
+	}
 }
 
 // ScanSecrets walks root and reports any secret matches.

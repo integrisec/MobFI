@@ -9,6 +9,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/integrisec/MobFI/internal/app"
+	"github.com/integrisec/MobFI/internal/device"
 )
 
 func usage(w io.Writer) {
@@ -83,11 +84,32 @@ func runExtract(ctx context.Context, core *app.App, args []string) error {
 	if *deviceID == "" || *bundle == "" || *dst == "" {
 		return fmt.Errorf("extract requires -device, -app and -out")
 	}
-	// TODO: resolve -device to a device.Device (via cached detection) and
-	// call core.ExtractApp.
-	_ = ctx
-	_ = core
-	return fmt.Errorf("extract: not implemented yet")
+	// Resolve the serial to a detected device. Detection errors are
+	// tolerated as long as the requested device turns up.
+	devices, _ := core.DetectDevices(ctx)
+	var target *device.Device
+	for i := range devices {
+		if devices[i].ID == *deviceID {
+			target = &devices[i]
+			break
+		}
+	}
+	if target == nil {
+		return fmt.Errorf("device %q not found; run `mfi detect`", *deviceID)
+	}
+
+	res, err := core.ExtractApp(ctx, *target, *bundle, *dst)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("extracted %d file(s), %d byte(s) to %s\n", res.FileCount, res.ByteCount, res.Root)
+	if len(res.Skipped) > 0 {
+		fmt.Printf("skipped %d path(s):\n", len(res.Skipped))
+		for _, s := range res.Skipped {
+			fmt.Printf("  %s: %s\n", s.Path, s.Reason)
+		}
+	}
+	return nil
 }
 
 func runScan(ctx context.Context, core *app.App, args []string) error {
