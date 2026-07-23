@@ -6,6 +6,7 @@ package device
 import (
 	"context"
 	"errors"
+	"fmt"
 )
 
 // Platform identifies the mobile OS family of a device.
@@ -50,27 +51,35 @@ type Registry struct {
 }
 
 // DefaultRegistry returns the registry with all built-in detectors.
-// TODO: also register libimobiledevice (iOS) and TCP-bridge detectors.
+// TODO: also register a TCP-bridge detector.
 func DefaultRegistry() *Registry {
 	r := &Registry{}
 	r.Add(NewADBDetector())
+	r.Add(NewIOSDetector())
 	return r
 }
 
 // Add registers a detector.
 func (r *Registry) Add(d Detector) { r.detectors = append(r.detectors, d) }
 
-// DetectAll runs every detector and merges their results.
+// DetectAll runs every detector and merges their results. A detector that
+// fails does not suppress the others: its error is collected and the
+// devices found by the remaining detectors are still returned, alongside a
+// joined error naming the detectors that failed.
 func (r *Registry) DetectAll(ctx context.Context) ([]Device, error) {
-	var out []Device
+	var (
+		out  []Device
+		errs []error
+	)
 	for _, d := range r.detectors {
 		found, err := d.Detect(ctx)
 		if err != nil {
-			return nil, err
+			errs = append(errs, fmt.Errorf("%s: %w", d.Name(), err))
+			continue
 		}
 		out = append(out, found...)
 	}
-	return out, nil
+	return out, errors.Join(errs...)
 }
 
 // ErrNotImplemented marks scaffolded behaviour that is not built yet.

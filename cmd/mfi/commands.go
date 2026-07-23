@@ -49,11 +49,13 @@ func runDetect(ctx context.Context, core *app.App, args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	// err may be non-nil while devices is still populated: one detector
+	// can fail while others succeed. Print what we found, then surface it.
 	devices, err := core.DetectDevices(ctx)
-	if err != nil {
-		return err
-	}
 	if len(devices) == 0 {
+		if err != nil {
+			return err
+		}
 		fmt.Println("no devices detected")
 		return nil
 	}
@@ -62,7 +64,10 @@ func runDetect(ctx context.Context, core *app.App, args []string) error {
 	for _, d := range devices {
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", d.ID, d.Name, d.Platform, d.Transport, d.State)
 	}
-	return tw.Flush()
+	if flushErr := tw.Flush(); flushErr != nil {
+		return flushErr
+	}
+	return err
 }
 
 func runExtract(ctx context.Context, core *app.App, args []string) error {
