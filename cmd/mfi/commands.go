@@ -155,5 +155,12 @@ func runDiff(ctx context.Context, core *app.App, args []string) error {
 		return err
 	}
 	fmt.Printf("%d change(s) between %s and %s\n", len(res.Changes), res.RootA, res.RootB)
+	for _, c := range res.Changes {
+		if c.Detail != "" {
+			fmt.Printf("  %-8s %s (%s)\n", c.Kind, c.Path, c.Detail)
+		} else {
+			fmt.Printf("  %-8s %s\n", c.Kind, c.Path)
+		}
+	}
 	return nil
 }
