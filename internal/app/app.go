@@ -23,6 +23,7 @@ import (
 type App struct {
 	Detectors  *device.Registry
 	Transports *transport.Registry
+	AFC        *transport.AFCConnector // iOS app-container access (app-scoped)
 	Scanner    *secrets.Scanner
 	Renderers  *render.Registry
 }
@@ -33,6 +34,7 @@ func New() *App {
 	return &App{
 		Detectors:  device.DefaultRegistry(),
 		Transports: transport.DefaultRegistry(),
+		AFC:        transport.NewAFCConnector(),
 		Scanner:    secrets.NewScanner(secrets.DefaultRules()),
 		Renderers:  render.DefaultRegistry(),
 	}
@@ -45,36 +47,36 @@ func (a *App) DetectDevices(ctx context.Context) ([]device.Device, error) {
 }
 
 // ExtractApp copies the on-device file tree of the target application to
-// dst, using the transport appropriate for the device.
+// dst, using the transport appropriate for the platform: adb for Android
+// (data root /data/data/<pkg>, which needs root or a debuggable app), and
+// AFC house arrest for iOS (the app container root "/", scoped to the
+// bundle id).
 func (a *App) ExtractApp(ctx context.Context, d device.Device, bundleID, dst string) (*extract.Result, error) {
-	root, err := appDataRoot(d.Platform, bundleID)
-	if err != nil {
-		return nil, err
-	}
-	conn, err := a.Transports.Connect(ctx, d)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-	return extract.Run(ctx, conn, extract.Request{
-		BundleID:   bundleID,
-		SourceRoot: root,
-		Dest:       dst,
-	})
-}
-
-// appDataRoot returns the on-device directory holding an app's private
-// data. The Android path requires root or a debuggable app (run-as); iOS
-// containers are reached differently (house arrest over AFC) and are not
-// wired up yet.
-func appDataRoot(p device.Platform, bundleID string) (string, error) {
-	switch p {
+	switch d.Platform {
 	case device.Android:
-		return "/data/data/" + bundleID, nil
+		conn, err := a.Transports.Connect(ctx, d)
+		if err != nil {
+			return nil, err
+		}
+		defer conn.Close()
+		return extract.Run(ctx, conn, extract.Request{
+			BundleID:   bundleID,
+			SourceRoot: "/data/data/" + bundleID,
+			Dest:       dst,
+		})
 	case device.IOS:
-		return "", fmt.Errorf("extract: iOS app extraction not yet supported")
+		conn, err := a.AFC.Connect(ctx, d, bundleID)
+		if err != nil {
+			return nil, err
+		}
+		defer conn.Close()
+		return extract.Run(ctx, conn, extract.Request{
+			BundleID:   bundleID,
+			SourceRoot: "/",
+			Dest:       dst,
+		})
 	default:
-		return "", fmt.Errorf("extract: unknown platform %q", p)
+		return nil, fmt.Errorf("extract: unknown platform %q", d.Platform)
 	}
 }
 
