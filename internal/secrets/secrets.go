@@ -35,7 +35,11 @@ type Finding struct {
 	RuleID string `json:"rule_id"`
 	Path   string `json:"path"` // file the match was found in
 	Line   int    `json:"line"`
-	Match  string `json:"match"` // redacted fingerprint, never the raw secret
+	Match  string `json:"match"` // redacted fingerprint, safe to display/export
+	// Secret is the raw matched value, populated during a scan so the
+	// operator can reveal/copy it. report.Build strips it so exported
+	// reports never carry raw secrets.
+	Secret string `json:"secret,omitempty"`
 }
 
 // Scanner applies a set of rules across a file tree.
@@ -118,6 +122,7 @@ func (s *Scanner) scanFile(path string) ([]Finding, error) {
 					Path:   path,
 					Line:   line,
 					Match:  redact(m),
+					Secret: m,
 				})
 			}
 		}

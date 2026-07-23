@@ -21,9 +21,15 @@ type Report struct {
 	Diff        *diff.Result      `json:"diff,omitempty"`
 }
 
-// Build assembles a report from the collected findings and diff.
+// Build assembles a report from the collected findings and diff. Raw
+// secrets are stripped so the report (text or JSON) is safe to share.
 func Build(findings []secrets.Finding, d *diff.Result) *Report {
-	return &Report{GeneratedAt: time.Now().UTC(), Findings: findings, Diff: d}
+	safe := make([]secrets.Finding, len(findings))
+	for i, f := range findings {
+		f.Secret = ""
+		safe[i] = f
+	}
+	return &Report{GeneratedAt: time.Now().UTC(), Findings: safe, Diff: d}
 }
 
 // Summary is the headline count of what an inspection turned up.

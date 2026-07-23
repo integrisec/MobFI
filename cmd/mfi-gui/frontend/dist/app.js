@@ -9,6 +9,42 @@ const el = (tag, props = {}, ...children) => {
   return n;
 };
 
+// makeResizable adds draggable column dividers to a table's headers. Header
+// text is wrapped in a .th-label span so other code (e.g. sort arrows) can
+// update the label without clobbering the resize handle.
+function makeResizable(table) {
+  if (!table) return;
+  table.classList.add("resizable");
+  table.querySelectorAll("thead th").forEach((th) => {
+    if (!th.querySelector(".th-label")) {
+      const label = el("span", { className: "th-label", textContent: th.textContent });
+      th.textContent = "";
+      th.appendChild(label);
+    }
+    if (th.querySelector(".col-resizer")) return;
+    const res = el("span", { className: "col-resizer" });
+    th.appendChild(res);
+    res.addEventListener("click", (e) => e.stopPropagation());
+    res.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const startX = e.pageX;
+      const startW = th.offsetWidth;
+      const onMove = (ev) => {
+        th.style.width = Math.max(48, startW + (ev.pageX - startX)) + "px";
+      };
+      const onUp = () => {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        document.body.style.cursor = "";
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+      document.body.style.cursor = "col-resize";
+    });
+  });
+}
+
 function gui() {
   // window.go is injected by the Wails runtime once bindings are ready.
   if (!window.go || !window.go.main || !window.go.main.GUI) {
@@ -98,6 +134,20 @@ const APP_COLUMNS = ["bundle_id", "name", "version", "data_path", "install_path"
 let appSortField = null;
 let appSortDir = 1;
 
+// A generated monogram avatar (a real icon would need APK/.app parsing).
+function hashHue(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h % 360;
+}
+function avatar(a) {
+  const label = (a.name || a.bundle_id || "?").trim();
+  const letter = ((label.match(/[A-Za-z0-9]/) || ["?"])[0]).toUpperCase();
+  const span = el("span", { className: "avatar", textContent: letter });
+  span.style.background = `hsl(${hashHue(a.bundle_id || label)} 52% 42%)`;
+  return span;
+}
+
 async function loadApps(deviceID) {
   currentAppsDevice = deviceID;
   showView("apps");
@@ -130,7 +180,9 @@ function sortApps(rows) {
 function updateSortIndicators() {
   document.querySelectorAll("#apps-table thead th.sortable").forEach((th) => {
     const arrow = th.dataset.field === appSortField ? (appSortDir === 1 ? " ▲" : " ▼") : "";
-    th.textContent = th.dataset.label + arrow;
+    const labelEl = th.querySelector(".th-label");
+    if (labelEl) labelEl.textContent = th.dataset.label + arrow;
+    else th.textContent = th.dataset.label + arrow;
   });
 }
 
@@ -173,7 +225,7 @@ function renderApps() {
     actions.append(" ", useBtn);
     $("#apps-table tbody").append(el("tr", {},
       el("td", { textContent: a.bundle_id }),
-      el("td", { textContent: a.name }),
+      el("td", {}, avatar(a), a.name || ""),
       el("td", { textContent: a.version || "" }),
       el("td", { textContent: a.data_path }),
       el("td", { textContent: a.install_path }),
@@ -188,7 +240,8 @@ function setupAppsSorting() {
     if (!field) return;
     th.classList.add("sortable");
     th.dataset.field = field;
-    th.dataset.label = th.textContent;
+    const labelEl = th.querySelector(".th-label");
+    th.dataset.label = labelEl ? labelEl.textContent : th.textContent;
     th.addEventListener("click", () => {
       if (appSortField === field) appSortDir = -appSortDir;
       else {
@@ -201,6 +254,7 @@ function setupAppsSorting() {
 }
 
 // Filter as you type; re-list when the system-apps toggle changes.
+makeResizable($("#apps-table")); // must precede sorting (creates .th-label)
 setupAppsSorting();
 $("#apps-search").addEventListener("input", renderApps);
 $("#apps-system").addEventListener("change", () => {
@@ -250,15 +304,31 @@ $("#btn-scan").addEventListener("click", async () => {
     if (known) await gui().AddKnownSecrets(known);
     const findings = await gui().ScanSecrets($("#sc-root").value.trim());
     if (!findings || findings.length === 0) {
-      emptyRow("#scan-table tbody", 4, "no secrets found");
+      emptyRow("#scan-table tbody", 5, "no secrets found");
       return;
     }
     for (const f of findings) {
+      const matchCell = el("td", { className: "revealable", textContent: f.match, title: "click to reveal" });
+      let revealed = false;
+      matchCell.addEventListener("click", () => {
+        revealed = !revealed;
+        matchCell.textContent = revealed ? (f.secret || f.match) : f.match;
+      });
+      const copyBtn = el("button", { textContent: "Copy" });
+      copyBtn.addEventListener("click", async () => {
+        try {
+          await gui().Copy(f.secret || f.match);
+          toast("copied secret", true);
+        } catch (e) {
+          fail(e);
+        }
+      });
       $("#scan-table tbody").append(el("tr", {},
         el("td", { textContent: f.rule_id }),
         el("td", { textContent: f.path }),
         el("td", { textContent: f.line }),
-        el("td", { textContent: f.match })
+        matchCell,
+        el("td", {}, copyBtn)
       ));
     }
   } catch (e) {
@@ -322,6 +392,7 @@ async function readTable() {
     for (const row of t.rows || []) {
       tbody.append(el("tr", {}, ...row.map((cell) => el("td", { textContent: cell }))));
     }
+    makeResizable($("#db-table-out"));
   } catch (e) {
     fail(e);
   }
@@ -362,6 +433,9 @@ wireBrowse("df-a-browse", "df-a", "dir");
 wireBrowse("df-b-browse", "df-b", "dir");
 wireBrowse("db-file-browse", "db-file", "file");
 wireBrowse("rn-file-browse", "rn-file", "file");
+
+// Resizable columns on the remaining static-header tables.
+["#devices-table", "#scan-table", "#diff-table"].forEach((sel) => makeResizable($(sel)));
 
 // Start on the Devices step of the wizard.
 showView("devices");

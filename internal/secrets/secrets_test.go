@@ -42,11 +42,15 @@ func TestScanTreeFindsAndRedacts(t *testing.T) {
 		t.Errorf("expected a GitHub token finding, got %+v", findings)
 	}
 
-	// The raw secret must never appear in a finding.
+	// The raw secret must never appear in the redacted Match...
 	for _, f := range findings {
 		if strings.Contains(f.Match, "IOSFODNN7EXAMPLE") || strings.Contains(f.Match, ghToken) {
-			t.Errorf("finding leaked the raw secret: %q", f.Match)
+			t.Errorf("finding leaked the raw secret in Match: %q", f.Match)
 		}
+	}
+	// ...but Secret carries the raw value for reveal/copy.
+	if got := byRule["aws-access-key-id"]; got.Secret != awsKey {
+		t.Errorf("Secret = %q, want the raw %q", got.Secret, awsKey)
 	}
 }
 

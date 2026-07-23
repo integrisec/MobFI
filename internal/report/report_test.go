@@ -12,9 +12,9 @@ import (
 
 func sampleReport() *Report {
 	findings := []secrets.Finding{
-		{RuleID: "aws-access-key-id", Path: "a.txt", Line: 1, Match: "AKIA…(20 chars)"},
-		{RuleID: "aws-access-key-id", Path: "b.txt", Line: 2, Match: "AKIA…(20 chars)"},
-		{RuleID: "github-token", Path: "c.txt", Line: 3, Match: "ghp_…(40 chars)"},
+		{RuleID: "aws-access-key-id", Path: "a.txt", Line: 1, Match: "AKIA…(20 chars)", Secret: "AKIAIOSFODNN7EXAMPLE"},
+		{RuleID: "aws-access-key-id", Path: "b.txt", Line: 2, Match: "AKIA…(20 chars)", Secret: "AKIAIOSFODNN7EXAMPLE"},
+		{RuleID: "github-token", Path: "c.txt", Line: 3, Match: "ghp_…(40 chars)", Secret: "ghp_rawtokenvalue"},
 	}
 	d := &diff.Result{RootA: "a", RootB: "b", Changes: []diff.Change{
 		{Path: "x", Kind: diff.Added},
@@ -46,6 +46,19 @@ func TestWriteText(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("text output missing %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestBuildStripsRawSecrets(t *testing.T) {
+	rep := sampleReport()
+	for _, f := range rep.Findings {
+		if f.Secret != "" {
+			t.Errorf("report retained a raw secret: %+v", f)
+		}
+	}
+	// The redacted Match is preserved.
+	if rep.Findings[0].Match == "" {
+		t.Error("expected the redacted Match to be preserved")
 	}
 }
 
