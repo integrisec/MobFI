@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/integrisec/MobFI/internal/dbview"
 	"github.com/integrisec/MobFI/internal/device"
 	"github.com/integrisec/MobFI/internal/diff"
 	"github.com/integrisec/MobFI/internal/extract"
@@ -93,6 +94,26 @@ func (a *App) AddKnownSecrets(path string) error {
 // Diff compares two extracted file roots at a native/semantic level.
 func (a *App) Diff(ctx context.Context, rootA, rootB string) (*diff.Result, error) {
 	return diff.Trees(ctx, rootA, rootB)
+}
+
+// DBTables lists the tables in a database file (opened read-only).
+func (a *App) DBTables(ctx context.Context, path string) ([]string, error) {
+	db, err := dbview.Open(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	return db.Tables(ctx)
+}
+
+// DBRead reads up to limit rows from a table in a database file.
+func (a *App) DBRead(ctx context.Context, path, table string, limit int) (*dbview.Table, error) {
+	db, err := dbview.Open(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	return db.Read(ctx, table, limit)
 }
 
 // Report aggregates findings and a diff into an actionable report.

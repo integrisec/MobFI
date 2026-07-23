@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/integrisec/MobFI/internal/app"
@@ -30,6 +31,7 @@ Commands:
   scan      Scan an extracted tree for secrets
   diff      Compare two extracted file roots
   report    Scan and/or diff, then summarise into a report
+  db        Inspect a SQLite database file (read-only)
   help      Show this help
 `)
 }
@@ -220,5 +222,47 @@ func runReport(ctx context.Context, core *app.App, args []string) error {
 		}
 		fmt.Printf("\nwrote JSON report to %s\n", *out)
 	}
+	return nil
+}
+
+func runDB(ctx context.Context, core *app.App, args []string) error {
+	fs := flag.NewFlagSet("db", flag.ContinueOnError)
+	var (
+		file  = fs.String("file", "", "SQLite database file to inspect")
+		table = fs.String("table", "", "table to dump (omit to list tables)")
+		limit = fs.Int("limit", 100, "max rows to read")
+	)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *file == "" {
+		return fmt.Errorf("db requires -file")
+	}
+
+	if *table == "" {
+		tables, err := core.DBTables(ctx, *file)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("%d table(s):\n", len(tables))
+		for _, t := range tables {
+			fmt.Printf("  %s\n", t)
+		}
+		return nil
+	}
+
+	t, err := core.DBRead(ctx, *file, *table, *limit)
+	if err != nil {
+		return err
+	}
+	tw := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
+	fmt.Fprintln(tw, strings.Join(t.Columns, "\t"))
+	for _, row := range t.Rows {
+		fmt.Fprintln(tw, strings.Join(row, "\t"))
+	}
+	if err := tw.Flush(); err != nil {
+		return err
+	}
+	fmt.Printf("(%d row(s))\n", len(t.Rows))
 	return nil
 }

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Early build. The package boundaries and interfaces are in place. Implemented so far: device detection (adb + libimobiledevice), the adb transport connector, `extract.Run` (mirrors an app's on-device tree to disk), and the `secrets` scanner (Trufflehog-style built-in rules + user-supplied known-secret lists, with redacted findings), `diff.Trees` (tree + content diff of two extracted roots; structural differs still to come), and `report` (aggregates scan + diff into a text summary and a JSON export) — all wired end-to-end through `mfi detect` / `mfi extract` / `mfi scan` / `mfi diff` / `mfi report`. The remaining subsystems (`dbview`, `render`) still return `ErrNotImplemented` — grep for `TODO` to find the next work items. Read `intial_claude_prompt.md` (the founding spec) for the full requirement set.
+Early build. The package boundaries and interfaces are in place. Implemented so far: device detection (adb + libimobiledevice), the adb transport connector, `extract.Run` (mirrors an app's on-device tree to disk), and the `secrets` scanner (Trufflehog-style built-in rules + user-supplied known-secret lists, with redacted findings), `diff.Trees` (tree + content diff of two extracted roots; structural differs still to come), and `report` (aggregates scan + diff into a text summary and a JSON export), and `dbview` (read-only, immutable SQLite inspection) — all wired end-to-end through `mfi detect` / `mfi extract` / `mfi scan` / `mfi diff` / `mfi report` / `mfi db`. The remaining subsystem (`render`) still returns `ErrNotImplemented` — grep for `TODO` to find the next work items. Read `intial_claude_prompt.md` (the founding spec) for the full requirement set.
 
 Go module path: `github.com/integrisec/MobFI` (remote: `https://github.com/integrisec/MobFI.git`). Requires Go 1.23+ (dev machine has 1.26.5). Both binaries build clean and `go vet ./...` passes; there are no tests yet.
 
@@ -20,7 +20,7 @@ go test ./internal/secrets/ -run TestScanTree   # a single package / test
 go run ./cmd/mfi detect                          # exercise a subcommand
 ```
 
-The CLI uses only the standard library (`flag`) today, so `go build ./...` works with no network fetch. When real dependencies are added (Trufflehog detectors, a SQLite driver, Wails), run `make tidy`.
+The one external dependency so far is `modernc.org/sqlite` (used by `internal/dbview`) — chosen because it is **cgo-free**, so cross-compiling to Windows/Linux needs no C toolchain. Keep new deps cgo-free for that reason. After changing imports, run `make tidy`.
 
 ## Repository layout
 
