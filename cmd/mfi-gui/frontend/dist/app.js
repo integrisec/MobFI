@@ -215,6 +215,10 @@ function applyAppMeta(row, meta) {
     const nameEl = row.querySelector(".app-name");
     if (nameEl) nameEl.textContent = meta.name;
   }
+  if (meta.version) {
+    const verEl = row.querySelector(".app-version");
+    if (verEl) verEl.textContent = meta.version;
+  }
   if (meta.icon) {
     const iconEl = row.querySelector(".app-icon");
     if (iconEl) iconEl.replaceChildren(el("img", { className: "app-img", src: meta.icon, alt: "" }));
@@ -301,12 +305,16 @@ function renderApps() {
       el("td", { className: "col-icon app-icon" }, avatar(a)),
       el("td", { textContent: a.bundle_id }),
       el("td", { className: "app-name", textContent: a.name || humanize(a.bundle_id) }),
-      el("td", { textContent: a.version || "" }),
+      el("td", { className: "app-version", textContent: a.version || "" }),
       el("td", { textContent: a.data_path }),
       el("td", { textContent: a.install_path }),
       actions
     );
     row._app = a;
+    row.addEventListener("click", (e) => {
+      if (e.target.closest("button")) return; // let action buttons do their thing
+      selectApp(row, a);
+    });
     $("#apps-table tbody").append(row);
 
     // Lazily resolve the real icon + name from the APK.
@@ -332,6 +340,77 @@ function setupAppsSorting() {
       renderApps();
     });
   });
+}
+
+function humanBytes(n) {
+  if (!n) return "—";
+  const u = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  let v = n;
+  while (v >= 1024 && i < u.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(v < 10 && i > 0 ? 1 : 0)} ${u[i]}`;
+}
+
+async function selectApp(row, a) {
+  document.querySelectorAll("#apps-table tbody tr.selected").forEach((r) => r.classList.remove("selected"));
+  row.classList.add("selected");
+  const panel = $("#app-details");
+  panel.classList.remove("hidden");
+  panel.textContent = "Loading details…";
+  try {
+    const d = await gui().AppDetails(currentAppsDevice, a.bundle_id, a.install_path);
+    renderDetails(a, d);
+  } catch (e) {
+    panel.textContent = "";
+    fail(e);
+  }
+}
+
+function renderDetails(a, d) {
+  const panel = $("#app-details");
+  const name = (appMetaCache.get(a.bundle_id) || {}).name || a.name || humanize(a.bundle_id);
+  const rows = [
+    ["Bundle id", a.bundle_id],
+    ["Version", d.version_name ? `${d.version_name} (code ${d.version_code || "?"})` : d.version_code || ""],
+    ["SDK", d.min_sdk || d.target_sdk ? `min ${d.min_sdk || "?"} → target ${d.target_sdk || "?"}` : ""],
+    ["ABI", d.abi],
+    ["Installer", d.installer],
+    ["First install", d.first_install],
+    ["Last update", d.last_update],
+    ["APK size", humanBytes(d.apk_size)],
+    ["Data size", humanBytes(d.data_size)],
+    ["UID", d.uid],
+    ["Signing", d.signing_version ? `v${d.signing_version}` : ""],
+    ["Flags", d.flags],
+    ["Data dir", d.data_dir],
+    ["Code path", d.code_path],
+  ];
+
+  const dl = el("dl", { className: "kv" });
+  for (const [k, v] of rows) {
+    if (!v) continue;
+    dl.append(el("dt", { textContent: k }), el("dd", { textContent: String(v) }));
+  }
+
+  panel.replaceChildren(
+    el("div", { className: "details-head" },
+      (appMetaCache.get(a.bundle_id) || {}).icon
+        ? el("img", { className: "app-img", src: appMetaCache.get(a.bundle_id).icon, alt: "" })
+        : avatar(a),
+      el("h3", { textContent: name })
+    ),
+    dl
+  );
+
+  if (d.permissions && d.permissions.length) {
+    panel.append(el("h4", { textContent: `Permissions (${d.permissions.length})` }));
+    const ul = el("ul", { className: "perms" });
+    for (const p of d.permissions) ul.append(el("li", { textContent: p }));
+    panel.append(ul);
+  }
 }
 
 // Filter as you type; re-list when the system-apps toggle changes.

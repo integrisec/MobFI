@@ -16,8 +16,9 @@ import (
 // possible (no aapt, adaptive-only icon, etc.); the frontend then keeps its
 // placeholder.
 type AppMeta struct {
-	Name string `json:"name"`
-	Icon string `json:"icon"`
+	Name    string `json:"name"`
+	Icon    string `json:"icon"`
+	Version string `json:"version"` // versionName, e.g. "1.0.0"
 }
 
 // AppMeta resolves an Android app's label and icon without pulling the whole
@@ -49,8 +50,9 @@ func (g *GUI) AppMeta(deviceID, bundleID, apkPath string) (AppMeta, error) {
 	if err != nil {
 		return meta, nil
 	}
-	name, iconEntry := parseBadging(string(badging))
+	name, iconEntry, version := parseBadging(string(badging))
 	meta.Name = name
+	meta.Version = version
 
 	if iconEntry != "" {
 		if data, err := deviceUnzipEntry(g.ctx, deviceID, apkPath, iconEntry); err == nil && len(data) > 0 {
@@ -148,9 +150,15 @@ func findAapt() string {
 	return ""
 }
 
-// parseBadging extracts the application label and the best raster icon entry
-// (highest density .png/.webp) from `aapt dump badging` output.
-func parseBadging(out string) (name, icon string) {
+// parseBadging extracts the application label, the best raster icon entry
+// (highest density .png/.webp) and the versionName from `aapt dump badging`.
+func parseBadging(out string) (name, icon, version string) {
+	if i := strings.Index(out, "versionName='"); i >= 0 {
+		rest := out[i+len("versionName='"):]
+		if j := strings.IndexByte(rest, '\''); j >= 0 {
+			version = rest[:j]
+		}
+	}
 	bestDpi := -1
 	for _, ln := range strings.Split(out, "\n") {
 		ln = strings.TrimSpace(ln)
@@ -180,7 +188,7 @@ func parseBadging(out string) (name, icon string) {
 			}
 		}
 	}
-	return name, icon
+	return name, icon, version
 }
 
 func firstQuoted(s string) string {
