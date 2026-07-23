@@ -18,6 +18,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/integrisec/MobFI/internal/dbview"
+	"github.com/integrisec/MobFI/internal/plist"
 )
 
 const (
@@ -56,6 +57,7 @@ func DefaultRegistry() *Registry {
 	r := &Registry{}
 	r.Add(sqliteRenderer{})
 	r.Add(jsonRenderer{})
+	r.Add(plistRenderer{})
 	r.Add(xmlRenderer{})
 	r.Add(textRenderer{})
 	r.Add(hexRenderer{}) // catch-all
@@ -99,25 +101,56 @@ func (jsonRenderer) Render(_ context.Context, path string) (*View, error) {
 	return &View{MIME: "application/json", Text: out.String()}, nil
 }
 
-// --- XML / plist ---
+// --- plist (binary + XML) ---
+
+type plistRenderer struct{}
+
+func (plistRenderer) Handles(path string) bool {
+	if strings.EqualFold(filepath.Ext(path), ".plist") {
+		return true
+	}
+	return bytes.HasPrefix(readSniff(path, len(bplistMagic)), bplistMagic)
+}
+
+func (plistRenderer) Render(_ context.Context, path string) (*View, error) {
+	b, _, err := readCapped(path, maxRenderBytes)
+	if err != nil {
+		return nil, err
+	}
+	if plist.IsBinary(b) {
+		v, err := plist.Decode(b)
+		if err != nil {
+			return &View{
+				MIME: "application/x-plist",
+				Text: "<binary plist; decode failed: " + err.Error() + ">\n\n" + hexDump(cap2(b, maxHexBytes)),
+			}, nil
+		}
+		out, err := json.MarshalIndent(v, "", "  ")
+		if err != nil {
+			return nil, err
+		}
+		return &View{MIME: "application/x-plist", Text: string(out)}, nil
+	}
+	// XML plist: reindent like any XML.
+	pretty, err := reindentXML(b)
+	if err != nil {
+		return &View{MIME: "application/x-plist", Text: string(b)}, nil
+	}
+	return &View{MIME: "application/x-plist", Text: pretty}, nil
+}
+
+// --- XML ---
 
 type xmlRenderer struct{}
 
 func (xmlRenderer) Handles(path string) bool {
-	ext := strings.ToLower(filepath.Ext(path))
-	return ext == ".xml" || ext == ".plist"
+	return strings.EqualFold(filepath.Ext(path), ".xml")
 }
 
 func (xmlRenderer) Render(_ context.Context, path string) (*View, error) {
 	b, _, err := readCapped(path, maxRenderBytes)
 	if err != nil {
 		return nil, err
-	}
-	if bytes.HasPrefix(b, bplistMagic) {
-		return &View{
-			MIME: "application/x-plist",
-			Text: "<binary plist; structured decoding not yet supported>\n\n" + hexDump(cap2(b, maxHexBytes)),
-		}, nil
 	}
 	pretty, err := reindentXML(b)
 	if err != nil {

@@ -122,7 +122,7 @@ type FileDiffer interface {
 }
 
 // defaultFileDiffers are consulted, in order, for files that differ.
-var defaultFileDiffers = []FileDiffer{sqliteDiffer{}, jsonDiffer{}}
+var defaultFileDiffers = []FileDiffer{sqliteDiffer{}, jsonDiffer{}, plistDiffer{}}
 
 // compare reports whether two files differ and a human-readable reason.
 // Identical files short-circuit on size then content hash. When they
