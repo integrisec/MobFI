@@ -84,6 +84,7 @@
         <label>Known-secrets file <input id="sc-known" placeholder="(optional)" /></label>
         <button class="browse" id="sc-known-browse" type="button">Browse…</button>
         <button class="primary" id="btn-scan">Scan</button>
+        <label class="inline"><input type="checkbox" id="sc-wrap" /> Wrap</label>
       </div>
       <p class="hint">Matches are redacted — click a match to reveal the raw secret, or use Copy.</p>
       <table class="grid" id="scan-table">
@@ -101,6 +102,7 @@
         <label>Root B <input id="df-b" placeholder="/path/to/B" /></label>
         <button class="browse" id="df-b-browse" type="button">Browse…</button>
         <button class="primary" id="btn-diff">Diff</button>
+        <label class="inline"><input type="checkbox" id="df-wrap" /> Wrap</label>
       </div>
       <table class="grid" id="diff-table">
         <thead><tr><th>Kind</th><th>Path</th><th>Detail</th></tr></thead>

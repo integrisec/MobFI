@@ -201,6 +201,14 @@ ul.perms li { break-inside: avoid; }
 
 .scroll { max-height: 60vh; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
 
+/* Wrap toggle for grid tables (leave icon/action columns intact) */
+.grid.wrap td:not(.col-actions):not(.col-icon) {
+  white-space: normal;
+  word-break: break-word;
+  overflow: visible;
+  text-overflow: clip;
+}
+
 /* Draggable horizontal splitter between the app list and details panel */
 .v-resizer {
   height: 12px;

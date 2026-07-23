@@ -829,7 +829,9 @@ $("#btn-render-folder").addEventListener("click", async () => {
     fail(e);
   }
 });
+$("#rn-hex").checked = localStorage.getItem("mobfi.render.hex") === "1";
 $("#rn-hex").addEventListener("change", () => {
+  localStorage.setItem("mobfi.render.hex", $("#rn-hex").checked ? "1" : "0");
   if (currentRenderPath) renderInPane(currentRenderPath);
 });
 
@@ -907,6 +909,22 @@ makeResizable($("#diff-table"), "mobfi.cols.diff");
 
 // Draggable splitter between the app list and the details panel (persisted).
 makeVResizer($("#apps-vsplit"), $("#apps-scroll"), "mobfi.apps.listHeight");
+
+// Persisted wrap toggle for a grid table (soft-wraps long cell contents).
+function wireWrapToggle(checkboxId, tableSel, storeKey) {
+  const cb = document.getElementById(checkboxId);
+  const table = $(tableSel);
+  if (!cb || !table) return;
+  const apply = () => table.classList.toggle("wrap", cb.checked);
+  cb.checked = localStorage.getItem(storeKey) === "1";
+  apply();
+  cb.addEventListener("change", () => {
+    localStorage.setItem(storeKey, cb.checked ? "1" : "0");
+    apply();
+  });
+}
+wireWrapToggle("sc-wrap", "#scan-table", "mobfi.scan.wrap");
+wireWrapToggle("df-wrap", "#diff-table", "mobfi.diff.wrap");
 
 // Start on the Devices step of the wizard.
 showView("devices");
