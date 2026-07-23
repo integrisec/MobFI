@@ -79,6 +79,17 @@ func (a *App) ScanSecrets(ctx context.Context, root string) ([]secrets.Finding, 
 	return a.Scanner.ScanTree(ctx, root)
 }
 
+// AddKnownSecrets loads a user-supplied list of literal secrets and adds
+// them to the scanner's rule set.
+func (a *App) AddKnownSecrets(path string) error {
+	rules, err := secrets.LoadKnownSecrets(path)
+	if err != nil {
+		return err
+	}
+	a.Scanner.AddRules(rules...)
+	return nil
+}
+
 // Diff compares two extracted file roots at a native/semantic level.
 func (a *App) Diff(ctx context.Context, rootA, rootB string) (*diff.Result, error) {
 	return diff.Trees(ctx, rootA, rootB)

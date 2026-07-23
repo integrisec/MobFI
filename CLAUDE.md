@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Early build. The package boundaries and interfaces are in place. Implemented so far: device detection (adb + libimobiledevice), the adb transport connector, and `extract.Run` (mirrors an app's on-device tree to disk) — all wired end-to-end through `mfi detect` / `mfi extract`. The remaining subsystems (`secrets`, `diff`, `dbview`, `render`, `report`) still return `ErrNotImplemented` — grep for `TODO` to find the next work items. Read `intial_claude_prompt.md` (the founding spec) for the full requirement set.
+Early build. The package boundaries and interfaces are in place. Implemented so far: device detection (adb + libimobiledevice), the adb transport connector, `extract.Run` (mirrors an app's on-device tree to disk), and the `secrets` scanner (Trufflehog-style built-in rules + user-supplied known-secret lists, with redacted findings) — all wired end-to-end through `mfi detect` / `mfi extract` / `mfi scan`. The remaining subsystems (`diff`, `dbview`, `render`, `report`) still return `ErrNotImplemented` — grep for `TODO` to find the next work items. Read `intial_claude_prompt.md` (the founding spec) for the full requirement set.
 
 Go module path: `github.com/integrisec/MobFI` (remote: `https://github.com/integrisec/MobFI.git`). Requires Go 1.23+ (dev machine has 1.26.5). Both binaries build clean and `go vet ./...` passes; there are no tests yet.
 

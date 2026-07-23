@@ -115,11 +115,17 @@ func runExtract(ctx context.Context, core *app.App, args []string) error {
 func runScan(ctx context.Context, core *app.App, args []string) error {
 	fs := flag.NewFlagSet("scan", flag.ContinueOnError)
 	root := fs.String("root", "", "extracted file tree to scan")
+	known := fs.String("known", "", "file of known secrets to also search for (one per line)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if *root == "" {
 		return fmt.Errorf("scan requires -root")
+	}
+	if *known != "" {
+		if err := core.AddKnownSecrets(*known); err != nil {
+			return err
+		}
 	}
 	findings, err := core.ScanSecrets(ctx, *root)
 	if err != nil {
@@ -127,7 +133,7 @@ func runScan(ctx context.Context, core *app.App, args []string) error {
 	}
 	fmt.Printf("%d finding(s)\n", len(findings))
 	for _, f := range findings {
-		fmt.Printf("  [%s] %s:%d\n", f.RuleID, f.Path, f.Line)
+		fmt.Printf("  [%s] %s:%d  %s\n", f.RuleID, f.Path, f.Line, f.Match)
 	}
 	return nil
 }
