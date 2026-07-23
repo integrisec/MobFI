@@ -23,8 +23,14 @@ function lockColumns(table) {
   table.classList.add("cols-fixed");
 }
 
-function makeResizable(table) {
+function makeResizable(table, storeKey) {
   if (!table) return;
+  const saveWidths = () => {
+    if (!storeKey) return;
+    const widths = [...table.querySelectorAll("thead th")].map((t) => t.offsetWidth);
+    localStorage.setItem(storeKey, JSON.stringify(widths));
+  };
+
   table.querySelectorAll("thead th").forEach((th) => {
     if (th.classList.contains("no-resize")) return; // icon / action columns
     if (!th.querySelector(".th-label")) {
@@ -49,12 +55,25 @@ function makeResizable(table) {
         document.removeEventListener("mousemove", onMove);
         document.removeEventListener("mouseup", onUp);
         document.body.style.cursor = "";
+        saveWidths();
       };
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
       document.body.style.cursor = "col-resize";
     });
   });
+
+  // Restore saved widths (only if the column count still matches).
+  if (storeKey) {
+    const saved = JSON.parse(localStorage.getItem(storeKey) || "null");
+    const ths = table.querySelectorAll("thead th");
+    if (Array.isArray(saved) && saved.length === ths.length) {
+      ths.forEach((th, i) => {
+        th.style.width = saved[i] + "px";
+      });
+      table.classList.add("cols-fixed");
+    }
+  }
 }
 
 // makeVResizer lets a divider drag the height of a target element (used for
@@ -509,7 +528,7 @@ function renderDetails(a, d) {
 }
 
 // Filter as you type; re-list when the system-apps toggle changes.
-makeResizable($("#apps-table")); // must precede sorting (creates .th-label)
+makeResizable($("#apps-table"), "mobfi.cols.apps"); // must precede sorting (creates .th-label)
 setupAppsSorting();
 $("#apps-search").addEventListener("input", renderApps);
 $("#apps-system").addEventListener("change", () => {
@@ -689,8 +708,10 @@ wireBrowse("df-b-browse", "df-b", "dir");
 wireBrowse("db-file-browse", "db-file", "file");
 wireBrowse("rn-file-browse", "rn-file", "file");
 
-// Resizable columns on the remaining static-header tables.
-["#devices-table", "#scan-table", "#diff-table"].forEach((sel) => makeResizable($(sel)));
+// Resizable columns on the remaining static-header tables (widths persisted).
+makeResizable($("#devices-table"), "mobfi.cols.devices");
+makeResizable($("#scan-table"), "mobfi.cols.scan");
+makeResizable($("#diff-table"), "mobfi.cols.diff");
 
 // Draggable splitter between the app list and the details panel (persisted).
 makeVResizer($("#apps-vsplit"), $("#apps-scroll"), "mobfi.apps.listHeight");
