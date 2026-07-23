@@ -64,6 +64,32 @@ func TestJSONDiffer(t *testing.T) {
 	}
 }
 
+func TestPlistDifferXML(t *testing.T) {
+	dir := t.TempDir()
+	a := filepath.Join(dir, "a.plist")
+	b := filepath.Join(dir, "b.plist")
+	os.WriteFile(a, []byte(`<plist version="1.0"><dict>
+		<key>logged_in</key><true/>
+		<key>user</key><string>dana</string>
+	</dict></plist>`), 0o600)
+	os.WriteFile(b, []byte(`<plist version="1.0"><dict>
+		<key>logged_in</key><false/>
+		<key>user</key><string>dana</string>
+		<key>last</key><string>x</string>
+	</dict></plist>`), 0o600) // logged_in changed, last added
+
+	if !(plistDiffer{}).Handles(a) {
+		t.Fatal("Handles should recognise an XML plist")
+	}
+	detail, err := plistDiffer{}.Diff(context.Background(), a, b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(detail, "1 changed") || !strings.Contains(detail, "1 added") {
+		t.Errorf("detail = %q, want 1 changed / 1 added", detail)
+	}
+}
+
 // TestTreesUsesStructuralDiff proves the differ is wired into Trees.
 func TestTreesUsesStructuralDiff(t *testing.T) {
 	rootA, rootB := t.TempDir(), t.TempDir()
