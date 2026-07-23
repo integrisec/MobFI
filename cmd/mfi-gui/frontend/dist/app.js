@@ -707,6 +707,7 @@ function displayRender(res) {
   const pane = $("#render-pane");
   $("#rn-mime").textContent = [res.mime, humanSize(res.size)].filter(Boolean).join(" · ");
   $("#btn-render-external").disabled = !currentRenderPath;
+  pane.classList.toggle("wrap", $("#rn-wrap").checked);
   pane.replaceChildren();
 
   // A database file: offer opening it in the Database tab.
@@ -750,7 +751,7 @@ async function renderInPane(path) {
   const pane = $("#render-pane");
   pane.replaceChildren(el("div", { className: "render-empty", textContent: "Rendering…" }));
   try {
-    displayRender(await gui().RenderPath(path, renderMode()));
+    displayRender(await gui().RenderPath(path, renderMode(), $("#rn-pretty").checked));
   } catch (e) {
     pane.replaceChildren();
     fail(e);
@@ -831,6 +832,19 @@ $("#btn-render-folder").addEventListener("click", async () => {
 $("#rn-hex").addEventListener("change", () => {
   if (currentRenderPath) renderInPane(currentRenderPath);
 });
+
+// Wrap: pure CSS toggle, no re-render needed. Prettify: needs a re-render.
+$("#rn-wrap").checked = localStorage.getItem("mobfi.render.wrap") === "1";
+$("#rn-pretty").checked = localStorage.getItem("mobfi.render.pretty") === "1";
+$("#rn-wrap").addEventListener("change", () => {
+  localStorage.setItem("mobfi.render.wrap", $("#rn-wrap").checked ? "1" : "0");
+  $("#render-pane").classList.toggle("wrap", $("#rn-wrap").checked);
+});
+$("#rn-pretty").addEventListener("change", () => {
+  localStorage.setItem("mobfi.render.pretty", $("#rn-pretty").checked ? "1" : "0");
+  if (currentRenderPath) renderInPane(currentRenderPath);
+});
+
 $("#btn-render-external").addEventListener("click", async () => {
   if (!currentRenderPath) return;
   try {

@@ -300,6 +300,13 @@ ul.perms li { break-inside: avoid; }
 .code-view { font-size: 12.5px; }
 .code-view pre { margin: 0; padding: 14px; overflow: auto; }
 
+/* Wrap toggle: soft-wrap long lines in the text and code panes */
+.render-pane.wrap .render-text,
+.render-pane.wrap .code-view pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .row-actions { display: flex; align-items: center; gap: 16px; }
 label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--text); font-size: 13px; cursor: pointer; }
 label.inline input { min-width: 0; }

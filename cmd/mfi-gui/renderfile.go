@@ -3,7 +3,10 @@ package main
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
+	"encoding/xml"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,6 +24,7 @@ const (
 	maxImageBytes = 32 << 20  // 32 MB
 	maxPDFBytes   = 64 << 20  // 64 MB
 	maxHexBytes   = 256 << 10 // 256 KB
+	maxTextBytes  = 4 << 20   // 4 MB for prettify
 )
 
 // FSEntry is one directory entry for the render file tree.
@@ -80,8 +84,9 @@ type RenderResult struct {
 // RenderPath renders a file. mode "hex" forces a hex dump; "auto" detects the
 // type: images and PDFs are returned as data URLs, structured/text formats go
 // through the shared renderer (XML reindent, plist decode, SQLite summary,
-// …) and code-like content is syntax-highlighted.
-func (g *GUI) RenderPath(path, mode string) (RenderResult, error) {
+// …) and code-like content is syntax-highlighted. When pretty is set, JSON
+// and XML are reformatted (indented) regardless of file extension.
+func (g *GUI) RenderPath(path, mode string, pretty bool) (RenderResult, error) {
 	r := RenderResult{Name: filepath.Base(path)}
 	info, err := os.Stat(path)
 	if err != nil {
@@ -126,6 +131,16 @@ func (g *GUI) RenderPath(path, mode string) (RenderResult, error) {
 		}
 	}
 
+	// Prettify JSON/XML on request, even for files with no/odd extension.
+	if pretty {
+		if raw, err := readCapped(path, maxTextBytes); err == nil {
+			if formatted, lexer, mime, ok := tryPrettify(raw); ok {
+				r.Kind, r.MIME, r.HTML = "code", mime, highlight(formatted, lexer)
+				return r, nil
+			}
+		}
+	}
+
 	// Structured/text formats via the shared renderer.
 	view, err := g.app.Render(g.ctx, path)
 	if err != nil || view == nil {
@@ -139,6 +154,54 @@ func (g *GUI) RenderPath(path, mode string) (RenderResult, error) {
 	}
 	r.Kind, r.Text = "text", view.Text
 	return r, nil
+}
+
+// tryPrettify reformats JSON or XML content. Returns the formatted text, a
+// lexer, its MIME, and whether it applied.
+func tryPrettify(raw []byte) (string, chroma.Lexer, string, bool) {
+	t := bytes.TrimSpace(raw)
+	if len(t) == 0 {
+		return "", nil, "", false
+	}
+	switch t[0] {
+	case '{', '[':
+		var buf bytes.Buffer
+		if json.Indent(&buf, t, "", "  ") == nil {
+			if lx := lexers.Get("json"); lx != nil {
+				return buf.String(), lx, "application/json", true
+			}
+		}
+	case '<':
+		if s, err := reindentXML(t); err == nil {
+			if lx := lexers.Get("xml"); lx != nil {
+				return s, lx, "application/xml", true
+			}
+		}
+	}
+	return "", nil, "", false
+}
+
+func reindentXML(b []byte) (string, error) {
+	dec := xml.NewDecoder(bytes.NewReader(b))
+	var out bytes.Buffer
+	enc := xml.NewEncoder(&out)
+	enc.Indent("", "  ")
+	for {
+		tok, err := dec.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+		if err := enc.EncodeToken(tok); err != nil {
+			return "", err
+		}
+	}
+	if err := enc.Flush(); err != nil {
+		return "", err
+	}
+	return out.String(), nil
 }
 
 func hexResult(path string) RenderResult {
