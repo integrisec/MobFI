@@ -624,40 +624,94 @@ function sendToRender(path) {
   renderInPane(path);
 }
 
+let currentDiff = null;
+let diffSortField = null;
+let diffSortDir = 1;
+const DIFF_COLUMNS = ["kind", "path", "detail", null]; // th index -> field
+
+// Generic table sort (numeric when both values are numbers, else localeCompare).
+function sortRows(rows, field, dir) {
+  if (!field) return rows;
+  return [...rows].sort((a, b) => {
+    const av = (a[field] ?? "").toString();
+    const bv = (b[field] ?? "").toString();
+    const an = parseFloat(av);
+    const bn = parseFloat(bv);
+    const numeric = !isNaN(an) && !isNaN(bn) && String(an) === av.trim() && String(bn) === bv.trim();
+    const cmp = numeric ? an - bn : av.toLowerCase().localeCompare(bv.toLowerCase());
+    return cmp * dir;
+  });
+}
+
 $("#btn-diff").addEventListener("click", async () => {
-  clearRows("#diff-table tbody");
   try {
-    const res = await gui().Diff($("#df-a").value.trim(), $("#df-b").value.trim());
-    if (!res.changes || res.changes.length === 0) {
-      emptyRow("#diff-table tbody", 4, "no differences");
-      return;
-    }
-    for (const c of res.changes) {
-      const aPath = joinPath(res.root_a, c.path);
-      const bPath = joinPath(res.root_b, c.path);
-      const target = c.kind === "removed" ? aPath : bPath; // the surviving side
-
-      const actions = el("td", { className: "col-actions" });
-      const renderBtn = el("button", { textContent: "Render →" });
-      renderBtn.addEventListener("click", () => sendToRender(target));
-      actions.append(renderBtn);
-      if (c.kind === "modified") {
-        const cmpBtn = el("button", { textContent: "Compare" });
-        cmpBtn.addEventListener("click", () => openFileDiff(aPath, bPath, c.path));
-        actions.append(" ", cmpBtn);
-      }
-
-      $("#diff-table tbody").append(el("tr", {},
-        el("td", {}, el("span", { className: `pill ${c.kind}`, textContent: c.kind })),
-        el("td", { textContent: c.path }),
-        el("td", { textContent: c.detail || "" }),
-        actions
-      ));
-    }
+    currentDiff = await gui().Diff($("#df-a").value.trim(), $("#df-b").value.trim());
+    renderDiff();
   } catch (e) {
     fail(e);
   }
 });
+
+function renderDiff() {
+  clearRows("#diff-table tbody");
+  if (!currentDiff) return;
+  const changes = currentDiff.changes || [];
+  if (changes.length === 0) {
+    emptyRow("#diff-table tbody", 4, "no differences");
+    return;
+  }
+  updateDiffSortIndicators();
+  for (const c of sortRows(changes, diffSortField, diffSortDir)) {
+    const aPath = joinPath(currentDiff.root_a, c.path);
+    const bPath = joinPath(currentDiff.root_b, c.path);
+    const target = c.kind === "removed" ? aPath : bPath; // the surviving side
+
+    const actions = el("td", { className: "col-actions" });
+    const renderBtn = el("button", { textContent: "Render →" });
+    renderBtn.addEventListener("click", () => sendToRender(target));
+    actions.append(renderBtn);
+    if (c.kind === "modified") {
+      const cmpBtn = el("button", { textContent: "Compare" });
+      cmpBtn.addEventListener("click", () => openFileDiff(aPath, bPath, c.path));
+      actions.append(" ", cmpBtn);
+    }
+
+    $("#diff-table tbody").append(el("tr", {},
+      el("td", {}, el("span", { className: `pill ${c.kind}`, textContent: c.kind })),
+      el("td", { textContent: c.path }),
+      el("td", { textContent: c.detail || "" }),
+      actions
+    ));
+  }
+}
+
+function updateDiffSortIndicators() {
+  document.querySelectorAll("#diff-table thead th.sortable").forEach((th) => {
+    const arrow = th.dataset.field === diffSortField ? (diffSortDir === 1 ? " ▲" : " ▼") : "";
+    const labelEl = th.querySelector(".th-label");
+    if (labelEl) labelEl.textContent = th.dataset.label + arrow;
+    else th.textContent = th.dataset.label + arrow;
+  });
+}
+
+function setupDiffSorting() {
+  document.querySelectorAll("#diff-table thead th").forEach((th, i) => {
+    const field = DIFF_COLUMNS[i];
+    if (!field) return;
+    th.classList.add("sortable");
+    th.dataset.field = field;
+    const labelEl = th.querySelector(".th-label");
+    th.dataset.label = labelEl ? labelEl.textContent : th.textContent;
+    th.addEventListener("click", () => {
+      if (diffSortField === field) diffSortDir = -diffSortDir;
+      else {
+        diffSortField = field;
+        diffSortDir = 1;
+      }
+      renderDiff();
+    });
+  });
+}
 
 // --- side-by-side file diff overlay ---
 let fileDiffHunks = [];
@@ -1004,6 +1058,7 @@ wireBrowse("db-file-browse", "db-file", "file");
 makeResizable($("#devices-table"), "mobfi.cols.devices");
 makeResizable($("#scan-table"), "mobfi.cols.scan");
 makeResizable($("#diff-table"), "mobfi.cols.diff");
+setupDiffSorting(); // after makeResizable, which creates the .th-label spans
 
 // Draggable splitter between the app list and the details panel (persisted).
 makeVResizer($("#apps-vsplit"), $("#apps-scroll"), "mobfi.apps.listHeight");
