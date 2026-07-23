@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Early **scaffold**. The package boundaries and interfaces exist, but every subsystem's behaviour returns `ErrNotImplemented` — grep for `TODO` to find the next work items. Read `intial_claude_prompt.md` (the founding spec) for the full requirement set; everything below is derived from it.
 
-Go module path: `github.com/integrisec/MobFI` (remote: `https://github.com/integrisec/MobFI.git`). **Go is not yet installed on the dev machine** — `brew install go` (needs 1.23+) before building.
+Go module path: `github.com/integrisec/MobFI` (remote: `https://github.com/integrisec/MobFI.git`). Requires Go 1.23+ (dev machine has 1.26.5). Both binaries build clean and `go vet ./...` passes; there are no tests yet.
 
 ## Commands
 
