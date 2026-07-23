@@ -1,0 +1,36 @@
+# Binaries
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/mfi
+/mfi-gui
+
+# Test & coverage output
+*.test
+*.out
+coverage.*
+
+# Go workspace files
+go.work
+go.work.sum
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Wails GUI build output & JS deps (added once `wails init` is run)
+/build/bin/
+frontend/dist/
+frontend/node_modules/
+
+# --- Project-sensitive: NEVER commit extracted device data, secrets, or reports ---
+/captures/
+/extractions/
+/reports/
+*.mfi-report.json
+known-secrets*.txt
