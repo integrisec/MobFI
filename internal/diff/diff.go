@@ -27,17 +27,18 @@ const (
 
 // Change is one difference between the two roots.
 type Change struct {
-	Path string
-	Kind ChangeKind
+	Path string     `json:"path"`
+	Kind ChangeKind `json:"kind"`
 	// Detail carries a format-specific description (changed rows, keys,
 	// elements) for files diffed structurally.
-	Detail string
+	Detail string `json:"detail,omitempty"`
 }
 
 // Result is the full comparison of two roots.
 type Result struct {
-	RootA, RootB string
-	Changes      []Change
+	RootA   string   `json:"root_a"`
+	RootB   string   `json:"root_b"`
+	Changes []Change `json:"changes"`
 }
 
 // Trees diffs the file trees rooted at a and b. Changes are returned sorted

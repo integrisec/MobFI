@@ -32,10 +32,10 @@ type Rule struct {
 
 // Finding is one secret match located during a scan.
 type Finding struct {
-	RuleID string
-	Path   string // file the match was found in
-	Line   int
-	Match  string // redacted fingerprint, never the raw secret
+	RuleID string `json:"rule_id"`
+	Path   string `json:"path"` // file the match was found in
+	Line   int    `json:"line"`
+	Match  string `json:"match"` // redacted fingerprint, never the raw secret
 }
 
 // Scanner applies a set of rules across a file tree.

@@ -37,6 +37,8 @@ func run(args []string) error {
 		return runScan(ctx, core, args[1:])
 	case "diff":
 		return runDiff(ctx, core, args[1:])
+	case "report":
+		return runReport(ctx, core, args[1:])
 	case "help", "-h", "--help":
 		usage(os.Stdout)
 		return nil

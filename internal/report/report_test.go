@@ -1,0 +1,67 @@
+package report
+
+import (
+	"bytes"
+	"encoding/json"
+	"strings"
+	"testing"
+
+	"github.com/integrisec/MobFI/internal/diff"
+	"github.com/integrisec/MobFI/internal/secrets"
+)
+
+func sampleReport() *Report {
+	findings := []secrets.Finding{
+		{RuleID: "aws-access-key-id", Path: "a.txt", Line: 1, Match: "AKIA…(20 chars)"},
+		{RuleID: "aws-access-key-id", Path: "b.txt", Line: 2, Match: "AKIA…(20 chars)"},
+		{RuleID: "github-token", Path: "c.txt", Line: 3, Match: "ghp_…(40 chars)"},
+	}
+	d := &diff.Result{RootA: "a", RootB: "b", Changes: []diff.Change{
+		{Path: "x", Kind: diff.Added},
+		{Path: "y", Kind: diff.Modified, Detail: "content differs"},
+	}}
+	return Build(findings, d)
+}
+
+func TestSummary(t *testing.T) {
+	s := sampleReport().Summary()
+	if s.TotalFindings != 3 {
+		t.Errorf("TotalFindings = %d, want 3", s.TotalFindings)
+	}
+	if s.FindingsByRule["aws-access-key-id"] != 2 || s.FindingsByRule["github-token"] != 1 {
+		t.Errorf("FindingsByRule = %v", s.FindingsByRule)
+	}
+	if s.DiffCounts[diff.Added] != 1 || s.DiffCounts[diff.Modified] != 1 {
+		t.Errorf("DiffCounts = %v", s.DiffCounts)
+	}
+}
+
+func TestWriteText(t *testing.T) {
+	var buf bytes.Buffer
+	if err := sampleReport().WriteText(&buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	for _, want := range []string{"Secrets: 3 finding(s)", "aws-access-key-id", "2 change(s)", "content differs"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("text output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestWriteJSONRoundTrips(t *testing.T) {
+	var buf bytes.Buffer
+	if err := sampleReport().WriteJSON(&buf); err != nil {
+		t.Fatal(err)
+	}
+	var got Report
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if len(got.Findings) != 3 {
+		t.Errorf("round-tripped findings = %d, want 3", len(got.Findings))
+	}
+	if got.Diff == nil || len(got.Diff.Changes) != 2 {
+		t.Errorf("round-tripped diff = %+v", got.Diff)
+	}
+}

@@ -10,6 +10,8 @@ import (
 
 	"github.com/integrisec/MobFI/internal/app"
 	"github.com/integrisec/MobFI/internal/device"
+	"github.com/integrisec/MobFI/internal/diff"
+	"github.com/integrisec/MobFI/internal/secrets"
 )
 
 func usage(w io.Writer) {
@@ -27,6 +29,7 @@ Commands:
   extract   Copy a target app's file tree to a local directory
   scan      Scan an extracted tree for secrets
   diff      Compare two extracted file roots
+  report    Scan and/or diff, then summarise into a report
   help      Show this help
 `)
 }
@@ -161,6 +164,61 @@ func runDiff(ctx context.Context, core *app.App, args []string) error {
 		} else {
 			fmt.Printf("  %-8s %s\n", c.Kind, c.Path)
 		}
+	}
+	return nil
+}
+
+func runReport(ctx context.Context, core *app.App, args []string) error {
+	fs := flag.NewFlagSet("report", flag.ContinueOnError)
+	var (
+		root  = fs.String("root", "", "extracted tree to scan for secrets")
+		known = fs.String("known", "", "known-secrets file to add to the scan")
+		a     = fs.String("a", "", "first root to diff")
+		b     = fs.String("b", "", "second root to diff")
+		out   = fs.String("out", "", "also write the report as JSON to this file")
+	)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *root == "" && (*a == "" || *b == "") {
+		return fmt.Errorf("report needs -root (to scan) and/or both -a and -b (to diff)")
+	}
+
+	var findings []secrets.Finding
+	if *root != "" {
+		if *known != "" {
+			if err := core.AddKnownSecrets(*known); err != nil {
+				return err
+			}
+		}
+		var err error
+		if findings, err = core.ScanSecrets(ctx, *root); err != nil {
+			return err
+		}
+	}
+
+	var d *diff.Result
+	if *a != "" && *b != "" {
+		var err error
+		if d, err = core.Diff(ctx, *a, *b); err != nil {
+			return err
+		}
+	}
+
+	rep := core.Report(findings, d)
+	if err := rep.WriteText(os.Stdout); err != nil {
+		return err
+	}
+	if *out != "" {
+		f, err := os.Create(*out)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		if err := rep.WriteJSON(f); err != nil {
+			return err
+		}
+		fmt.Printf("\nwrote JSON report to %s\n", *out)
 	}
 	return nil
 }
