@@ -58,9 +58,17 @@ function makeResizable(table) {
 }
 
 // makeVResizer lets a divider drag the height of a target element (used for
-// the splitter between the app list and the details panel).
-function makeVResizer(divider, target) {
+// the splitter between the app list and the details panel). If storeKey is
+// given, the height is saved to localStorage and restored on load.
+function makeVResizer(divider, target, storeKey) {
   if (!divider || !target) return;
+  if (storeKey) {
+    const saved = parseInt(localStorage.getItem(storeKey), 10);
+    if (saved > 0) {
+      target.style.maxHeight = "none";
+      target.style.height = saved + "px";
+    }
+  }
   divider.addEventListener("mousedown", (e) => {
     e.preventDefault();
     const startY = e.pageY;
@@ -73,6 +81,7 @@ function makeVResizer(divider, target) {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
       document.body.style.cursor = "";
+      if (storeKey) localStorage.setItem(storeKey, target.offsetHeight);
     };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
@@ -683,8 +692,8 @@ wireBrowse("rn-file-browse", "rn-file", "file");
 // Resizable columns on the remaining static-header tables.
 ["#devices-table", "#scan-table", "#diff-table"].forEach((sel) => makeResizable($(sel)));
 
-// Draggable splitter between the app list and the details panel.
-makeVResizer($("#apps-vsplit"), $("#apps-scroll"));
+// Draggable splitter between the app list and the details panel (persisted).
+makeVResizer($("#apps-vsplit"), $("#apps-scroll"), "mobfi.apps.listHeight");
 
 // Start on the Devices step of the wizard.
 showView("devices");
