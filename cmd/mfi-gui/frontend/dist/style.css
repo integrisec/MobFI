@@ -112,7 +112,21 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 .col-resizer:hover { background: var(--accent); opacity: 0.4; }
 
-/* App monogram avatars */
+/* Fixed-purpose columns: icon (far left) and the action buttons (right) */
+.grid .col-icon { width: 44px; text-align: center; }
+.grid .col-icon .avatar { margin: 0; }
+.grid .col-actions { width: 1%; white-space: nowrap; }
+.grid.cols-fixed td.col-actions, .grid.cols-fixed td.col-icon { overflow: visible; }
+.app-img {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  object-fit: cover;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* App monogram avatars (placeholder until the real icon loads) */
 .avatar {
   display: inline-flex;
   align-items: center;

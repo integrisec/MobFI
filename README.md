@@ -124,8 +124,11 @@ mfi apps -device <serial-or-udid>
 mfi apps -device <serial-or-udid> -all      # also list system apps
 ```
 
-In the GUI, the Apps view has a search box (filter by bundle id or name) and
-an "Include system apps" checkbox.
+In the GUI, the Apps view has a search box (filter by bundle id or name), an
+"Include system apps" checkbox, sortable/resizable columns, and per-row Copy.
+Real app icons and names are resolved lazily from each APK using `aapt` (from
+the Android SDK build-tools); without it, a monogram avatar and a name derived
+from the bundle id are shown instead.
 
 ### Extract an app's data
 

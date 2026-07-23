@@ -26,6 +26,7 @@ function lockColumns(table) {
 function makeResizable(table) {
   if (!table) return;
   table.querySelectorAll("thead th").forEach((th) => {
+    if (th.classList.contains("no-resize")) return; // icon / action columns
     if (!th.querySelector(".th-label")) {
       const label = el("span", { className: "th-label", textContent: th.textContent });
       th.textContent = "";
@@ -119,7 +120,7 @@ $("#btn-detect").addEventListener("click", async () => {
         $("#ex-bundle").focus();
         showView("extract");
       });
-      const actions = el("td", {}, appsBtn);
+      const actions = el("td", { className: "col-actions" }, appsBtn);
       actions.append(" ", useBtn);
       const tr = el("tr", {},
         el("td", { textContent: d.id }),
@@ -140,12 +141,12 @@ $("#btn-detect").addEventListener("click", async () => {
 let currentAppsDevice = null;
 let currentApps = [];
 
-// Column index -> app field (null = not sortable, e.g. the actions column).
-const APP_COLUMNS = ["bundle_id", "name", "version", "data_path", "install_path", null];
+// Column index -> app field (null = not sortable: icon and action columns).
+const APP_COLUMNS = [null, "bundle_id", "name", "version", "data_path", "install_path", null];
 let appSortField = null;
 let appSortDir = 1;
 
-// A generated monogram avatar (a real icon would need APK/.app parsing).
+// A generated monogram avatar shown until the real icon loads.
 function hashHue(s) {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
@@ -157,6 +158,67 @@ function avatar(a) {
   const span = el("span", { className: "avatar", textContent: letter });
   span.style.background = `hsl(${hashHue(a.bundle_id || label)} 52% 42%)`;
   return span;
+}
+
+// A readable placeholder name from the bundle id until the real label loads.
+function humanize(bundleID) {
+  const seg = (bundleID || "").split(".").pop() || bundleID || "";
+  return seg.split(/[_-]/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+}
+
+// --- lazy real icon + label (resolved from the APK via aapt) ---
+const appMetaCache = new Map(); // bundle_id -> { name, icon }
+let metaInFlight = 0;
+const metaQueue = [];
+function pumpMeta() {
+  while (metaInFlight < 2 && metaQueue.length) {
+    const job = metaQueue.shift();
+    metaInFlight++;
+    job().finally(() => {
+      metaInFlight--;
+      pumpMeta();
+    });
+  }
+}
+const appMetaObserver = new IntersectionObserver(
+  (entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      const row = e.target;
+      appMetaObserver.unobserve(row);
+      if (row._app) {
+        metaQueue.push(() => fetchAppMeta(row, row._app));
+        pumpMeta();
+      }
+    }
+  },
+  { root: document.querySelector("#view-apps .scroll"), rootMargin: "150px" }
+);
+
+async function fetchAppMeta(row, a) {
+  if (appMetaCache.has(a.bundle_id)) {
+    applyAppMeta(row, appMetaCache.get(a.bundle_id));
+    return;
+  }
+  try {
+    const meta = (await gui().AppMeta(currentAppsDevice, a.bundle_id, a.install_path)) || {};
+    appMetaCache.set(a.bundle_id, meta);
+    applyAppMeta(row, meta);
+  } catch (e) {
+    /* leave the placeholder in place */
+  }
+}
+
+function applyAppMeta(row, meta) {
+  if (!meta) return;
+  if (meta.name) {
+    const nameEl = row.querySelector(".app-name");
+    if (nameEl) nameEl.textContent = meta.name;
+  }
+  if (meta.icon) {
+    const iconEl = row.querySelector(".app-icon");
+    if (iconEl) iconEl.replaceChildren(el("img", { className: "app-img", src: meta.icon, alt: "" }));
+  }
 }
 
 async function loadApps(deviceID) {
@@ -213,7 +275,7 @@ function renderApps() {
 
   clearRows("#apps-table tbody");
   if (rows.length === 0) {
-    emptyRow("#apps-table tbody", 6, currentApps.length ? "no matches" : "no apps found");
+    emptyRow("#apps-table tbody", 7, currentApps.length ? "no matches" : "no apps found");
     return;
   }
   for (const a of rows) {
@@ -232,16 +294,24 @@ function renderApps() {
       $("#ex-bundle").value = a.bundle_id;
       showView("extract");
     });
-    const actions = el("td", {}, copyBtn);
+    const actions = el("td", { className: "col-actions" }, copyBtn);
     actions.append(" ", useBtn);
-    $("#apps-table tbody").append(el("tr", {},
+
+    const row = el("tr", {},
+      el("td", { className: "col-icon app-icon" }, avatar(a)),
       el("td", { textContent: a.bundle_id }),
-      el("td", {}, avatar(a), a.name || ""),
+      el("td", { className: "app-name", textContent: a.name || humanize(a.bundle_id) }),
       el("td", { textContent: a.version || "" }),
       el("td", { textContent: a.data_path }),
       el("td", { textContent: a.install_path }),
       actions
-    ));
+    );
+    row._app = a;
+    $("#apps-table tbody").append(row);
+
+    // Lazily resolve the real icon + name from the APK.
+    if (appMetaCache.has(a.bundle_id)) applyAppMeta(row, appMetaCache.get(a.bundle_id));
+    else appMetaObserver.observe(row);
   }
 }
 
@@ -339,7 +409,7 @@ $("#btn-scan").addEventListener("click", async () => {
         el("td", { textContent: f.path }),
         el("td", { textContent: f.line }),
         matchCell,
-        el("td", {}, copyBtn)
+        el("td", { className: "col-actions" }, copyBtn)
       ));
     }
   } catch (e) {
