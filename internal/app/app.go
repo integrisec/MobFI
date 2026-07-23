@@ -50,8 +50,9 @@ func (a *App) DetectDevices(ctx context.Context) ([]device.Device, error) {
 // dst, using the transport appropriate for the platform: adb for Android
 // (data root /data/data/<pkg>, which needs root or a debuggable app), and
 // AFC house arrest for iOS (the app container root "/", scoped to the
-// bundle id).
-func (a *App) ExtractApp(ctx context.Context, d device.Device, bundleID, dst string) (*extract.Result, error) {
+// bundle id). afcScope selects the iOS house-arrest area ("container" or
+// "documents"); it is ignored for Android.
+func (a *App) ExtractApp(ctx context.Context, d device.Device, bundleID, dst, afcScope string) (*extract.Result, error) {
 	switch d.Platform {
 	case device.Android:
 		conn, err := a.Transports.Connect(ctx, d)
@@ -65,7 +66,7 @@ func (a *App) ExtractApp(ctx context.Context, d device.Device, bundleID, dst str
 			Dest:       dst,
 		})
 	case device.IOS:
-		conn, err := a.AFC.Connect(ctx, d, bundleID)
+		conn, err := a.AFC.Connect(ctx, d, bundleID, afcScope)
 		if err != nil {
 			return nil, err
 		}

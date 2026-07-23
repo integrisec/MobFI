@@ -35,12 +35,12 @@ func (g *GUI) DetectDevices() ([]device.Device, error) {
 }
 
 // ExtractApp resolves a device by serial and mirrors the target app's file
-// tree to dest.
-func (g *GUI) ExtractApp(deviceID, bundleID, dest string) (*extract.Result, error) {
+// tree to dest. afcScope ("container"/"documents") applies to iOS only.
+func (g *GUI) ExtractApp(deviceID, bundleID, dest, afcScope string) (*extract.Result, error) {
 	devices, _ := g.app.DetectDevices(g.ctx)
 	for i := range devices {
 		if devices[i].ID == deviceID {
-			return g.app.ExtractApp(g.ctx, devices[i], bundleID, dest)
+			return g.app.ExtractApp(g.ctx, devices[i], bundleID, dest, afcScope)
 		}
 	}
 	return nil, fmt.Errorf("device %q not found; re-run detection", deviceID)

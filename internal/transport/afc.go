@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -27,6 +28,15 @@ func execRun(ctx context.Context, name string, args ...string) ([]byte, error) {
 	return exec.CommandContext(ctx, name, args...).Output()
 }
 
+// House-arrest scopes for AFC access.
+const (
+	// ScopeContainer sees the whole app sandbox (needs a dev-signed app or
+	// a jailbroken device).
+	ScopeContainer = "container"
+	// ScopeDocuments sees only Documents/, but works for more apps.
+	ScopeDocuments = "documents"
+)
+
 // AFCConnector reaches an iOS application's data container over AFC (Apple
 // File Conduit), via libimobiledevice's `afcclient` house-arrest client.
 // Unlike a device-wide connector, an AFC session is scoped to one app, so
@@ -34,9 +44,8 @@ func execRun(ctx context.Context, name string, args ...string) ([]byte, error) {
 type AFCConnector struct {
 	// Bin is the afcclient executable. Empty means "afcclient" from PATH.
 	Bin string
-	// Scope selects the house-arrest area: "container" (default, the whole
-	// app sandbox) or "documents" (only Documents/, which works for more
-	// apps but sees less).
+	// Scope is the default house-arrest area when Connect is passed an
+	// empty scope. Empty means ScopeContainer.
 	Scope string
 	run   runner // stubbable in tests; nil means os/exec
 }
@@ -49,17 +58,23 @@ func (c *AFCConnector) Supports(d device.Device) bool {
 	return d.Platform == device.IOS
 }
 
-// Connect opens an AFC session to the app identified by bundleID on d.
-func (c *AFCConnector) Connect(_ context.Context, d device.Device, bundleID string) (Conn, error) {
+// Connect opens an AFC session to the app identified by bundleID on d. An
+// empty scope falls back to the connector's default (then ScopeContainer).
+func (c *AFCConnector) Connect(_ context.Context, d device.Device, bundleID, scope string) (Conn, error) {
 	if !c.Supports(d) {
 		return nil, ErrNoConnector
 	}
 	if bundleID == "" {
 		return nil, errors.New("afc: bundle id is required")
 	}
-	scope := c.Scope
 	if scope == "" {
-		scope = "container"
+		scope = c.Scope
+	}
+	if scope == "" {
+		scope = ScopeContainer
+	}
+	if scope != ScopeContainer && scope != ScopeDocuments {
+		return nil, fmt.Errorf("afc: invalid scope %q (want %q or %q)", scope, ScopeContainer, ScopeDocuments)
 	}
 	bin := c.Bin
 	if bin == "" {

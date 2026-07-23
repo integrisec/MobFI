@@ -71,8 +71,30 @@ func TestAFCConnectorSupports(t *testing.T) {
 
 func TestAFCConnectRequiresBundleID(t *testing.T) {
 	c := NewAFCConnector()
-	if _, err := c.Connect(context.Background(), device.Device{Platform: device.IOS, ID: "U"}, ""); err == nil {
+	if _, err := c.Connect(context.Background(), device.Device{Platform: device.IOS, ID: "U"}, "", ScopeContainer); err == nil {
 		t.Error("expected error when bundle id is empty")
+	}
+}
+
+func TestAFCConnectRejectsBadScope(t *testing.T) {
+	c := NewAFCConnector()
+	d := device.Device{Platform: device.IOS, ID: "U"}
+	if _, err := c.Connect(context.Background(), d, "com.x", "wrong"); err == nil {
+		t.Error("expected error for an invalid scope")
+	}
+	if _, err := c.Connect(context.Background(), d, "com.x", ScopeDocuments); err != nil {
+		t.Errorf("documents scope should be accepted, got %v", err)
+	}
+}
+
+func TestAFCConnectDefaultsScope(t *testing.T) {
+	c := NewAFCConnector()
+	conn, err := c.Connect(context.Background(), device.Device{Platform: device.IOS, ID: "U"}, "com.x", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := conn.(*afcConn).scope; got != ScopeContainer {
+		t.Errorf("default scope = %q, want %q", got, ScopeContainer)
 	}
 }
 

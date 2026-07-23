@@ -40,6 +40,12 @@
         <label>Device ID <input id="ex-device" placeholder="select in Devices, or type a serial" /></label>
         <label>App / bundle id <input id="ex-bundle" placeholder="com.example.app" /></label>
         <label>Destination dir <input id="ex-dest" placeholder="/path/to/output" /></label>
+        <label>iOS scope
+          <select id="ex-scope">
+            <option value="container">container</option>
+            <option value="documents">documents</option>
+          </select>
+        </label>
         <button class="primary" id="btn-extract">Extract</button>
       </div>
       <pre class="output" id="extract-out"></pre>

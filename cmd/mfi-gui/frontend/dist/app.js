@@ -92,7 +92,8 @@ $("#btn-extract").addEventListener("click", async () => {
     const res = await gui().ExtractApp(
       $("#ex-device").value.trim(),
       $("#ex-bundle").value.trim(),
-      $("#ex-dest").value.trim()
+      $("#ex-dest").value.trim(),
+      $("#ex-scope").value
     );
     let text = `Extracted ${res.file_count} file(s), ${res.byte_count} byte(s)\nto ${res.root}\n`;
     if (res.skipped && res.skipped.length) {
