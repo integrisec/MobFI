@@ -3,12 +3,14 @@
 package extract
 
 import (
+	"archive/tar"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -102,6 +104,65 @@ func Run(ctx context.Context, conn transport.Conn, req Request) (*Result, error)
 	})
 	if walkErr != nil {
 		return res, walkErr
+	}
+	return res, nil
+}
+
+// RunTar extracts a tar stream (as produced by transport.TarStreamer) into
+// req.Dest, applying the same destination guard, skip tracking and progress
+// reporting as Run. Directory entries are recreated; regular files are
+// copied; other entry types (symlinks, sockets, devices) are recorded as
+// skipped rather than reconstructed.
+func RunTar(ctx context.Context, r io.Reader, req Request) (*Result, error) {
+	if req.Dest == "" {
+		return nil, errors.New("extract: Dest is required")
+	}
+	if err := os.MkdirAll(req.Dest, 0o755); err != nil {
+		return nil, err
+	}
+
+	res := &Result{Root: req.Dest}
+	tr := tar.NewReader(r)
+	for {
+		if err := ctx.Err(); err != nil {
+			return res, err
+		}
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return res, err
+		}
+
+		name := path.Clean(strings.TrimPrefix(hdr.Name, "./"))
+		if name == "." || name == ".." || name == "" {
+			continue
+		}
+		local := filepath.Join(req.Dest, filepath.FromSlash(name))
+		if !within(req.Dest, local) {
+			res.Skipped = append(res.Skipped, SkippedFile{Path: hdr.Name, Reason: "path escapes destination"})
+			continue
+		}
+
+		switch hdr.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(local, 0o755); err != nil {
+				return res, err
+			}
+		case tar.TypeReg:
+			n, err := writeLocal(local, tr)
+			if err != nil {
+				return res, fmt.Errorf("write %s: %w", local, err)
+			}
+			res.FileCount++
+			res.ByteCount += n
+			if req.Progress != nil {
+				req.Progress(Progress{Files: res.FileCount, Bytes: res.ByteCount, Path: name})
+			}
+		default:
+			res.Skipped = append(res.Skipped, SkippedFile{Path: hdr.Name, Reason: fmt.Sprintf("unsupported tar entry type %q", hdr.Typeflag)})
+		}
 	}
 	return res, nil
 }

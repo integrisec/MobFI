@@ -75,12 +75,16 @@ func (a *App) ExtractApp(ctx context.Context, d device.Device, bundleID, dst, af
 			return nil, err
 		}
 		defer conn.Close()
-		return extract.Run(ctx, conn, extract.Request{
-			BundleID:   bundleID,
-			SourceRoot: "/data/data/" + bundleID,
-			Dest:       dst,
-			Progress:   progress,
-		})
+		root := "/data/data/" + bundleID
+		req := extract.Request{BundleID: bundleID, SourceRoot: root, Dest: dst, Progress: progress}
+		// Fast path: a single tar stream. Fall back to per-file copying if
+		// the device has no `tar` (the stream yields nothing) or it fails.
+		if ts, ok := conn.(transport.TarStreamer); ok {
+			if res, ok := tarExtract(ctx, ts, root, req); ok {
+				return res, nil
+			}
+		}
+		return extract.Run(ctx, conn, req)
 	case device.IOS:
 		conn, err := a.AFC.Connect(ctx, d, bundleID, afcScope)
 		if err != nil {
@@ -96,6 +100,22 @@ func (a *App) ExtractApp(ctx context.Context, d device.Device, bundleID, dst, af
 	default:
 		return nil, fmt.Errorf("extract: unknown platform %q", d.Platform)
 	}
+}
+
+// tarExtract streams a tar of root and untars it into req.Dest. It reports
+// success only when the stream produced files, so a device without `tar`
+// (empty/garbage stream) falls back to per-file extraction.
+func tarExtract(ctx context.Context, ts transport.TarStreamer, root string, req extract.Request) (*extract.Result, bool) {
+	r, err := ts.TarReader(ctx, root)
+	if err != nil {
+		return nil, false
+	}
+	defer r.Close() // ignores tar's non-zero exit on partially-readable trees
+	res, err := extract.RunTar(ctx, r, req)
+	if err != nil || res.FileCount == 0 {
+		return nil, false
+	}
+	return res, true
 }
 
 // androidConn picks how to reach an app's private data. It prefers

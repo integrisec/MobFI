@@ -1,6 +1,8 @@
 package extract
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -160,6 +162,51 @@ func readTree(t *testing.T, dir string) map[string]string {
 		t.Fatal(err)
 	}
 	return out
+}
+
+func TestRunTar(t *testing.T) {
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	writeTar := func(name string, typ byte, body string) {
+		hdr := &tar.Header{Name: name, Typeflag: typ, Mode: 0o600, Size: int64(len(body))}
+		if typ == tar.TypeDir {
+			hdr.Size = 0
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			t.Fatal(err)
+		}
+		if body != "" {
+			tw.Write([]byte(body))
+		}
+	}
+	writeTar("./files/", tar.TypeDir, "")
+	writeTar("./files/a.txt", tar.TypeReg, "hello")
+	writeTar("./shared_prefs/p.xml", tar.TypeReg, "<x/>")
+	writeTar("./link", tar.TypeSymlink, "")     // must be skipped, not recreated
+	writeTar("../escape", tar.TypeReg, "pwned") // must be rejected
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	dest := t.TempDir()
+	res, err := RunTar(context.Background(), &buf, Request{Dest: dest})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.FileCount != 2 {
+		t.Errorf("FileCount = %d, want 2", res.FileCount)
+	}
+	if len(res.Skipped) != 2 {
+		t.Errorf("Skipped = %+v, want the symlink and the escape", res.Skipped)
+	}
+
+	got := readTree(t, dest)
+	if got["files/a.txt"] != "hello" || got["shared_prefs/p.xml"] != "<x/>" {
+		t.Errorf("wrote %v", got)
+	}
+	if len(got) != 2 {
+		t.Errorf("wrote %d files, want 2: %v", len(got), keys(got))
+	}
 }
 
 func keys(m map[string]string) []string {

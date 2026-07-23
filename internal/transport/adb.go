@@ -159,6 +159,24 @@ func (a *adbConn) Walk(ctx context.Context, root string, fn fs.WalkDirFunc) erro
 	return nil
 }
 
+// TarReader streams a tar of root's contents from the device in a single
+// `adb exec-out [run-as <pkg>] tar` process — one process for the whole
+// tree rather than one `cat` per file. Entries are relative to root (via
+// `-C`). Requires `tar` on the device (toybox, Android 6+); callers should
+// fall back to Walk/Open if this yields nothing.
+func (a *adbConn) TarReader(ctx context.Context, root string) (io.ReadCloser, error) {
+	args := append([]string{"-s", a.serial, "exec-out"}, a.shellCmd("tar", "-cf", "-", "-C", root, ".")...)
+	cmd := exec.CommandContext(ctx, a.bin, args...)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	return &cmdReader{cmd: cmd, stdout: stdout}, nil
+}
+
 // Close releases the session. adb invocations are stateless, so there is
 // nothing to tear down.
 func (a *adbConn) Close() error { return nil }

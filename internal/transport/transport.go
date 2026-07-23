@@ -24,6 +24,14 @@ type Conn interface {
 	Close() error
 }
 
+// TarStreamer is an optional Conn capability: stream a POSIX tar of a
+// directory's contents (entries relative to root) in a single operation.
+// This is far faster than walking + reading each file, so callers should
+// prefer it when a Conn implements it.
+type TarStreamer interface {
+	TarReader(ctx context.Context, root string) (io.ReadCloser, error)
+}
+
 // Connector opens a Conn for devices it supports.
 type Connector interface {
 	// Supports reports whether this connector can reach d.
