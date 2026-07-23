@@ -81,6 +81,7 @@ func runDetect(ctx context.Context, core *app.App, args []string) error {
 func runApps(ctx context.Context, core *app.App, args []string) error {
 	fs := flag.NewFlagSet("apps", flag.ContinueOnError)
 	deviceID := fs.String("device", "", "device ID to list apps from")
+	all := fs.Bool("all", false, "include system apps (default: user apps only)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -100,7 +101,7 @@ func runApps(ctx context.Context, core *app.App, args []string) error {
 		return fmt.Errorf("device %q not found; run `mfi detect`", *deviceID)
 	}
 
-	apps, err := core.ListApps(ctx, *target)
+	apps, err := core.ListApps(ctx, *target, *all)
 	if err != nil {
 		return err
 	}

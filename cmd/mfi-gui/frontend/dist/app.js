@@ -89,12 +89,15 @@ $("#btn-detect").addEventListener("click", async () => {
 });
 
 // --- Apps ---
+let currentAppsDevice = null;
+
 async function loadApps(deviceID) {
+  currentAppsDevice = deviceID;
   showView("apps");
   $("#apps-device").textContent = deviceID;
   clearRows("#apps-table tbody");
   try {
-    const apps = await gui().ListApps(deviceID);
+    const apps = await gui().ListApps(deviceID, $("#apps-system").checked);
     if (!apps || apps.length === 0) {
       emptyRow("#apps-table tbody", 5, "no apps found");
       return;
@@ -118,6 +121,11 @@ async function loadApps(deviceID) {
     fail(e);
   }
 }
+
+// Re-list when the system-apps toggle changes (if a device is loaded).
+$("#apps-system").addEventListener("change", () => {
+  if (currentAppsDevice) loadApps(currentAppsDevice);
+});
 
 // --- Extract ---
 $("#btn-extract").addEventListener("click", async () => {

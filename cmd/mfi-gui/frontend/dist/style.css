@@ -111,6 +111,10 @@ button.primary:hover { background: var(--accent); }
 
 .mime { color: var(--muted); font-size: 12px; align-self: center; }
 
+.row-actions { display: flex; align-items: center; gap: 16px; }
+label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--text); font-size: 13px; cursor: pointer; }
+label.inline input { min-width: 0; }
+
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .chip {
   background: var(--panel-2);

@@ -116,11 +116,15 @@ mfi detect
 ### List installed apps
 
 Show the user-installed apps on a device with their bundle ids and on-device
-paths (handy for picking an extraction target):
+paths (handy for picking an extraction target). Add `-all` to include system
+apps:
 
 ```sh
 mfi apps -device <serial-or-udid>
+mfi apps -device <serial-or-udid> -all      # also list system apps
 ```
+
+In the GUI, the Apps view has an "Include system apps" checkbox.
 
 ### Extract an app's data
 

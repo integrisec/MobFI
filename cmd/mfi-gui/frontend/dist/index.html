@@ -38,9 +38,12 @@
     <section class="view hidden" id="view-apps">
       <div class="row">
         <h2>Installed apps</h2>
-        <span class="mime" id="apps-device"></span>
+        <div class="row-actions">
+          <label class="inline"><input type="checkbox" id="apps-system" /> Include system apps</label>
+          <span class="mime" id="apps-device"></span>
+        </div>
       </div>
-      <p class="hint">User-installed apps on the selected device. Detect a device first, then click “List apps”. Pick one to prefill Extract.</p>
+      <p class="hint">Apps on the selected device. Detect a device first, then click “List apps”. Pick one to prefill Extract.</p>
       <div class="scroll">
         <table class="grid" id="apps-table">
           <thead><tr><th>Bundle ID</th><th>Name</th><th>Data path</th><th>Install path</th><th></th></tr></thead>

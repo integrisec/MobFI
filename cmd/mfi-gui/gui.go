@@ -35,11 +35,12 @@ func (g *GUI) DetectDevices() ([]device.Device, error) {
 }
 
 // ListApps enumerates the installed apps on a device (resolved by serial).
-func (g *GUI) ListApps(deviceID string) ([]device.InstalledApp, error) {
+// includeSystem also lists system apps.
+func (g *GUI) ListApps(deviceID string, includeSystem bool) ([]device.InstalledApp, error) {
 	devices, _ := g.app.DetectDevices(g.ctx)
 	for i := range devices {
 		if devices[i].ID == deviceID {
-			return g.app.ListApps(g.ctx, devices[i])
+			return g.app.ListApps(g.ctx, devices[i], includeSystem)
 		}
 	}
 	return nil, fmt.Errorf("device %q not found; re-run detection", deviceID)

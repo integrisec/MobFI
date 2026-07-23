@@ -48,11 +48,12 @@ func (a *App) DetectDevices(ctx context.Context) ([]device.Device, error) {
 	return a.Detectors.DetectAll(ctx)
 }
 
-// ListApps enumerates the user-installed applications on a device.
-func (a *App) ListApps(ctx context.Context, d device.Device) ([]device.InstalledApp, error) {
+// ListApps enumerates the applications on a device. When includeSystem is
+// true, system apps are listed alongside user-installed ones.
+func (a *App) ListApps(ctx context.Context, d device.Device, includeSystem bool) ([]device.InstalledApp, error) {
 	for _, l := range a.AppListers {
 		if l.Supports(d) {
-			return l.List(ctx, d)
+			return l.List(ctx, d, includeSystem)
 		}
 	}
 	return nil, fmt.Errorf("no app lister for platform %q", d.Platform)

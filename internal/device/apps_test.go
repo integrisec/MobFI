@@ -34,13 +34,40 @@ func TestADBAppListerMissingBinary(t *testing.T) {
 	l := &ADBAppLister{run: func(context.Context, string, ...string) ([]byte, error) {
 		return nil, exec.ErrNotFound
 	}}
-	apps, err := l.List(context.Background(), Device{Platform: Android, ID: "S"})
+	apps, err := l.List(context.Background(), Device{Platform: Android, ID: "S"}, false)
 	if err != nil {
 		t.Fatalf("missing adb should not error, got %v", err)
 	}
 	if apps != nil {
 		t.Fatalf("missing adb should yield no apps, got %+v", apps)
 	}
+}
+
+func TestADBAppListerSystemFlag(t *testing.T) {
+	var gotArgs []string
+	l := &ADBAppLister{run: func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		gotArgs = args
+		return nil, nil
+	}}
+	d := Device{Platform: Android, ID: "S"}
+
+	l.List(context.Background(), d, false)
+	if !containsArg(gotArgs, "-3") {
+		t.Errorf("user-only listing should pass -3, got %v", gotArgs)
+	}
+	l.List(context.Background(), d, true)
+	if containsArg(gotArgs, "-3") {
+		t.Errorf("include-system listing should omit -3, got %v", gotArgs)
+	}
+}
+
+func containsArg(args []string, want string) bool {
+	for _, a := range args {
+		if a == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestParseIOSApps(t *testing.T) {

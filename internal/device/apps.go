@@ -23,10 +23,11 @@ type InstalledApp struct {
 	Version     string   `json:"version,omitempty"`
 }
 
-// AppLister enumerates the user-installed applications on a device.
+// AppLister enumerates the applications on a device. When includeSystem is
+// true, system apps are listed in addition to user-installed ones.
 type AppLister interface {
 	Supports(d Device) bool
-	List(ctx context.Context, d Device) ([]InstalledApp, error)
+	List(ctx context.Context, d Device, includeSystem bool) ([]InstalledApp, error)
 }
 
 // DefaultAppListers returns the built-in listers for Android and iOS.
@@ -36,7 +37,8 @@ func DefaultAppListers() []AppLister {
 
 // --- Android (adb) ---
 
-// ADBAppLister lists third-party apps via `adb shell pm list packages -f -3`.
+// ADBAppLister lists apps via `adb shell pm list packages -f` (adding -3 to
+// restrict to third-party apps unless system apps are requested).
 type ADBAppLister struct {
 	Bin string
 	run func(ctx context.Context, name string, args ...string) ([]byte, error)
@@ -61,10 +63,14 @@ func (l *ADBAppLister) exec(ctx context.Context, args ...string) ([]byte, error)
 	return exec.CommandContext(ctx, l.bin(), args...).Output()
 }
 
-// List returns the third-party (user-installed) apps. A missing adb yields
-// no apps rather than an error.
-func (l *ADBAppLister) List(ctx context.Context, d Device) ([]InstalledApp, error) {
-	out, err := l.exec(ctx, "-s", d.ID, "shell", "pm", "list", "packages", "-f", "-3")
+// List returns installed apps (third-party only unless includeSystem). A
+// missing adb yields no apps rather than an error.
+func (l *ADBAppLister) List(ctx context.Context, d Device, includeSystem bool) ([]InstalledApp, error) {
+	args := []string{"-s", d.ID, "shell", "pm", "list", "packages", "-f"}
+	if !includeSystem {
+		args = append(args, "-3") // third-party only
+	}
+	out, err := l.exec(ctx, args...)
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
 			return nil, nil
@@ -130,10 +136,14 @@ func (l *IOSAppLister) exec(ctx context.Context, args ...string) ([]byte, error)
 	return exec.CommandContext(ctx, l.bin(), args...).Output()
 }
 
-// List returns the user-installed iOS apps. Missing ideviceinstaller yields
-// no apps rather than an error.
-func (l *IOSAppLister) List(ctx context.Context, d Device) ([]InstalledApp, error) {
-	out, err := l.exec(ctx, "-u", d.ID, "list", "-o", "xml", "-o", "list_user")
+// List returns iOS apps (user apps only unless includeSystem). Missing
+// ideviceinstaller yields no apps rather than an error.
+func (l *IOSAppLister) List(ctx context.Context, d Device, includeSystem bool) ([]InstalledApp, error) {
+	scope := "list_user"
+	if includeSystem {
+		scope = "list_all"
+	}
+	out, err := l.exec(ctx, "-u", d.ID, "list", "-o", "xml", "-o", scope)
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
 			return nil, nil
