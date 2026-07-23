@@ -129,8 +129,9 @@ In the GUI, the Apps view has a search box (filter by bundle id or name), an
 Real app icons, names and versions are resolved lazily from each APK using
 `aapt` (from the Android SDK build-tools); without it, a monogram avatar and a
 name derived from the bundle id are shown instead. Click a row to show a
-details panel (version, SDK, ABI, install/update dates, sizes, flags, signing,
-paths and permissions) from `dumpsys package`.
+details panel: on Android from `dumpsys package` (version, SDK, ABI,
+install/update dates, sizes, flags, signing, paths, permissions); on iOS from
+`ideviceinstaller` (version, type, min iOS, signer, paths, entitlements).
 
 ### Extract an app's data
 

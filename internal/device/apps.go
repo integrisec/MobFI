@@ -126,8 +126,8 @@ func firstField(s string) string {
 
 // --- iOS (ideviceinstaller) ---
 
-// IOSAppLister lists user apps via `ideviceinstaller list -o xml`, decoding
-// the returned property list.
+// IOSAppLister lists apps via `ideviceinstaller list --user/--all --xml`,
+// decoding the returned property list.
 type IOSAppLister struct {
 	Bin string
 	run func(ctx context.Context, name string, args ...string) ([]byte, error)
@@ -155,11 +155,11 @@ func (l *IOSAppLister) exec(ctx context.Context, args ...string) ([]byte, error)
 // List returns iOS apps (user apps only unless includeSystem). Missing
 // ideviceinstaller yields no apps rather than an error.
 func (l *IOSAppLister) List(ctx context.Context, d Device, includeSystem bool) ([]InstalledApp, error) {
-	scope := "list_user"
+	scope := "--user"
 	if includeSystem {
-		scope = "list_all"
+		scope = "--all"
 	}
-	out, err := l.exec(ctx, "-u", d.ID, "list", "-o", "xml", "-o", scope)
+	out, err := l.exec(ctx, "-u", d.ID, "list", scope, "--xml")
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
 			return nil, nil

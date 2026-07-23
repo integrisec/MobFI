@@ -354,18 +354,6 @@ function setupAppsSorting() {
   });
 }
 
-function humanBytes(n) {
-  if (!n) return "—";
-  const u = ["B", "KB", "MB", "GB", "TB"];
-  let i = 0;
-  let v = n;
-  while (v >= 1024 && i < u.length - 1) {
-    v /= 1024;
-    i++;
-  }
-  return `${v.toFixed(v < 10 && i > 0 ? 1 : 0)} ${u[i]}`;
-}
-
 // clearDetails hides the details panel and drops the row highlight.
 function clearDetails() {
   selectedBundle = null;
@@ -383,7 +371,7 @@ async function selectApp(row, a) {
   panel.classList.remove("hidden");
   panel.textContent = "Loading details…";
   try {
-    const d = await gui().AppDetails(currentAppsDevice, a.bundle_id, a.install_path);
+    const d = await gui().AppDetails(currentAppsDevice, a.bundle_id, a.install_path, a.platform);
     if (selectedBundle === a.bundle_id) renderDetails(a, d); // ignore if selection changed
   } catch (e) {
     panel.textContent = "";
@@ -394,27 +382,12 @@ async function selectApp(row, a) {
 function renderDetails(a, d) {
   const panel = $("#app-details");
   const name = (appMetaCache.get(a.bundle_id) || {}).name || a.name || humanize(a.bundle_id);
-  const rows = [
-    ["Bundle id", a.bundle_id],
-    ["Version", d.version_name ? `${d.version_name} (code ${d.version_code || "?"})` : d.version_code || ""],
-    ["SDK", d.min_sdk || d.target_sdk ? `min ${d.min_sdk || "?"} → target ${d.target_sdk || "?"}` : ""],
-    ["ABI", d.abi],
-    ["Installer", d.installer],
-    ["First install", d.first_install],
-    ["Last update", d.last_update],
-    ["APK size", humanBytes(d.apk_size)],
-    ["Data size", humanBytes(d.data_size)],
-    ["UID", d.uid],
-    ["Signing", d.signing_version ? `v${d.signing_version}` : ""],
-    ["Flags", d.flags],
-    ["Data dir", d.data_dir],
-    ["Code path", d.code_path],
-  ];
 
   const dl = el("dl", { className: "kv" });
-  for (const [k, v] of rows) {
-    if (!v) continue;
-    dl.append(el("dt", { textContent: k }), el("dd", { textContent: String(v) }));
+  dl.append(el("dt", { textContent: "Bundle id" }), el("dd", { textContent: a.bundle_id }));
+  for (const f of d.fields || []) {
+    if (!f.value) continue;
+    dl.append(el("dt", { textContent: f.label }), el("dd", { textContent: f.value }));
   }
 
   const closeBtn = el("button", { className: "details-close", textContent: "✕", title: "Close" });
