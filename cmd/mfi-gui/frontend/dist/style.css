@@ -199,6 +199,24 @@ ul.perms li { break-inside: avoid; }
 
 .scroll { max-height: 60vh; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
 
+/* Draggable horizontal splitter between the app list and details panel */
+.v-resizer {
+  height: 12px;
+  margin: 2px 0;
+  cursor: row-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.v-resizer::before {
+  content: "";
+  width: 46px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line);
+}
+.v-resizer:hover::before { background: var(--accent); }
+
 .output {
   background: #0b0f14;
   border: 1px solid var(--line);

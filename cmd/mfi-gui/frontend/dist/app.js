@@ -57,6 +57,29 @@ function makeResizable(table) {
   });
 }
 
+// makeVResizer lets a divider drag the height of a target element (used for
+// the splitter between the app list and the details panel).
+function makeVResizer(divider, target) {
+  if (!divider || !target) return;
+  divider.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    const startY = e.pageY;
+    const startH = target.offsetHeight;
+    target.style.maxHeight = "none"; // let the explicit height take over
+    const onMove = (ev) => {
+      target.style.height = Math.max(120, startH + (ev.pageY - startY)) + "px";
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    document.body.style.cursor = "row-resize";
+  });
+}
+
 function gui() {
   // window.go is injected by the Wails runtime once bindings are ready.
   if (!window.go || !window.go.main || !window.go.main.GUI) {
@@ -659,6 +682,9 @@ wireBrowse("rn-file-browse", "rn-file", "file");
 
 // Resizable columns on the remaining static-header tables.
 ["#devices-table", "#scan-table", "#diff-table"].forEach((sel) => makeResizable($(sel)));
+
+// Draggable splitter between the app list and the details panel.
+makeVResizer($("#apps-vsplit"), $("#apps-scroll"));
 
 // Start on the Devices step of the wizard.
 showView("devices");

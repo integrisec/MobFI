@@ -46,12 +46,13 @@
         </div>
       </div>
       <p class="hint">Apps on the selected device. Detect a device first, then click “List apps”. Pick one to prefill Extract.</p>
-      <div class="scroll">
+      <div class="scroll" id="apps-scroll">
         <table class="grid" id="apps-table">
           <thead><tr><th class="no-resize col-icon"></th><th>Bundle ID</th><th>Name</th><th>Version</th><th>Data path</th><th>Install path</th><th class="no-resize col-actions"></th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
+      <div class="v-resizer" id="apps-vsplit" title="Drag to resize the list"></div>
       <div id="app-details" class="details hidden"></div>
     </section>
 
