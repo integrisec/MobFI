@@ -201,9 +201,15 @@ Detect button forces a re-check) and shows each device's rooted/jailbroken
 status, with tabs for Apps, Extract, Scan, Diff, Database and Render.
 
 The **Render** tab opens a single file or a whole folder (an Explorer-style
-tree on the left, render pane on the right). It detects the type and renders
-natively — images and PDFs inline, code (XML/JSON/JS/…) with syntax
-highlighting, property lists decoded — with a Hex-view toggle.
+tree on the left, render pane on the right, with a resizable divider). It
+detects the type and renders natively — images and PDFs inline, code
+(XML/JSON/JS/…) with syntax highlighting, property lists decoded — with
+**Wrap**, **Prettify** (indent JSON/XML regardless of extension) and **Hex**
+toggles. It also shows the file size, an **Open externally** button (OS
+default app), and — when the file is a SQLite database — an **Open in
+Database** button that jumps to the Database tab. GUI-only extras (real app
+icons/details, syntax highlighting) shell out to `aapt` (Android SDK
+build-tools) and use Chroma; they degrade gracefully when unavailable.
 
 ---
 
