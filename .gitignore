@@ -23,10 +23,13 @@ Thumbs.db
 .idea/
 .vscode/
 
-# Wails GUI build output & JS deps (added once `wails init` is run)
-/build/bin/
-frontend/dist/
-frontend/node_modules/
+# Wails: compiled app output (keep build/darwin config + appicon.png)
+**/build/bin/
+# Generated Wails JS/TS bindings — the runtime injects window.go regardless,
+# and the vanilla frontend doesn't import them.
+cmd/mfi-gui/frontend/dist/wailsjs/
+# Node deps, if a build-based frontend is ever added
+node_modules/
 
 # --- Project-sensitive: NEVER commit extracted device data, secrets, or reports ---
 /captures/

@@ -28,12 +28,12 @@ const (
 
 // Device is a single Android/iOS target seen by a detector.
 type Device struct {
-	ID        string // stable identifier (adb serial, iOS UDID, ...)
-	Name      string // human-friendly label
-	Platform  Platform
-	Transport Transport
-	Address   string // host:port for TCP transports; empty otherwise
-	State     string // reachability, e.g. "device", "offline", "unauthorized"
+	ID        string    `json:"id"`   // stable identifier (adb serial, iOS UDID, ...)
+	Name      string    `json:"name"` // human-friendly label
+	Platform  Platform  `json:"platform"`
+	Transport Transport `json:"transport"`
+	Address   string    `json:"address,omitempty"` // host:port for TCP transports
+	State     string    `json:"state"`             // "device", "offline", "unauthorized", ...
 }
 
 // Detector discovers devices reachable via one mechanism. Implementations

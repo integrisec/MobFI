@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Early build. The package boundaries and interfaces are in place. Implemented so far: device detection (adb + libimobiledevice), the adb transport connector, `extract.Run` (mirrors an app's on-device tree to disk), and the `secrets` scanner (Trufflehog-style built-in rules + user-supplied known-secret lists, with redacted findings), `diff.Trees` (tree + content diff of two extracted roots; structural differs still to come), and `report` (aggregates scan + diff into a text summary and a JSON export), `dbview` (read-only, immutable SQLite inspection), and `render` (JSON/XML/plist/SQLite-summary/text/hex, pluggable per file type) — all wired end-to-end through `mfi detect` / `mfi extract` / `mfi scan` / `mfi diff` / `mfi report` / `mfi db` / `mfi render`. Every core capability from the spec now has a working first implementation; grep for `TODO` for the known follow-ups (iOS/AFC extraction, structural diffs, binary-plist decoding, the Wails GUI). Read `intial_claude_prompt.md` (the founding spec) for the full requirement set.
+Early build. The package boundaries and interfaces are in place. Implemented so far: device detection (adb + libimobiledevice), the adb transport connector, `extract.Run` (mirrors an app's on-device tree to disk), and the `secrets` scanner (Trufflehog-style built-in rules + user-supplied known-secret lists, with redacted findings), `diff.Trees` (tree + content diff of two extracted roots; structural differs still to come), and `report` (aggregates scan + diff into a text summary and a JSON export), `dbview` (read-only, immutable SQLite inspection), and `render` (JSON/XML/plist/SQLite-summary/text/hex, pluggable per file type) — all wired end-to-end through the CLI (`mfi detect` / `extract` / `scan` / `diff` / `report` / `db` / `render`) **and** the Wails desktop GUI, which binds the same core. Every core capability from the spec now has a working first implementation; grep for `TODO` for the known follow-ups (iOS/AFC extraction, structural diffs, binary-plist decoding). Read `intial_claude_prompt.md` (the founding spec) for the full requirement set.
 
 Go module path: `github.com/integrisec/MobFI` (remote: `https://github.com/integrisec/MobFI.git`). Requires Go 1.23+ (dev machine has 1.26.5). Both binaries build clean and `go vet ./...` passes; there are no tests yet.
 
@@ -20,12 +20,22 @@ go test ./internal/secrets/ -run TestScanTree   # a single package / test
 go run ./cmd/mfi detect                          # exercise a subcommand
 ```
 
+GUI (from `cmd/mfi-gui/`, needs the `wails` CLI — `go install github.com/wailsapp/wails/v2/cmd/wails@latest`):
+
+```sh
+cd cmd/mfi-gui
+wails dev      # live-reload dev window
+wails build    # package build/bin/MobFI.app (macOS); cgo/WebKit toolchain required
+```
+
+The GUI frontend under `cmd/mfi-gui/frontend/dist/` is **vanilla HTML/JS/CSS** — no npm/build step. It calls the Go bindings at `window.go.main.GUI.*`, which the Wails runtime injects from the exported methods on the `GUI` type (`cmd/mfi-gui/gui.go`). Generated `wailsjs/` bindings are gitignored; don't rely on them.
+
 The one external dependency so far is `modernc.org/sqlite` (used by `internal/dbview`) — chosen because it is **cgo-free**, so cross-compiling to Windows/Linux needs no C toolchain. Keep new deps cgo-free for that reason. After changing imports, run `make tidy`.
 
 ## Repository layout
 
 - `cmd/mfi/` — CLI frontend (thin; wizard is the default command, subcommands are the advanced path).
-- `cmd/mfi-gui/` — placeholder for the Wails desktop frontend; run `wails init` to generate `frontend/` + `wails.json`.
+- `cmd/mfi-gui/` — the Wails desktop app. `main.go` runs the window; `gui.go` is the bound `GUI` type (thin wrappers over `internal/app`); `frontend/dist/` is the vanilla UI; `build/` holds packaging config (icon, Info.plist).
 - `internal/app/` — **the core orchestrator.** Both frontends construct `app.New()` and call its methods; keep all real logic here or in the packages below, never in a frontend.
 - `internal/device/`, `internal/transport/` — device discovery and connection, each built around a pluggable registry (`Add` a `Detector`/`Connector`).
 - `internal/extract/`, `internal/secrets/`, `internal/diff/`, `internal/dbview/`, `internal/render/`, `internal/report/` — the capability packages; `render` and `dbview` also use registries for per-file-type handlers.

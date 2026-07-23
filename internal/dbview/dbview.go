@@ -20,9 +20,9 @@ var sqliteMagic = []byte("SQLite format 3\x00")
 
 // Table is a listing of columns and rows read from a database.
 type Table struct {
-	Name    string
-	Columns []string
-	Rows    [][]string
+	Name    string     `json:"name"`
+	Columns []string   `json:"columns"`
+	Rows    [][]string `json:"rows"`
 }
 
 // DB is a read-only view over an opened database file.

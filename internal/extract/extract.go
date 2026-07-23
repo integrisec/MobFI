@@ -25,16 +25,16 @@ type Request struct {
 // SkippedFile records a path that could not be copied (typically a
 // permission denial) so the report can note the gap rather than hide it.
 type SkippedFile struct {
-	Path   string // on-device path
-	Reason string
+	Path   string `json:"path"` // on-device path
+	Reason string `json:"reason"`
 }
 
 // Result summarises what was copied.
 type Result struct {
-	Root      string // local root the tree was written under
-	FileCount int
-	ByteCount int64
-	Skipped   []SkippedFile
+	Root      string        `json:"root"` // local root the tree was written under
+	FileCount int           `json:"file_count"`
+	ByteCount int64         `json:"byte_count"`
+	Skipped   []SkippedFile `json:"skipped,omitempty"`
 }
 
 // Run mirrors req.SourceRoot from the device (reached via conn) into

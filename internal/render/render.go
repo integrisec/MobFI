@@ -33,8 +33,8 @@ var (
 
 // View is a rendered, human-readable representation of a file.
 type View struct {
-	MIME string // best-guess content type
-	Text string // rendered text form
+	MIME string `json:"mime"` // best-guess content type
+	Text string `json:"text"` // rendered text form
 }
 
 // Renderer produces a View for files it recognises.
