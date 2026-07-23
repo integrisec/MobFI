@@ -252,6 +252,23 @@ $("#btn-detect").addEventListener("click", () => {
   refreshDevices(true);
 });
 
+// Connect to an Android device over adb TCP (host:port).
+async function connectTCP() {
+  const addr = $("#tcp-addr").value.trim();
+  if (!addr) return;
+  try {
+    const msg = await gui().ConnectTCP(addr);
+    toast(msg || "connected to " + addr, true);
+    refreshDevices(true);
+  } catch (e) {
+    fail(e);
+  }
+}
+$("#btn-connect").addEventListener("click", connectTCP);
+$("#tcp-addr").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") connectTCP();
+});
+
 // --- Apps ---
 let currentAppsDevice = null;
 let currentApps = [];
@@ -571,44 +588,94 @@ $("#btn-extract").addEventListener("click", async () => {
 });
 
 // --- Scan ---
+let currentFindings = null;
+let scanSortField = null;
+let scanSortDir = 1;
+const SCAN_COLUMNS = ["rule_id", "path", "line", "match", null];
+
 $("#btn-scan").addEventListener("click", async () => {
-  clearRows("#scan-table tbody");
   try {
     const known = $("#sc-known").value.trim();
     if (known) await gui().AddKnownSecrets(known);
-    const findings = await gui().ScanSecrets($("#sc-root").value.trim());
-    if (!findings || findings.length === 0) {
-      emptyRow("#scan-table tbody", 5, "no secrets found");
-      return;
-    }
-    for (const f of findings) {
-      const matchCell = el("td", { className: "revealable", textContent: f.match, title: "click to reveal" });
-      let revealed = false;
-      matchCell.addEventListener("click", () => {
-        revealed = !revealed;
-        matchCell.textContent = revealed ? (f.secret || f.match) : f.match;
-      });
-      const copyBtn = el("button", { textContent: "Copy" });
-      copyBtn.addEventListener("click", async () => {
-        try {
-          await gui().Copy(f.secret || f.match);
-          toast("copied secret", true);
-        } catch (e) {
-          fail(e);
-        }
-      });
-      $("#scan-table tbody").append(el("tr", {},
-        el("td", { textContent: f.rule_id }),
-        el("td", { textContent: f.path }),
-        el("td", { textContent: f.line }),
-        matchCell,
-        el("td", { className: "col-actions" }, copyBtn)
-      ));
-    }
+    currentFindings = await gui().ScanSecrets($("#sc-root").value.trim());
+    renderScan();
   } catch (e) {
     fail(e);
   }
 });
+
+function scanRow(f) {
+  const matchCell = el("td", { className: "revealable", textContent: f.match, title: "click to reveal" });
+  let revealed = false;
+  matchCell.addEventListener("click", () => {
+    revealed = !revealed;
+    matchCell.textContent = revealed ? f.secret || f.match : f.match;
+  });
+  const copyBtn = el("button", { textContent: "Copy" });
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await gui().Copy(f.secret || f.match);
+      toast("copied secret", true);
+    } catch (e) {
+      fail(e);
+    }
+  });
+  return el("tr", {},
+    el("td", { textContent: f.rule_id }),
+    el("td", { textContent: f.path }),
+    el("td", { textContent: f.line }),
+    matchCell,
+    el("td", { className: "col-actions" }, copyBtn)
+  );
+}
+
+function renderScan() {
+  clearRows("#scan-table tbody");
+  if (!currentFindings) return;
+  if (currentFindings.length === 0) {
+    emptyRow("#scan-table tbody", 5, "no secrets found");
+    return;
+  }
+  updateScanSortIndicators();
+  for (const f of sortRows(currentFindings, scanSortField, scanSortDir)) {
+    $("#scan-table tbody").append(scanRow(f));
+  }
+}
+
+function updateScanSortIndicators() {
+  document.querySelectorAll("#scan-table thead th.sortable").forEach((th) => {
+    const arrow = th.dataset.field === scanSortField ? (scanSortDir === 1 ? " ▲" : " ▼") : "";
+    const labelEl = th.querySelector(".th-label");
+    if (labelEl) labelEl.textContent = th.dataset.label + arrow;
+    else th.textContent = th.dataset.label + arrow;
+  });
+}
+
+function setupScanSorting() {
+  const saved = JSON.parse(localStorage.getItem("mobfi.scan.sort") || "null");
+  if (saved && saved.field) {
+    scanSortField = saved.field;
+    scanSortDir = saved.dir;
+  }
+  document.querySelectorAll("#scan-table thead th").forEach((th, i) => {
+    const field = SCAN_COLUMNS[i];
+    if (!field) return;
+    th.classList.add("sortable");
+    th.dataset.field = field;
+    const labelEl = th.querySelector(".th-label");
+    th.dataset.label = labelEl ? labelEl.textContent : th.textContent;
+    th.addEventListener("click", () => {
+      if (scanSortField === field) scanSortDir = -scanSortDir;
+      else {
+        scanSortField = field;
+        scanSortDir = 1;
+      }
+      localStorage.setItem("mobfi.scan.sort", JSON.stringify({ field: scanSortField, dir: scanSortDir }));
+      renderScan();
+    });
+  });
+  updateScanSortIndicators();
+}
 
 // --- Diff ---
 function joinPath(root, rel) {
@@ -695,6 +762,11 @@ function updateDiffSortIndicators() {
 }
 
 function setupDiffSorting() {
+  const saved = JSON.parse(localStorage.getItem("mobfi.diff.sort") || "null");
+  if (saved && saved.field) {
+    diffSortField = saved.field;
+    diffSortDir = saved.dir;
+  }
   document.querySelectorAll("#diff-table thead th").forEach((th, i) => {
     const field = DIFF_COLUMNS[i];
     if (!field) return;
@@ -708,9 +780,11 @@ function setupDiffSorting() {
         diffSortField = field;
         diffSortDir = 1;
       }
+      localStorage.setItem("mobfi.diff.sort", JSON.stringify({ field: diffSortField, dir: diffSortDir }));
       renderDiff();
     });
   });
+  updateDiffSortIndicators();
 }
 
 // --- side-by-side file diff overlay ---
@@ -1058,7 +1132,8 @@ wireBrowse("db-file-browse", "db-file", "file");
 makeResizable($("#devices-table"), "mobfi.cols.devices");
 makeResizable($("#scan-table"), "mobfi.cols.scan");
 makeResizable($("#diff-table"), "mobfi.cols.diff");
-setupDiffSorting(); // after makeResizable, which creates the .th-label spans
+setupScanSorting(); // after makeResizable, which creates the .th-label spans
+setupDiffSorting();
 
 // Draggable splitter between the app list and the details panel (persisted).
 makeVResizer($("#apps-vsplit"), $("#apps-scroll"), "mobfi.apps.listHeight");

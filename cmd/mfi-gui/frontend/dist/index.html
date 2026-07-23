@@ -25,7 +25,11 @@
     <section class="view" id="view-devices">
       <div class="row">
         <h2>Detect devices</h2>
-        <button class="primary" id="btn-detect">Detect</button>
+        <div class="row-actions">
+          <input id="tcp-addr" class="search" placeholder="host:port (adb TCP)" />
+          <button id="btn-connect">Connect</button>
+          <button class="primary" id="btn-detect">Detect</button>
+        </div>
       </div>
       <p class="hint">Android (adb) and iOS (libimobiledevice) devices over USB, emulator, or TCP. The list refreshes automatically; Detect forces a re-check (including root/jailbreak).</p>
       <table class="grid" id="devices-table">
