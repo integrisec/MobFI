@@ -49,7 +49,7 @@ html, body {
 .tab:hover { color: var(--text); background: var(--panel-2); }
 .tab.active { color: #fff; background: var(--accent-2); }
 
-main { padding: 22px; max-width: 1100px; margin: 0 auto; }
+main { padding: 22px; }
 .view.hidden { display: none; }
 
 h2 { margin: 0 0 6px; font-size: 17px; }
@@ -96,10 +96,11 @@ button:disabled { opacity: 0.5; cursor: default; }
 .grid th.sortable { cursor: pointer; user-select: none; }
 .grid th.sortable:hover { color: var(--text); }
 
-/* Resizable columns */
-.grid.resizable { table-layout: fixed; }
-.grid.resizable td { overflow: hidden; text-overflow: ellipsis; }
-.grid .th-label { display: inline-block; overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 8px); vertical-align: bottom; }
+/* Resizable columns. Tables keep their natural (auto) layout until the
+   first drag, which locks widths and switches to fixed layout. */
+.grid.cols-fixed { table-layout: fixed; }
+.grid.cols-fixed td { overflow: hidden; text-overflow: ellipsis; }
+.grid .th-label { display: inline-block; vertical-align: bottom; }
 .col-resizer {
   position: absolute;
   top: 0;

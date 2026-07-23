@@ -12,9 +12,19 @@ const el = (tag, props = {}, ...children) => {
 // makeResizable adds draggable column dividers to a table's headers. Header
 // text is wrapped in a .th-label span so other code (e.g. sort arrows) can
 // update the label without clobbering the resize handle.
+// lockColumns freezes each column at its current natural width and switches
+// the table to fixed layout, so subsequent drags resize predictably without
+// the browser re-flowing every column.
+function lockColumns(table) {
+  if (table.classList.contains("cols-fixed")) return;
+  table.querySelectorAll("thead th").forEach((th) => {
+    th.style.width = th.offsetWidth + "px";
+  });
+  table.classList.add("cols-fixed");
+}
+
 function makeResizable(table) {
   if (!table) return;
-  table.classList.add("resizable");
   table.querySelectorAll("thead th").forEach((th) => {
     if (!th.querySelector(".th-label")) {
       const label = el("span", { className: "th-label", textContent: th.textContent });
@@ -28,6 +38,7 @@ function makeResizable(table) {
     res.addEventListener("mousedown", (e) => {
       e.preventDefault();
       e.stopPropagation();
+      lockColumns(table); // natural widths -> fixed, only on first drag
       const startX = e.pageX;
       const startW = th.offsetWidth;
       const onMove = (ev) => {
