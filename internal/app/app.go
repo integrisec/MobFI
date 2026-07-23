@@ -12,6 +12,7 @@ import (
 	"github.com/integrisec/MobFI/internal/device"
 	"github.com/integrisec/MobFI/internal/diff"
 	"github.com/integrisec/MobFI/internal/extract"
+	"github.com/integrisec/MobFI/internal/render"
 	"github.com/integrisec/MobFI/internal/report"
 	"github.com/integrisec/MobFI/internal/secrets"
 	"github.com/integrisec/MobFI/internal/transport"
@@ -23,15 +24,17 @@ type App struct {
 	Detectors  *device.Registry
 	Transports *transport.Registry
 	Scanner    *secrets.Scanner
+	Renderers  *render.Registry
 }
 
-// New returns an App with the default detectors, transports and rules
-// registered.
+// New returns an App with the default detectors, transports, rules and
+// renderers registered.
 func New() *App {
 	return &App{
 		Detectors:  device.DefaultRegistry(),
 		Transports: transport.DefaultRegistry(),
 		Scanner:    secrets.NewScanner(secrets.DefaultRules()),
+		Renderers:  render.DefaultRegistry(),
 	}
 }
 
@@ -114,6 +117,11 @@ func (a *App) DBRead(ctx context.Context, path, table string, limit int) (*dbvie
 	}
 	defer db.Close()
 	return db.Read(ctx, table, limit)
+}
+
+// Render produces a human-readable view of a single file.
+func (a *App) Render(ctx context.Context, path string) (*render.View, error) {
+	return a.Renderers.Render(ctx, path)
 }
 
 // Report aggregates findings and a diff into an actionable report.

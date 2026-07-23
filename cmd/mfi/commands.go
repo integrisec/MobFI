@@ -32,6 +32,7 @@ Commands:
   diff      Compare two extracted file roots
   report    Scan and/or diff, then summarise into a report
   db        Inspect a SQLite database file (read-only)
+  render    Render a file (XML, JSON, plist, SQLite, text, hex)
   help      Show this help
 `)
 }
@@ -264,5 +265,26 @@ func runDB(ctx context.Context, core *app.App, args []string) error {
 		return err
 	}
 	fmt.Printf("(%d row(s))\n", len(t.Rows))
+	return nil
+}
+
+func runRender(ctx context.Context, core *app.App, args []string) error {
+	fs := flag.NewFlagSet("render", flag.ContinueOnError)
+	file := fs.String("file", "", "file to render")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *file == "" {
+		return fmt.Errorf("render requires -file")
+	}
+	v, err := core.Render(ctx, *file)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("# %s\n\n", v.MIME)
+	fmt.Print(v.Text)
+	if !strings.HasSuffix(v.Text, "\n") {
+		fmt.Println()
+	}
 	return nil
 }
