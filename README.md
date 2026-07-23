@@ -1,38 +1,234 @@
-# MFI
+# MobFI
 
-A cross-platform desktop + CLI tool for inspecting and exploring the file
-structures of installed Android and iOS applications: device discovery,
-app-data extraction, secrets scanning, native-level diffing, database
-viewing, and reporting.
+**MobFI** is a cross-platform **desktop app and CLI** for inspecting and
+exploring the file structures of installed **Android and iOS** applications.
+It is a mobile-forensics / app-data-inspection tool: discover devices, pull an
+app's on-device data, hunt for secrets, diff two captures, browse databases,
+and render native file formats — then summarise it all into a report.
 
-See [`intial_claude_prompt.md`](./intial_claude_prompt.md) for the full
-specification and [`CLAUDE.md`](./CLAUDE.md) for the architecture decision.
+The GUI and the CLI are thin frontends over one shared Go core, so every
+capability is available from both.
 
-## Architecture
+---
 
-A single shared **core library in Go** (`internal/`) is driven by two thin
-frontends: a Go CLI (`cmd/mfi`) and a Wails desktop GUI (`cmd/mfi-gui`, not
-yet generated). All device I/O, extraction, scanning, diffing, and reporting
-live in the core — never in a frontend.
+## Features
+
+- **Device discovery** — Android via `adb` (USB, emulator, adb-over-TCP) and
+  iOS via `libimobiledevice` (USB + network); reports each device's pairing
+  state (`device` / `unauthorized` / `unpaired`).
+- **App extraction** — mirror an app's on-device file tree to a local folder.
+  Android uses `/data/data/<pkg>` over adb; iOS uses AFC house arrest
+  (`afcclient`) with a selectable scope (`container` or `documents`).
+  Unreadable files are recorded, not silently dropped, and a path-escape guard
+  prevents hostile device paths from writing outside the destination.
+- **Secrets scanning** — Trufflehog-style built-in detectors (AWS keys, GitHub
+  tokens, Google API keys, Slack tokens, Stripe keys, private keys, JWTs, and a
+  generic key/secret assignment) plus a user-supplied list of known secrets.
+  Findings carry only a **redacted fingerprint**, never the raw secret.
+- **Native diffing** — compare two extracted captures (e.g. logged-in vs
+  logged-out). Beyond add/remove/modify at the file level, structural differs
+  report **SQLite** row-level changes, and **JSON** and **property list** (binary
+  *and* XML) field-level changes — even across formats.
+- **Database viewing** — open SQLite files **read-only and immutable** (evidence
+  is never mutated); list tables and dump rows.
+- **File rendering** — pretty-print JSON, reindent XML, decode **binary property
+  lists**, summarise SQLite, show text, or fall back to a hex dump.
+- **Reporting** — aggregate scan and diff results into a text summary and an
+  exportable JSON report.
+
+---
+
+## How it works
+
+A single shared **core library in Go** (`internal/`) holds all logic — device
+I/O, extraction, scanning, diffing, database access, rendering and reporting.
+Two thin frontends drive it:
+
+- `cmd/mfi` — the CLI
+- `cmd/mfi-gui` — the [Wails](https://wails.io) desktop app (Go backend + a
+  dependency-free HTML/JS/CSS UI)
+
+See [`CLAUDE.md`](./CLAUDE.md) for the architecture rationale and
+[`intial_claude_prompt.md`](./intial_claude_prompt.md) for the original spec.
+
+---
 
 ## Prerequisites
 
-- **Go 1.23+** (not currently installed on this machine — `brew install go`)
-- For the GUI: the [Wails](https://wails.io) CLI and Node.js (added later)
+**To build:**
 
-## Build & run
+- **Go 1.23+**
+
+**To inspect real devices (runtime tools, install what you need):**
+
+- **Android** — the Android platform tools (`adb`):
+  `brew install --cask android-platform-tools`
+- **iOS** — `libimobiledevice` (`idevice_id`, `ideviceinfo`, `afcclient`):
+  `brew install libimobiledevice`
+  (pair and *trust* the device first; the AFC `container` scope needs a
+  dev-signed app or a jailbroken device — `documents` scope works more broadly)
+
+**To build the desktop GUI (in addition to the above):**
+
+- The **Wails** CLI: `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
+- **Node.js** and a C toolchain / platform webview
+  (macOS: Xcode Command Line Tools). Run `wails doctor` to check.
+
+MobFI does not need the runtime tools to build or run — features degrade
+gracefully when a tool is absent (e.g. no `adb` simply means no Android
+devices are found).
+
+---
+
+## Installation
 
 ```sh
-make build        # -> bin/mfi
-make run          # runs the CLI wizard
-make test         # go test ./...
-make vet          # go vet ./...
-go run ./cmd/mfi detect       # list reachable devices
-go run ./cmd/mfi help         # all subcommands
+git clone https://github.com/integrisec/MobFI.git
+cd MobFI
+make build            # compiles the CLI to ./bin/mfi
 ```
 
-## Status
+Optionally put it on your PATH:
 
-Scaffold only. Every subsystem exposes its interfaces and package boundaries
-but the implementations return `ErrNotImplemented` — search for `TODO` to find
-the next work items.
+```sh
+cp bin/mfi /usr/local/bin/     # or add ./bin to $PATH
+```
+
+---
+
+## Usage — CLI
+
+Run with no arguments for the guided wizard, or use a subcommand directly:
+
+```sh
+mfi                 # guided wizard (advanced users can run subcommands)
+mfi help            # list all commands
+```
+
+### Detect devices
+
+```sh
+mfi detect
+```
+
+### Extract an app's data
+
+```sh
+# Android
+mfi extract -device <serial> -app com.example.app -out ./capture
+
+# iOS (choose the AFC scope)
+mfi extract -device <udid> -app com.example.app -out ./capture -scope documents
+```
+
+### Scan for secrets
+
+```sh
+mfi scan -root ./capture
+mfi scan -root ./capture -known ./known-secrets.txt   # also match literal secrets
+```
+
+### Diff two captures
+
+```sh
+mfi diff -a ./logged-out -b ./logged-in
+# e.g. modified app.db (sqlite: creds: +1 -1 rows)
+#      modified state.plist (plist: 1 changed, 0 added, 1 removed field(s))
+```
+
+### Inspect a SQLite database (read-only)
+
+```sh
+mfi db -file ./capture/databases/app.db                 # list tables
+mfi db -file ./capture/databases/app.db -table users    # dump rows
+mfi db -file ./capture/databases/app.db -table users -limit 500
+```
+
+### Render a file
+
+```sh
+mfi render -file ./capture/Library/Preferences/com.example.app.plist
+```
+
+### Build a report
+
+```sh
+# scan and/or diff, print a summary, and optionally export JSON
+mfi report -root ./capture -a ./logged-out -b ./logged-in -out report.mfi-report.json
+```
+
+---
+
+## Usage — Desktop GUI
+
+The GUI wraps the same core. From the `cmd/mfi-gui` directory:
+
+```sh
+cd cmd/mfi-gui
+wails dev      # live-reload development window
+wails build    # package a native app (e.g. build/bin/MobFI.app on macOS)
+```
+
+The window opens on the **Devices** step of the wizard, with tabs for Extract,
+Scan, Diff, Database and Render.
+
+---
+
+## Updating
+
+```sh
+git pull
+go mod download        # if dependencies changed
+make build             # rebuild the CLI
+
+# rebuild the desktop app
+cd cmd/mfi-gui && wails build
+```
+
+To update the Wails CLI itself:
+
+```sh
+go install github.com/wailsapp/wails/v2/cmd/wails@latest
+```
+
+---
+
+## Development
+
+```sh
+make test                                        # go test ./...
+make vet                                         # go vet ./...
+make fmt                                         # gofmt -w .
+go test ./internal/secrets/ -run TestScanTree    # a single package / test
+```
+
+Repository layout:
+
+- `cmd/mfi/` — CLI frontend
+- `cmd/mfi-gui/` — Wails desktop app (`gui.go` bindings, `frontend/dist/` UI)
+- `internal/app/` — the core orchestrator both frontends call
+- `internal/device/`, `internal/transport/` — device discovery and connection
+- `internal/extract/`, `internal/secrets/`, `internal/diff/`, `internal/dbview/`,
+  `internal/render/`, `internal/report/`, `internal/plist/` — the capabilities
+
+New device detectors, transports, secret rules, structural differs and file
+renderers are all pluggable — see the registries in the relevant packages.
+
+---
+
+## Safety & handling of sensitive data
+
+MobFI works with real application data and secrets, so it is built to be
+careful:
+
+- Databases are opened **read-only and immutable** — source files are never
+  modified.
+- Discovered secrets are **redacted** in findings and reports (leading
+  characters + length only).
+- Extraction **guards against path traversal** from untrusted device paths.
+- Binary parsers (property lists) are bounds-checked and never panic on
+  malformed input.
+- `.gitignore` excludes extracted data, reports and known-secret files so they
+  are not committed by accident.
+
+Only use MobFI on devices and applications you are **authorized** to inspect.
