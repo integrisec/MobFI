@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/integrisec/MobFI/internal/sysproc"
 )
 
 // AppMeta is an app's real display name and launcher icon (a data: URL),
@@ -46,7 +48,7 @@ func (g *GUI) AppMeta(deviceID, bundleID, apkPath string) (AppMeta, error) {
 	}
 	defer os.Remove(mini)
 
-	badging, err := exec.CommandContext(g.ctx, aapt, "dump", "badging", mini).Output()
+	badging, err := sysproc.CommandContext(g.ctx, aapt, "dump", "badging", mini).Output()
 	if err != nil {
 		return meta, nil
 	}
@@ -69,7 +71,7 @@ func (g *GUI) AppMeta(deviceID, bundleID, apkPath string) (AppMeta, error) {
 // deviceUnzipEntry extracts a single entry from an on-device APK to stdout
 // (exec-out keeps the bytes raw).
 func deviceUnzipEntry(ctx context.Context, deviceID, apk, entry string) ([]byte, error) {
-	return exec.CommandContext(ctx, "adb", "-s", deviceID, "exec-out", "unzip", "-p", apk, entry).Output()
+	return sysproc.CommandContext(ctx, "adb", "-s", deviceID, "exec-out", "unzip", "-p", apk, entry).Output()
 }
 
 // writeMiniZip builds a temporary zip containing just the manifest and

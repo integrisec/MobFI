@@ -11,6 +11,8 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+
+	"github.com/integrisec/MobFI/internal/sysproc"
 )
 
 // SimctlDetector discovers booted iOS Simulators via `xcrun simctl`. Unlike
@@ -34,7 +36,7 @@ func (d *SimctlDetector) exec(ctx context.Context, name string, args ...string) 
 	if d.run != nil {
 		return d.run(ctx, name, args...)
 	}
-	return exec.CommandContext(ctx, name, args...).Output()
+	return sysproc.CommandContext(ctx, name, args...).Output()
 }
 
 // Detect lists booted simulators. Simulators exist only on macOS, and a
@@ -114,7 +116,7 @@ func runtimeVersion(id string) string {
 // installed on a booted simulator, via `simctl get_app_container ... data`.
 // This is the root that extraction mirrors.
 func SimulatorDataContainer(ctx context.Context, udid, bundleID string) (string, error) {
-	out, err := exec.CommandContext(ctx, "xcrun", "simctl", "get_app_container", udid, bundleID, "data").Output()
+	out, err := sysproc.CommandContext(ctx, "xcrun", "simctl", "get_app_container", udid, bundleID, "data").Output()
 	if err != nil {
 		return "", fmt.Errorf("simctl get_app_container %s: %w", bundleID, err)
 	}
@@ -160,7 +162,7 @@ func (l *SimctlAppLister) listappsJSON(ctx context.Context, udid string) ([]byte
 	if l.listapps != nil {
 		return l.listapps(ctx, udid)
 	}
-	ascii, err := exec.CommandContext(ctx, "xcrun", "simctl", "listapps", udid).Output()
+	ascii, err := sysproc.CommandContext(ctx, "xcrun", "simctl", "listapps", udid).Output()
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +171,7 @@ func (l *SimctlAppLister) listappsJSON(ctx context.Context, udid string) ([]byte
 
 // plutilToJSON converts an ASCII/binary plist on stdin to JSON.
 func plutilToJSON(ctx context.Context, in []byte) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "plutil", "-convert", "json", "-", "-o", "-")
+	cmd := sysproc.CommandContext(ctx, "plutil", "-convert", "json", "-", "-o", "-")
 	cmd.Stdin = bytes.NewReader(in)
 	return cmd.Output()
 }

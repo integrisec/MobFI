@@ -2,8 +2,9 @@ package main
 
 import (
 	"errors"
-	"os/exec"
 	"strings"
+
+	"github.com/integrisec/MobFI/internal/sysproc"
 )
 
 // ConnectTCP connects to an Android device over adb TCP (`adb connect
@@ -14,7 +15,7 @@ func (g *GUI) ConnectTCP(addr string) (string, error) {
 	if addr == "" {
 		return "", errors.New("enter a host:port")
 	}
-	out, err := exec.CommandContext(g.ctx, "adb", "connect", addr).CombinedOutput()
+	out, err := sysproc.CommandContext(g.ctx, "adb", "connect", addr).CombinedOutput()
 	msg := strings.TrimSpace(string(out))
 	low := strings.ToLower(msg)
 	// `adb connect` often exits 0 even on failure, so inspect the message.
@@ -45,7 +46,7 @@ func (g *GUI) PairTCP(addr, code string) (string, error) {
 	if code == "" {
 		return "", errors.New("enter the 6-digit pairing code")
 	}
-	cmd := exec.CommandContext(g.ctx, "adb", "pair", addr, code)
+	cmd := sysproc.CommandContext(g.ctx, "adb", "pair", addr, code)
 	cmd.Stdin = strings.NewReader(code + "\n") // for adb builds that prompt for the code
 	out, err := cmd.CombinedOutput()
 	msg := strings.TrimSpace(string(out))

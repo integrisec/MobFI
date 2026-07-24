@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/integrisec/MobFI/internal/sysproc"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -64,7 +65,7 @@ func (g *GUI) ConsoleStart(deviceID, platform, sshUser, sshHost, sshPort, logPat
 			// Direct network SSH.
 			port := firstNonEmpty(sshPort, "22")
 			args := append([]string{"-p", port}, sshOpts...)
-			cmd = exec.Command("ssh", append(args, user+"@"+sshHost)...)
+			cmd = sysproc.Command("ssh", append(args, user+"@"+sshHost)...)
 			status = fmt.Sprintf("ssh %s@%s:%s", user, sshHost, port)
 		} else {
 			// USB: forward a local port to the device's SSH port with iproxy.
@@ -76,7 +77,7 @@ func (g *GUI) ConsoleStart(deviceID, platform, sshUser, sshHost, sshPort, logPat
 				return ConsoleInfo{}, err
 			}
 			devicePort := firstNonEmpty(sshPort, "22")
-			aux = exec.Command("iproxy", "-u", deviceID, fmt.Sprintf("%d:%s", local, devicePort))
+			aux = sysproc.Command("iproxy", "-u", deviceID, fmt.Sprintf("%d:%s", local, devicePort))
 			if err := aux.Start(); err != nil {
 				return ConsoleInfo{}, fmt.Errorf("iproxy: %w", err)
 			}
@@ -85,14 +86,14 @@ func (g *GUI) ConsoleStart(deviceID, platform, sshUser, sshHost, sshPort, logPat
 				return ConsoleInfo{}, fmt.Errorf("iproxy forward not ready (is the device jailbroken with sshd on %s?): %w", devicePort, err)
 			}
 			args := append([]string{"-p", strconv.Itoa(local)}, sshOpts...)
-			cmd = exec.Command("ssh", append(args, user+"@127.0.0.1")...)
+			cmd = sysproc.Command("ssh", append(args, user+"@127.0.0.1")...)
 			status = fmt.Sprintf("ssh %s@ USB (iproxy :%d → device:%s)", user, local, devicePort)
 		}
 	} else {
 		if deviceID == "" {
 			return ConsoleInfo{}, errors.New("select a device")
 		}
-		cmd = exec.Command("adb", "-s", deviceID, "shell")
+		cmd = sysproc.Command("adb", "-s", deviceID, "shell")
 		status = "adb shell " + deviceID
 	}
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color")

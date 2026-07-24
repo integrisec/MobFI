@@ -8,11 +8,11 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/integrisec/MobFI/internal/device"
+	"github.com/integrisec/MobFI/internal/sysproc"
 )
 
 // ErrUnsupported is returned by a Conn for operations its transport cannot
@@ -25,7 +25,7 @@ var errSkipAll = errors.New("skip all")
 type runner func(ctx context.Context, name string, args ...string) ([]byte, error)
 
 func execRun(ctx context.Context, name string, args ...string) ([]byte, error) {
-	return exec.CommandContext(ctx, name, args...).Output()
+	return sysproc.CommandContext(ctx, name, args...).Output()
 }
 
 // House-arrest scopes for AFC access.

@@ -7,6 +7,8 @@ import (
 	"errors"
 	"os/exec"
 	"strings"
+
+	"github.com/integrisec/MobFI/internal/sysproc"
 )
 
 // ADBDetector discovers Android devices and emulators via the Android
@@ -38,7 +40,7 @@ func (d *ADBDetector) exec(ctx context.Context, args ...string) ([]byte, error) 
 	if d.run != nil {
 		return d.run(ctx, d.bin(), args...)
 	}
-	return exec.CommandContext(ctx, d.bin(), args...).Output()
+	return sysproc.CommandContext(ctx, d.bin(), args...).Output()
 }
 
 // Detect lists the Android devices adb can currently see. If adb is not

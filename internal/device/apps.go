@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/integrisec/MobFI/internal/plist"
+	"github.com/integrisec/MobFI/internal/sysproc"
 )
 
 // InstalledApp is an application installed on a device, as seen by an
@@ -60,7 +61,7 @@ func (l *ADBAppLister) exec(ctx context.Context, args ...string) ([]byte, error)
 	if l.run != nil {
 		return l.run(ctx, l.bin(), args...)
 	}
-	return exec.CommandContext(ctx, l.bin(), args...).Output()
+	return sysproc.CommandContext(ctx, l.bin(), args...).Output()
 }
 
 // List returns installed apps (third-party only unless includeSystem). A
@@ -153,7 +154,7 @@ func (l *IOSAppLister) exec(ctx context.Context, args ...string) ([]byte, error)
 	if l.run != nil {
 		return l.run(ctx, l.bin(), args...)
 	}
-	return exec.CommandContext(ctx, l.bin(), args...).Output()
+	return sysproc.CommandContext(ctx, l.bin(), args...).Output()
 }
 
 // List returns iOS apps (user apps only unless includeSystem). Missing

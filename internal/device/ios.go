@@ -7,6 +7,8 @@ import (
 	"errors"
 	"os/exec"
 	"strings"
+
+	"github.com/integrisec/MobFI/internal/sysproc"
 )
 
 // IOSDetector discovers iOS devices via the libimobiledevice tools:
@@ -48,7 +50,7 @@ func (d *IOSDetector) exec(ctx context.Context, name string, args ...string) ([]
 	if d.run != nil {
 		return d.run(ctx, name, args...)
 	}
-	return exec.CommandContext(ctx, name, args...).Output()
+	return sysproc.CommandContext(ctx, name, args...).Output()
 }
 
 // Detect lists iOS devices reachable over USB and the network. If the

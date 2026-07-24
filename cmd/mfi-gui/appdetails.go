@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
-	"os/exec"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/integrisec/MobFI/internal/plist"
+	"github.com/integrisec/MobFI/internal/sysproc"
 )
 
 // DetailField is one labelled row in the app details panel.
@@ -52,7 +52,7 @@ type androidPkg struct {
 }
 
 func androidDetails(g *GUI, deviceID, bundleID string) ([]DetailField, []string) {
-	out, err := exec.CommandContext(g.ctx, "adb", "-s", deviceID, "shell", "dumpsys", "package", bundleID).Output()
+	out, err := sysproc.CommandContext(g.ctx, "adb", "-s", deviceID, "shell", "dumpsys", "package", bundleID).Output()
 	if err != nil {
 		return nil, nil
 	}
@@ -142,7 +142,7 @@ func parseDumpsys(out string, d *androidPkg) {
 // --- iOS (ideviceinstaller) ---
 
 func iosDetails(g *GUI, udid, bundleID string) ([]DetailField, []string) {
-	out, err := exec.CommandContext(g.ctx, "ideviceinstaller", "-u", udid, "list", "--all", "--xml").Output()
+	out, err := sysproc.CommandContext(g.ctx, "ideviceinstaller", "-u", udid, "list", "--all", "--xml").Output()
 	if err != nil {
 		return nil, nil
 	}
@@ -262,7 +262,7 @@ func dirSizeBytes(g *GUI, deviceID, runAs, dir string) int64 {
 	args = append(args, "du", "-sk", dir)
 	// Ignore the exit code: du prints the summary total to stdout even when
 	// it exits non-zero because a subdirectory (e.g. oat/) was unreadable.
-	out, _ := exec.CommandContext(g.ctx, "adb", args...).Output()
+	out, _ := sysproc.CommandContext(g.ctx, "adb", args...).Output()
 	fields := strings.Fields(string(out))
 	if len(fields) == 0 {
 		return 0

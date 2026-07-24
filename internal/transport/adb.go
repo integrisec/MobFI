@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/integrisec/MobFI/internal/device"
+	"github.com/integrisec/MobFI/internal/sysproc"
 )
 
 // ADBConnector opens sessions to Android devices over the adb bridge. Each
@@ -82,7 +83,7 @@ func (a *adbConn) exec(ctx context.Context, args ...string) ([]byte, error) {
 	if a.run != nil {
 		return a.run(ctx, a.bin, args...)
 	}
-	return exec.CommandContext(ctx, a.bin, args...).Output()
+	return sysproc.CommandContext(ctx, a.bin, args...).Output()
 }
 
 // shellCmd builds the on-device command, prefixing run-as when app-scoped.
@@ -106,7 +107,7 @@ func (a *adbConn) Exec(ctx context.Context, cmd string, args ...string) ([]byte,
 // newline translation.
 func (a *adbConn) Open(ctx context.Context, path string) (io.ReadCloser, error) {
 	args := append([]string{"-s", a.serial, "exec-out"}, a.shellCmd("cat", path)...)
-	cmd := exec.CommandContext(ctx, a.bin, args...)
+	cmd := sysproc.CommandContext(ctx, a.bin, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -166,7 +167,7 @@ func (a *adbConn) Walk(ctx context.Context, root string, fn fs.WalkDirFunc) erro
 // fall back to Walk/Open if this yields nothing.
 func (a *adbConn) TarReader(ctx context.Context, root string) (io.ReadCloser, error) {
 	args := append([]string{"-s", a.serial, "exec-out"}, a.shellCmd("tar", "-cf", "-", "-C", root, ".")...)
-	cmd := exec.CommandContext(ctx, a.bin, args...)
+	cmd := sysproc.CommandContext(ctx, a.bin, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err

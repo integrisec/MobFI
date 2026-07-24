@@ -18,6 +18,7 @@ import (
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/alecthomas/chroma/v2/styles"
+	"github.com/integrisec/MobFI/internal/sysproc"
 )
 
 const (
@@ -114,11 +115,11 @@ func (g *GUI) OpenExternally(path string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
-		cmd = exec.Command("open", path)
+		cmd = sysproc.Command("open", path)
 	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", "", path)
+		cmd = sysproc.Command("cmd", "/c", "start", "", path)
 	default: // linux, bsd, …
-		cmd = exec.Command("xdg-open", path)
+		cmd = sysproc.Command("xdg-open", path)
 	}
 	return cmd.Start()
 }

@@ -1,10 +1,10 @@
 package main
 
 import (
-	"os/exec"
 	"strings"
 
 	"github.com/integrisec/MobFI/internal/plist"
+	"github.com/integrisec/MobFI/internal/sysproc"
 )
 
 // jailbreakApps are bundle ids of common jailbreak package managers / tools.
@@ -46,7 +46,7 @@ func (g *GUI) DeviceRoot(deviceID, platform, transport string) (string, error) {
 // could prompt/hang).
 func androidRooted(g *GUI, serial string) string {
 	const probe = "ls -d /data/adb/magisk /sbin/.magisk /system/bin/su /system/xbin/su /sbin/su /su/bin/su 2>/dev/null; command -v su"
-	out, err := exec.CommandContext(g.ctx, "adb", "-s", serial, "shell", probe).Output()
+	out, err := sysproc.CommandContext(g.ctx, "adb", "-s", serial, "shell", probe).Output()
 	if err != nil && len(out) == 0 {
 		return "unknown"
 	}
@@ -58,7 +58,7 @@ func androidRooted(g *GUI, serial string) string {
 
 // iosJailbroken looks for a known jailbreak manager among installed apps.
 func iosJailbroken(g *GUI, udid string) string {
-	out, err := exec.CommandContext(g.ctx, "ideviceinstaller", "-u", udid, "list", "--all", "--xml").Output()
+	out, err := sysproc.CommandContext(g.ctx, "ideviceinstaller", "-u", udid, "list", "--all", "--xml").Output()
 	if err != nil {
 		return "unknown"
 	}
