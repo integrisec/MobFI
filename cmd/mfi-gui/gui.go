@@ -12,6 +12,7 @@ import (
 	"github.com/integrisec/MobFI/internal/dbview"
 	"github.com/integrisec/MobFI/internal/device"
 	"github.com/integrisec/MobFI/internal/diff"
+	"github.com/integrisec/MobFI/internal/doctor"
 	"github.com/integrisec/MobFI/internal/extract"
 	"github.com/integrisec/MobFI/internal/render"
 	"github.com/integrisec/MobFI/internal/secrets"
@@ -64,6 +65,10 @@ func saveGeometry(ctx context.Context) {
 func (g *GUI) DetectDevices() ([]device.Device, error) {
 	return g.app.DetectDevices(g.ctx)
 }
+
+// Doctor reports which external device tools (adb, libimobiledevice, ...) are
+// installed on the host, with install hints for those that are missing.
+func (g *GUI) Doctor() []doctor.Tool { return g.app.Doctor() }
 
 // ListApps enumerates the installed apps on a device (resolved by serial).
 // includeSystem also lists system apps.

@@ -233,6 +233,37 @@ dl.kv dd {
 }
 .details h4 { margin: 16px 0 8px; font-size: 13px; color: var(--muted); }
 .details h4:first-child { margin-top: 0; }
+
+/* Dependencies panel */
+.deps-table { margin-top: 12px; }
+.deps-table td { vertical-align: top; }
+.deps-table code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  color: var(--text);
+  word-break: break-word;
+}
+.dep-path {
+  color: var(--muted);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+.dep-badge {
+  display: inline-block;
+  min-width: 56px;
+  text-align: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--line);
+}
+.dep-ok       { color: var(--ok);     border-color: var(--ok); }
+.dep-missing  { color: var(--danger); border-color: var(--danger); }
+.dep-optional { color: var(--muted); }
+button.mini { padding: 1px 8px; font-size: 11px; }
+
 ul.perms {
   margin: 0;
   padding-left: 18px;

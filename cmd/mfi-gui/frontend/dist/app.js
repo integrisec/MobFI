@@ -278,6 +278,73 @@ $("#btn-detect").addEventListener("click", () => {
   refreshDevices(true);
 });
 
+// --- Dependencies panel (external device tools) ---
+$("#btn-deps").addEventListener("click", () => {
+  const panel = $("#deps-panel");
+  if (panel.classList.contains("hidden")) loadDeps();
+  else panel.classList.add("hidden");
+});
+
+async function loadDeps() {
+  const panel = $("#deps-panel");
+  panel.classList.remove("hidden");
+  panel.textContent = "Checking…";
+  try {
+    renderDeps((await gui().Doctor()) || []);
+  } catch (e) {
+    panel.classList.add("hidden");
+    fail(e);
+  }
+}
+
+function renderDeps(tools) {
+  const panel = $("#deps-panel");
+  const missing = tools.filter((t) => !t.found && !t.optional).map((t) => t.name);
+
+  const summary = el("span", {
+    className: "mime",
+    textContent: missing.length ? `${missing.length} core tool(s) missing` : "all core tools present",
+  });
+  const closeBtn = el("button", { className: "details-close", textContent: "✕", title: "Close" });
+  closeBtn.addEventListener("click", () => panel.classList.add("hidden"));
+  const head = el("div", { className: "details-head" },
+    el("h3", { textContent: "Dependencies" }), summary, closeBtn);
+
+  const tbody = el("tbody");
+  for (const t of tools) {
+    const status = t.found ? "ok" : t.optional ? "optional" : "missing";
+    const badge = el("span", { className: "dep-badge dep-" + status, textContent: status });
+
+    let loc;
+    if (t.found) {
+      loc = el("span", { className: "dep-path", textContent: t.path });
+    } else {
+      const hint = t.hint || "(see README)";
+      const copy = el("button", { className: "mini", textContent: "Copy", title: "Copy install command" });
+      copy.addEventListener("click", () =>
+        gui().Copy(hint).then(() => toast("copied", true)).catch(fail));
+      loc = el("span", {}, el("code", { textContent: hint }), " ", copy);
+    }
+
+    tbody.append(el("tr", {},
+      el("td", {}, badge),
+      el("td", { textContent: t.name }),
+      el("td", { textContent: t.purpose }),
+      el("td", {}, loc)
+    ));
+  }
+  const table = el("table", { className: "grid deps-table" },
+    el("thead", {}, el("tr", {},
+      el("th", { textContent: "" }),
+      el("th", { textContent: "Tool" }),
+      el("th", { textContent: "Purpose" }),
+      el("th", { textContent: "Location / install" })
+    )),
+    tbody
+  );
+  panel.replaceChildren(head, table);
+}
+
 // Connect to an Android device over adb TCP (host:port).
 async function connectTCP() {
   const addr = $("#tcp-addr").value.trim();
