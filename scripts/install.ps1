@@ -155,9 +155,13 @@ function Get-PrebuiltTools([string]$Repo, [string]$ZipPattern, [string]$Sub, [st
 # of the core tools but omits ideviceinstaller, so pull that one from the
 # imobiledevice-net bundle (self-contained DLLs, loaded from its own folder).
 function Install-Libimobiledevice {
-  Step "Downloading libimobiledevice (prebuilt Windows binaries)"
-  Get-PrebuiltTools -Repo 'jrjr/libimobiledevice-windows' -ZipPattern '*.zip' -Sub 'libimobiledevice' -Probe 'idevice_id.exe'
-  Update-Path
+  # Idempotent: only downloads the tools that are actually missing, so re-runs
+  # can fill a single gap (e.g. ideviceinstaller) without re-fetching the rest.
+  if (-not (Have idevice_id)) {
+    Step "Downloading libimobiledevice (prebuilt Windows binaries)"
+    Get-PrebuiltTools -Repo 'jrjr/libimobiledevice-windows' -ZipPattern '*.zip' -Sub 'libimobiledevice' -Probe 'idevice_id.exe'
+    Update-Path
+  }
   if (-not (Have ideviceinstaller)) {
     Step "Fetching ideviceinstaller (imobiledevice-net bundle)"
     Get-PrebuiltTools -Repo 'libimobiledevice-win32/imobiledevice-net' -ZipPattern '*win-x64*.zip' -Sub 'ideviceinstaller' -Probe 'ideviceinstaller.exe'
@@ -201,15 +205,12 @@ function Ensure-RuntimeTools {
 
   if (Have adb) { Ok "adb" } else { if (Winget-Install 'Google.PlatformTools') { Update-Path; Ok "adb (platform-tools)" } }
 
-  # iOS: libimobiledevice has no winget/scoop package, so fetch prebuilt binaries.
-  if (Have idevice_id) {
-    Ok "libimobiledevice"
-  } else {
-    Install-Libimobiledevice
-    if (Have idevice_id) { Ok "libimobiledevice" } else { Warn "libimobiledevice still unavailable (see README for the manual bundle)" }
-  }
+  # iOS: libimobiledevice has no winget/scoop package; fetch prebuilt binaries
+  # (idempotent - only downloads what is missing, so a re-run fills any gap).
+  Install-Libimobiledevice
+  if (Have idevice_id) { Ok "libimobiledevice" } else { Warn "libimobiledevice unavailable (see README for the manual bundle)" }
 
-  # MobFI shells out to these; warn if the bundle omitted either. afcclient
+  # MobFI shells out to these; warn if a bundle omitted either. afcclient
   # drives extraction; ideviceinstaller drives iOS app listing.
   foreach ($t in @('ideviceinstaller', 'afcclient')) {
     if (Have $t) { Ok $t } else { Warn "$t not found - some iOS features need it (see README for the manual bundle)" }
