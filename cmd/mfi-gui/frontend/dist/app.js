@@ -1332,6 +1332,9 @@ setupDiffSorting();
 // Draggable splitter between the app list and the details panel (persisted).
 makeVResizer($("#apps-vsplit"), $("#apps-scroll"), "mobfi.apps.listHeight");
 
+// Same, between the Render file view and its details panel (persisted).
+makeVResizer($("#render-vsplit"), $(".render-split"), "mobfi.render.viewHeight");
+
 // Persisted wrap toggle for a grid table (soft-wraps long cell contents).
 function wireWrapToggle(checkboxId, tableSel, storeKey) {
   const cb = document.getElementById(checkboxId);
