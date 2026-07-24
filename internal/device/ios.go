@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"errors"
-	"os/exec"
 	"strings"
 
 	"github.com/integrisec/MobFI/internal/sysproc"
@@ -54,15 +52,20 @@ func (d *IOSDetector) exec(ctx context.Context, name string, args ...string) ([]
 }
 
 // Detect lists iOS devices reachable over USB and the network. If the
-// libimobiledevice tools are not installed it reports no devices (and no
-// error) so that other detectors can still run.
+// libimobiledevice tools are absent, or present but unable to enumerate
+// (e.g. on Windows with no Apple Mobile Device Service / usbmuxd running,
+// where idevice_id exits non-zero), it reports no devices and no error so
+// other detectors still run and the UI stays quiet. Only cancellation of the
+// caller's context is propagated.
 func (d *IOSDetector) Detect(ctx context.Context) ([]Device, error) {
 	usb, err := d.listUDIDs(ctx, "-l")
 	if err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
-			return nil, nil
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
 		}
-		return nil, err
+		// ErrNotFound (tool missing) or a non-zero exit (no daemon / no
+		// devices) both mean there is nothing to report here.
+		return nil, nil
 	}
 	// Network listing is best-effort: older idevice_id builds lack "-n",
 	// so a failure here should not drop the USB results.

@@ -3,6 +3,7 @@ package device
 import (
 	"context"
 	"errors"
+	"os"
 	"os/exec"
 	"reflect"
 	"testing"
@@ -55,5 +56,33 @@ func TestIOSDetectMissingBinary(t *testing.T) {
 	}
 	if devs != nil {
 		t.Fatalf("missing tools should yield no devices, got %+v", devs)
+	}
+}
+
+// idevice_id exits non-zero when it cannot reach usbmuxd (e.g. Windows with no
+// Apple Mobile Device Service). Detect should treat that as "no iOS devices",
+// not surface it as an error.
+func TestIOSDetectEnumerateFailure(t *testing.T) {
+	d := &IOSDetector{run: func(context.Context, string, ...string) ([]byte, error) {
+		return nil, &exec.ExitError{ProcessState: &os.ProcessState{}}
+	}}
+	devs, err := d.Detect(context.Background())
+	if err != nil {
+		t.Fatalf("enumerate failure should not error, got %v", err)
+	}
+	if devs != nil {
+		t.Fatalf("enumerate failure should yield no devices, got %+v", devs)
+	}
+}
+
+// A cancelled context must still propagate.
+func TestIOSDetectContextCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	d := &IOSDetector{run: func(context.Context, string, ...string) ([]byte, error) {
+		return nil, context.Canceled
+	}}
+	if _, err := d.Detect(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled context should propagate, got %v", err)
 	}
 }

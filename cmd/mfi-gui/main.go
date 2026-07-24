@@ -26,6 +26,12 @@ const (
 )
 
 func main() {
+	// A GUI launched from a Start Menu / Desktop shortcut inherits Explorer's
+	// login-time PATH, which can predate tools installed since (adb via winget,
+	// the libimobiledevice bundle). Refresh it from the registry so the bound
+	// core finds those tools without requiring a logoff. No-op off Windows.
+	refreshPath()
+
 	gui := NewGUI()
 
 	// Restore the last window size; startup clamps it to the current screen.
