@@ -125,31 +125,43 @@ function Add-ToUserPath($dir) {
   if (-not (($env:Path -split ';') -contains $dir)) { $env:Path = "$dir;$env:Path" }
 }
 
-# libimobiledevice has no scoop/winget package, so fetch the prebuilt Windows
-# binaries (x64; they run under ARM64 emulation). Resolved via the GitHub
-# latest-release API so no version is hardcoded. Best-effort: any failure just
-# warns and points to the README.
-function Install-Libimobiledevice {
-  $api  = 'https://api.github.com/repos/jrjr/libimobiledevice-windows/releases/latest'
-  $dest = Join-Path $env:LOCALAPPDATA 'MobFI\libimobiledevice'
+# Download a prebuilt-tools zip from a GitHub repo's latest release (resolved
+# via the API, so no version is hardcoded), extract it under %LOCALAPPDATA%,
+# and put the folder holding $Probe on PATH. Best-effort: any failure warns.
+function Get-PrebuiltTools([string]$Repo, [string]$ZipPattern, [string]$Sub, [string]$Probe) {
+  $dest = Join-Path $env:LOCALAPPDATA "MobFI\$Sub"
   try {
-    Step "Downloading libimobiledevice (prebuilt Windows binaries)"
     # Windows PowerShell 5.1 can default to TLS 1.0/1.1, which GitHub rejects.
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-    $rel   = Invoke-RestMethod -Uri $api -Headers @{ 'User-Agent' = 'MobFI-installer' }
-    $asset = $rel.assets | Where-Object { $_.name -like '*.zip' } | Select-Object -First 1
-    if (-not $asset) { Warn "no .zip asset in the latest release"; return }
+    $rel   = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -Headers @{ 'User-Agent' = 'MobFI-installer' }
+    $asset = $rel.assets | Where-Object { $_.name -like $ZipPattern } | Select-Object -First 1
+    if (-not $asset) { Warn "no asset matching '$ZipPattern' in $Repo latest release"; return }
     $zip = Join-Path $env:TEMP $asset.name
     Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -UseBasicParsing
     if (Test-Path $dest) { Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue }
     New-Item -ItemType Directory -Force -Path $dest | Out-Null
     Expand-Archive -Path $zip -DestinationPath $dest -Force
     Remove-Item $zip -Force -ErrorAction SilentlyContinue
-    # The binaries may sit in a subfolder; anchor PATH on idevice_id.exe.
-    $idExe = Get-ChildItem -Path $dest -Recurse -Filter 'idevice_id.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($idExe) { Add-ToUserPath (Split-Path $idExe.FullName) } else { Add-ToUserPath $dest }
+    # The exe may sit in a subfolder; anchor PATH on the probe binary.
+    $exe = Get-ChildItem -Path $dest -Recurse -Filter $Probe -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($exe) { Add-ToUserPath (Split-Path $exe.FullName) } else { Add-ToUserPath $dest }
   } catch {
-    Warn "libimobiledevice download failed: $($_.Exception.Message)"
+    Warn "download from $Repo failed: $($_.Exception.Message)"
+  }
+}
+
+# libimobiledevice has no scoop/winget package, so fetch prebuilt Windows x64
+# binaries (they run under ARM64 emulation). The jrjr suite is the newest build
+# of the core tools but omits ideviceinstaller, so pull that one from the
+# imobiledevice-net bundle (self-contained DLLs, loaded from its own folder).
+function Install-Libimobiledevice {
+  Step "Downloading libimobiledevice (prebuilt Windows binaries)"
+  Get-PrebuiltTools -Repo 'jrjr/libimobiledevice-windows' -ZipPattern '*.zip' -Sub 'libimobiledevice' -Probe 'idevice_id.exe'
+  Update-Path
+  if (-not (Have ideviceinstaller)) {
+    Step "Fetching ideviceinstaller (imobiledevice-net bundle)"
+    Get-PrebuiltTools -Repo 'libimobiledevice-win32/imobiledevice-net' -ZipPattern '*win-x64*.zip' -Sub 'ideviceinstaller' -Probe 'ideviceinstaller.exe'
+    Update-Path
   }
 }
 

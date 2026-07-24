@@ -50,7 +50,7 @@ var catalog = []Tool{
 		install: map[string]string{
 			"darwin":  "brew install ideviceinstaller",
 			"linux":   "apt install ideviceinstaller",
-			"windows": "prebuilt binaries: libimobiledevice-win32/ideviceinstaller (or run scripts\\install.ps1)",
+			"windows": "run scripts\\install.ps1 (fetches it from the imobiledevice-net bundle)",
 		},
 	},
 	{

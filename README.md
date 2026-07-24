@@ -123,14 +123,14 @@ Windows-only: `-NoShortcuts` skips creating the Start Menu / Desktop shortcuts.
   Service (install iTunes from apple.com, then *trust* the device); Android
   works without any of the iOS pieces. `scoop` bootstrapping requires a
   non-elevated PowerShell.
-  - **iOS tools, manual fallback:** if the auto-download fails or omits a tool,
-    grab prebuilt binaries from the
-    [libimobiledevice-win32](https://github.com/libimobiledevice-win32) project
-    (per-tool repos, incl. `ideviceinstaller`) or the
+  - **iOS tools, manual fallback:** the installer pulls the core tools
+    (`idevice_id`, `ideviceinfo`, `afcclient`) from the
     [jrjr/libimobiledevice-windows](https://github.com/jrjr/libimobiledevice-windows/releases)
-    suite, extract them, and add the folder to your PATH. MobFI needs
-    `idevice_id`, `ideviceinfo`, `afcclient` (extraction) and `ideviceinstaller`
-    (app listing).
+    suite and `ideviceinstaller` from the
+    [imobiledevice-net](https://github.com/libimobiledevice-win32/imobiledevice-net/releases)
+    `win-x64` bundle. If a download fails, grab that zip manually, extract it,
+    and add the folder to your PATH. MobFI needs `idevice_id`, `ideviceinfo`,
+    `afcclient` (extraction) and `ideviceinstaller` (app listing).
   - **Windows on ARM64:** scoop's `gcc` is x86-64, so the installer builds the
     GUI as `windows/amd64` and it runs under the OS's x64 emulation. (A native
     arm64 GUI would need an aarch64 mingw toolchain, e.g. llvm-mingw.) The
