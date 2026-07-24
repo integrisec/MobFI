@@ -1,7 +1,12 @@
 BINARY := mfi
 BIN_DIR := bin
 
-.PHONY: build test vet fmt run tidy clean
+.PHONY: setup build test vet fmt run tidy clean
+
+# One-shot bootstrap for newcomers: installs Go, Wails, adb and
+# libimobiledevice, then builds the CLI and GUI (macOS/Linux).
+setup:
+	./scripts/install.sh
 
 build:
 	go build -o $(BIN_DIR)/$(BINARY) ./cmd/mfi

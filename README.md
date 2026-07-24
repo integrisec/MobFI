@@ -84,9 +84,37 @@ devices are found).
 
 ## Installation
 
+### Quick install (recommended if you don't build Go projects)
+
+One command resolves **everything** — the Go toolchain, the Wails CLI and its
+native GUI toolchain, and the device tools (`adb`, `libimobiledevice`) — then
+builds the CLI and GUI. Safe to re-run; anything already present is skipped.
+
 ```sh
 git clone https://github.com/integrisec/MobFI.git
 cd MobFI
+
+# macOS / Linux
+./scripts/install.sh            # or: make setup
+
+# Windows (PowerShell)
+powershell -ExecutionPolicy Bypass -File scripts\install.ps1
+```
+
+Useful flags (both scripts): `--cli-only` / `-CliOnly`, `--gui-only` /
+`-GuiOnly`, `--no-runtime-tools` / `-NoRuntimeTools`, and
+`--launch cli|gui` / `-Launch cli|gui` to run the app when it's built.
+
+- **macOS** uses Homebrew (installed if missing).
+- **Linux** auto-detects `apt`/`dnf`/`pacman`/`zypper` and installs the GTK3 +
+  WebKit2GTK build packages; Go is fetched from go.dev if the system's is older
+  than 1.23.
+- **Windows** uses `winget` (Go, platform-tools/`adb`, WebView2). iOS tooling
+  (`libimobiledevice`) is best-effort via `scoop`; Android works without it.
+
+### Manual build
+
+```sh
 make build            # compiles the CLI to ./bin/mfi
 ```
 
