@@ -48,6 +48,7 @@ func run(args []string) error {
 	case "doctor":
 		return runDoctor(ctx, core, args[1:])
 	case "help", "-h", "--help":
+		printLogo(os.Stdout)
 		usage(os.Stdout)
 		return nil
 	default:

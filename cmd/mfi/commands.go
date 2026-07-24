@@ -46,7 +46,8 @@ Commands:
 func runWizard(ctx context.Context, core *app.App) error {
 	// TODO: drive the user through detect -> select device -> select app
 	// -> extract -> scan/diff -> report. For now, list the steps.
-	fmt.Println("MFI guided wizard (advanced users can run subcommands directly; see `mfi help`).")
+	printLogo(os.Stdout)
+	fmt.Println("MobFI guided wizard (advanced users can run subcommands directly; see `mfi help`).")
 	fmt.Println("  1. Detect devices")
 	fmt.Println("  2. Select a device and target application")
 	fmt.Println("  3. Extract the application file tree")
