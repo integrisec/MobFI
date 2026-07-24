@@ -226,8 +226,9 @@ mfi report -root ./capture -a ./logged-out -b ./logged-in -out report.html
 mfi report -root ./capture -out report.mfi-report.json
 ```
 
-In the GUI, the **Scan** and **Diff** tabs each have an **Export** control
-(HTML / JSON / Text) that saves the same report for that tab's results.
+In the GUI, the **Scan** and **Diff** tabs each have an **Export** control —
+choose the scope (that tab's results, or a **Combined** scan + diff report)
+and the format (HTML / JSON / Text) and save.
 
 ---
 

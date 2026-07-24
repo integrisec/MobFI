@@ -767,13 +767,15 @@ function isCancelError(e) {
   return String((e && e.message) || e).toLowerCase().includes("cancel");
 }
 
-// Export the last scan/diff results as a report (HTML/JSON/text). The backend
-// builds the report from its cached results and prompts for a destination.
-function wireExport(btnId, selId, scope) {
+// Export a report (HTML/JSON/text) at the selected scope — this tab's results
+// or a combined scan+diff report. The backend builds it from its cached
+// results and prompts for a destination.
+function wireExport(btnId, scopeSelId, fmtSelId) {
   const btn = document.getElementById(btnId);
   if (!btn) return;
   btn.addEventListener("click", async () => {
-    const fmt = document.getElementById(selId).value;
+    const scope = document.getElementById(scopeSelId).value;
+    const fmt = document.getElementById(fmtSelId).value;
     btn.disabled = true;
     try {
       const path = await gui().ExportReport(scope, fmt);
@@ -785,8 +787,8 @@ function wireExport(btnId, selId, scope) {
     }
   });
 }
-wireExport("btn-scan-export", "scan-export-fmt", "scan");
-wireExport("btn-diff-export", "diff-export-fmt", "diff");
+wireExport("btn-scan-export", "scan-export-scope", "scan-export-fmt");
+wireExport("btn-diff-export", "diff-export-scope", "diff-export-fmt");
 
 function shortPath(p, n = 64) {
   return p && p.length > n ? "…" + p.slice(-(n - 1)) : p || "";

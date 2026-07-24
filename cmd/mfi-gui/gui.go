@@ -231,6 +231,15 @@ func (g *GUI) ExportReport(scope, format string) (string, error) {
 			return "", fmt.Errorf("run a diff first")
 		}
 		rep = g.app.Report(nil, d)
+	case "combined":
+		// Whatever has run: scan findings and/or diff in one report.
+		if !scanned && d == nil {
+			return "", fmt.Errorf("run a scan and/or a diff first")
+		}
+		if !scanned {
+			findings = nil
+		}
+		rep = g.app.Report(findings, d)
 	default:
 		return "", fmt.Errorf("unknown export scope %q", scope)
 	}
