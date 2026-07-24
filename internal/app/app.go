@@ -139,17 +139,25 @@ func tarExtract(ctx context.Context, ts transport.TarStreamer, root string, req 
 	return res, true
 }
 
-// androidConn picks how to reach an app's private data. It prefers
-// `run-as <pkg>` (works on a non-rooted device for a debuggable app) and
-// probes that it can actually read the data dir; if not (e.g. a
-// non-debuggable app on a rooted device), it falls back to a direct shell
-// session, which succeeds when the shell user has access (root).
+// androidConn picks how to reach an app's private data, probing each option
+// against the actual data dir and using the first that can read it:
+//  1. `run-as <pkg>` — a debuggable app on any device (the app's own uid);
+//  2. `su -c` as root — a non-debuggable app on a rooted device;
+//  3. a plain shell — a device where the shell user already has access
+//     (adb running as root, e.g. userdebug/eng builds).
 func (a *App) androidConn(ctx context.Context, d device.Device, pkg string) (transport.Conn, error) {
+	dataDir := "/data/data/" + pkg
 	if runas, err := a.ADB.ConnectAs(ctx, d, pkg); err == nil {
-		if _, probeErr := runas.Exec(ctx, "ls", "/data/data/"+pkg); probeErr == nil {
+		if _, probeErr := runas.Exec(ctx, "ls", dataDir); probeErr == nil {
 			return runas, nil
 		}
 		runas.Close()
+	}
+	if root, err := a.ADB.ConnectAsRoot(ctx, d); err == nil {
+		if _, probeErr := root.Exec(ctx, "ls", dataDir); probeErr == nil {
+			return root, nil
+		}
+		root.Close()
 	}
 	return a.ADB.Connect(ctx, d)
 }

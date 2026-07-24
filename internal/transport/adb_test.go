@@ -57,6 +57,27 @@ func TestADBRunAsWrapsCommands(t *testing.T) {
 	}
 }
 
+// In su mode the whole on-device command must be grouped and passed to adb as
+// a single argument, so adb does not re-split it and break `su -c`.
+func TestADBSuWrapsCommands(t *testing.T) {
+	var got []string
+	a := &adbConn{bin: "adb", serial: "SER", su: true, run: func(_ context.Context, name string, args ...string) ([]byte, error) {
+		got = append([]string{name}, args...)
+		return nil, nil
+	}}
+	a.Exec(context.Background(), "ls", "/data/data/com.x")
+	want := []string{"adb", "-s", "SER", "shell", "su -c 'ls /data/data/com.x'"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("su Exec args = %v, want %v", got, want)
+	}
+
+	a.find(context.Background(), "/data/data/com.x", "-type", "d")
+	wantFind := []string{"adb", "-s", "SER", "shell", "su -c 'find /data/data/com.x -type d'"}
+	if !reflect.DeepEqual(got, wantFind) {
+		t.Errorf("su find args = %v, want %v", got, wantFind)
+	}
+}
+
 const (
 	walkAll = `/data/data/com.x
 /data/data/com.x/files

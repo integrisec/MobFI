@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os/exec"
@@ -56,6 +57,20 @@ func (c *ADBConnector) ConnectAs(_ context.Context, d device.Device, pkg string)
 	return c.connect(d, pkg)
 }
 
+// ConnectAsRoot binds a session that runs every command through `su -c` as
+// root. It reads a non-debuggable app's private data on a rooted device,
+// where run-as is unavailable but the shell can escalate via su. The device
+// must grant root to the shell (a Magisk/superuser prompt may appear).
+func (c *ADBConnector) ConnectAsRoot(_ context.Context, d device.Device) (Conn, error) {
+	if !c.Supports(d) {
+		return nil, ErrNoConnector
+	}
+	if d.ID == "" {
+		return nil, errors.New("adb: device has no serial")
+	}
+	return &adbConn{bin: c.bin(), serial: d.ID, su: true}, nil
+}
+
 func (c *ADBConnector) connect(d device.Device, pkg string) (Conn, error) {
 	if !c.Supports(d) {
 		return nil, ErrNoConnector
@@ -73,6 +88,9 @@ type adbConn struct {
 	// asPackage, when set, wraps every on-device command in
 	// `run-as <asPackage>` so it executes as that app's uid.
 	asPackage string
+	// su, when true, runs every on-device command through `su -c` as root.
+	// Mutually exclusive with asPackage.
+	su bool
 	// run executes a command and buffers its stdout. It is a field so
 	// tests can stub adb; nil means os/exec. Streaming (Open) always uses
 	// os/exec directly.
@@ -96,26 +114,37 @@ func (a *adbConn) shellCmd(cmd string, args ...string) []string {
 	return append(out, args...)
 }
 
+// wrap builds the argv passed to adb for a device-side command. sub is the adb
+// subcommand ("shell" or "exec-out"). In su mode the whole command is grouped
+// and run via `su -c`, passed as a single adb argument so adb does not
+// re-split it (which would break `su -c`'s single-command argument). Otherwise
+// it uses the run-as/plain tokens from shellCmd.
+func (a *adbConn) wrap(sub, cmd string, args ...string) []string {
+	base := []string{"-s", a.serial, sub}
+	if a.su {
+		joined := strings.Join(append([]string{cmd}, args...), " ")
+		return append(base, "su -c "+shellQuote(joined))
+	}
+	return append(base, a.shellCmd(cmd, args...)...)
+}
+
+// shellQuote single-quotes s for a POSIX shell so a grouped command survives
+// as one token.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
 // Exec runs a shell command on the device via `adb shell`.
 func (a *adbConn) Exec(ctx context.Context, cmd string, args ...string) ([]byte, error) {
-	full := append([]string{"-s", a.serial, "shell"}, a.shellCmd(cmd, args...)...)
-	return a.exec(ctx, full...)
+	return a.exec(ctx, a.wrap("shell", cmd, args...)...)
 }
 
 // Open streams a file off the device. `adb exec-out cat` is used rather
 // than `adb shell` so the byte stream is not mangled by pseudo-terminal
 // newline translation.
 func (a *adbConn) Open(ctx context.Context, path string) (io.ReadCloser, error) {
-	args := append([]string{"-s", a.serial, "exec-out"}, a.shellCmd("cat", path)...)
-	cmd := sysproc.CommandContext(ctx, a.bin, args...)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-	return &cmdReader{cmd: cmd, stdout: stdout}, nil
+	args := a.wrap("exec-out", "cat", path)
+	return startStream(ctx, a.bin, args)
 }
 
 // Walk visits every entry under root on the device. It enumerates paths
@@ -166,8 +195,18 @@ func (a *adbConn) Walk(ctx context.Context, root string, fn fs.WalkDirFunc) erro
 // `-C`). Requires `tar` on the device (toybox, Android 6+); callers should
 // fall back to Walk/Open if this yields nothing.
 func (a *adbConn) TarReader(ctx context.Context, root string) (io.ReadCloser, error) {
-	args := append([]string{"-s", a.serial, "exec-out"}, a.shellCmd("tar", "-cf", "-", "-C", root, ".")...)
-	cmd := sysproc.CommandContext(ctx, a.bin, args...)
+	args := a.wrap("exec-out", "tar", "-cf", "-", "-C", root, ".")
+	return startStream(ctx, a.bin, args)
+}
+
+// startStream runs an adb streaming command and returns its stdout as a
+// ReadCloser, capturing stderr so a non-zero exit surfaces the device's error
+// message (e.g. "Permission denied", "run-as: not found") instead of a bare
+// "exit status 1".
+func startStream(ctx context.Context, bin string, args []string) (io.ReadCloser, error) {
+	cmd := sysproc.CommandContext(ctx, bin, args...)
+	var errbuf bytes.Buffer
+	cmd.Stderr = &errbuf
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -175,7 +214,7 @@ func (a *adbConn) TarReader(ctx context.Context, root string) (io.ReadCloser, er
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	return &cmdReader{cmd: cmd, stdout: stdout}, nil
+	return &cmdReader{cmd: cmd, stdout: stdout, stderr: &errbuf}, nil
 }
 
 // Close releases the session. adb invocations are stateless, so there is
@@ -183,7 +222,7 @@ func (a *adbConn) TarReader(ctx context.Context, root string) (io.ReadCloser, er
 func (a *adbConn) Close() error { return nil }
 
 func (a *adbConn) find(ctx context.Context, root string, extra ...string) ([]string, error) {
-	args := append([]string{"-s", a.serial, "shell"}, a.shellCmd("find", append([]string{root}, extra...)...)...)
+	args := a.wrap("shell", "find", append([]string{root}, extra...)...)
 	out, err := a.exec(ctx, args...)
 	return parseLines(out), err
 }
@@ -204,17 +243,36 @@ func toBoolSet(xs []string) map[string]bool {
 }
 
 // cmdReader adapts a running command's stdout to an io.ReadCloser, reaping
-// the process on Close.
+// the process on Close. If stderr is set, a non-zero exit is annotated with
+// the captured stderr text.
 type cmdReader struct {
 	cmd    *exec.Cmd
 	stdout io.ReadCloser
+	stderr *bytes.Buffer
 }
 
 func (r *cmdReader) Read(p []byte) (int, error) { return r.stdout.Read(p) }
 
 func (r *cmdReader) Close() error {
 	_ = r.stdout.Close()
-	return r.cmd.Wait()
+	err := r.cmd.Wait()
+	if err != nil && r.stderr != nil {
+		if msg := strings.TrimSpace(r.stderr.String()); msg != "" {
+			return fmt.Errorf("%w: %s", err, firstLine(msg))
+		}
+	}
+	return err
+}
+
+// firstLine returns the first non-empty line of s, so a multi-line stderr
+// collapses to a concise reason.
+func firstLine(s string) string {
+	for _, ln := range strings.Split(s, "\n") {
+		if ln = strings.TrimSpace(ln); ln != "" {
+			return ln
+		}
+	}
+	return s
 }
 
 // adbDirEntry is a minimal fs.DirEntry for a path listed on-device. Only
