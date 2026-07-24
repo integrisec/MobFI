@@ -214,11 +214,26 @@ build_cli() {
   ok "bin/mfi"
 }
 
+# wails_tags echoes any extra `-tags` args Wails needs on this system.
+# On Linux, Wails compiles against webkit2gtk-4.0 by default, but modern distros
+# (Debian bookworm / recent Ubuntu, incl. Raspberry Pi OS) ship only
+# webkit2gtk-4.1; the `webkit2_41` tag links against whatever is actually present.
+wails_tags() {
+  [ "$OS" = "Linux" ] && have pkg-config || return 0
+  if ! pkg-config --exists webkit2gtk-4.0 2>/dev/null && pkg-config --exists webkit2gtk-4.1 2>/dev/null; then
+    printf -- '-tags webkit2_41'
+  fi
+}
+
 build_gui() {
   step "Building the GUI (Wails)"
   add_gobin_to_path
   have wails || { warn "wails unavailable; skipping GUI build"; return 1; }
-  ( cd "$ROOT/cmd/mfi-gui" && wails build )
+
+  local tags; tags="$(wails_tags)"
+  [ -n "$tags" ] && ok "using webkit2gtk-4.1 (webkit2_41 build tag)"
+  # shellcheck disable=SC2086 -- word-splitting of $tags into flags is intended.
+  ( cd "$ROOT/cmd/mfi-gui" && wails build $tags )
   case "$OS" in
     Darwin) ok "cmd/mfi-gui/build/bin/MobFI.app" ;;
     *)      ok "cmd/mfi-gui/build/bin/" ;;
@@ -251,7 +266,8 @@ main() {
       step "Launching the GUI"
       case "$OS" in
         Darwin) open "${ROOT}/cmd/mfi-gui/build/bin/MobFI.app" ;;
-        *)      ( cd "$ROOT/cmd/mfi-gui" && exec wails dev ) ;;
+        # shellcheck disable=SC2086 -- word-splitting of tags into flags is intended.
+        *)      ( cd "$ROOT/cmd/mfi-gui" && exec wails dev $(wails_tags) ) ;;
       esac
       ;;
   esac
