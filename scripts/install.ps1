@@ -43,6 +43,17 @@ function Ok($m)   { Write-Host "  [ok] $m"   -ForegroundColor Green }
 function Warn($m) { Write-Host "  [!] $m"    -ForegroundColor Yellow }
 function Have($c) { [bool](Get-Command $c -ErrorAction SilentlyContinue) }
 
+# Run external tools (scoop, wails, the scoop bootstrap) without our global
+# 'Stop' preference turning their benign stderr / cleanup errors into a
+# script-aborting terminating error. Scoop runs in-process and inherits our
+# preference, so a locked temp file during a dependency install would otherwise
+# kill the whole installer. Callers verify success via Have / exit code.
+function Invoke-Native([scriptblock]$Block) {
+  $prev = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try { & $Block } finally { $ErrorActionPreference = $prev }
+}
+
 # Pull the current PATH from the registry so tools installed this run are
 # visible without opening a new shell.
 function Update-Path {
@@ -80,7 +91,7 @@ function Ensure-Scoop {
     if ($ep -eq 'Restricted' -or $ep -eq 'AllSigned' -or $ep -eq 'Undefined') {
       Set-ExecutionPolicy -Scope CurrentUser RemoteSigned -Force
     }
-    Invoke-Expression (Invoke-RestMethod -Uri 'https://get.scoop.sh')
+    Invoke-Native { Invoke-Expression (Invoke-RestMethod -Uri 'https://get.scoop.sh') }
     Update-Path
   } catch {
     Warn "scoop bootstrap failed: $($_.Exception.Message)"
@@ -97,7 +108,7 @@ function Ensure-CCompiler {
   Update-Path
   if ((Have gcc) -or (Have clang) -or (Have cc)) { Ok "C compiler present"; return $true }
   Step "Installing a C compiler (Wails needs cgo/gcc on Windows)"
-  if (Ensure-Scoop) { & scoop install gcc 2>&1 | Out-Null; Update-Path }
+  if (Ensure-Scoop) { Invoke-Native { & scoop install gcc 2>&1 | Out-Null }; Update-Path }
   if (Have gcc) { Ok "gcc"; return $true }
   Warn "No C compiler found; the GUI build needs one (e.g. 'scoop install gcc')."
   Warn "Run 'wails doctor' to check your GUI toolchain."
@@ -123,7 +134,8 @@ function Ensure-GuiToolchain {
   Winget-Install 'Microsoft.EdgeWebView2Runtime' | Out-Null
   Update-Path
   if (Have wails) {
-    Ok "Wails $((& wails version) 2>$null)"
+    $wv = (& wails version 2>$null | Where-Object { $_ -match '\S' } | Select-Object -First 1)
+    Ok "Wails $wv"
   } else {
     Step "Installing the Wails CLI"
     & go install github.com/wailsapp/wails/v2/cmd/wails@latest
@@ -145,7 +157,7 @@ function Ensure-RuntimeTools {
   } else {
     if (Ensure-Scoop) {
       Step "Installing libimobiledevice via scoop"
-      & scoop install libimobiledevice 2>&1 | Out-Null
+      Invoke-Native { & scoop install libimobiledevice 2>&1 | Out-Null }
       Update-Path
     }
     if (Have idevice_id) { Ok "libimobiledevice" } else { Warn "libimobiledevice still unavailable (see README for a prebuilt bundle)" }
@@ -173,8 +185,20 @@ function Build-Gui {
   Update-Path
   if (-not (Have wails)) { Warn "wails unavailable; skipping GUI build"; return }
   $binDir = Join-Path $Root 'cmd\mfi-gui\build\bin'
+
+  # Wails links WebView2 via cgo. On Windows/ARM64 a native build needs an
+  # aarch64 compiler; scoop's gcc is x86-64, so unless a native aarch64
+  # toolchain is present we build a windows/amd64 binary, which runs under
+  # Windows-on-ARM's x64 emulation.
+  $arch = (& go env GOARCH 2>$null)
+  $platformArgs = @()
+  if ($arch -eq 'arm64' -and -not (Have 'aarch64-w64-mingw32-gcc')) {
+    Warn "ARM64 host without an aarch64 compiler: building the GUI as windows/amd64 (runs under emulation)."
+    $platformArgs = @('-platform', 'windows/amd64')
+  }
+
   Push-Location (Join-Path $Root 'cmd\mfi-gui')
-  try { & wails build } finally { Pop-Location }
+  try { Invoke-Native { & wails build @platformArgs } } finally { Pop-Location }
   $exe = Get-ChildItem -Path $binDir -Filter *.exe -ErrorAction SilentlyContinue | Select-Object -First 1
   if ($exe) {
     $script:GuiExe = $exe.FullName

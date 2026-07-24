@@ -122,6 +122,10 @@ Windows-only: `-NoShortcuts` skips creating the Start Menu / Desktop shortcuts.
   + Apple Mobile Device Service (install iTunes from apple.com, then *trust* the
   device); Android works without any of the iOS pieces. `scoop` bootstrapping
   requires a non-elevated PowerShell.
+  - **Windows on ARM64:** scoop's `gcc` is x86-64, so the installer builds the
+    GUI as `windows/amd64` and it runs under the OS's x64 emulation. (A native
+    arm64 GUI would need an aarch64 mingw toolchain, e.g. llvm-mingw.) The
+    cgo-free CLI builds natively as arm64.
 
 ### Manual build
 
