@@ -1536,6 +1536,15 @@ refreshHistoryDropdown();
 async function populateConsoleDevices() {
   const sel = $("#con-device");
   const prev = sel.value;
+  // Arriving from the Devices tab's Console button: show the connecting state
+  // up front so there's feedback during device detection too, not only once
+  // startConsole runs.
+  const wantAutoConnect = !!(pendingConsoleDeviceID && pendingConsoleConnect);
+  if (wantAutoConnect) {
+    $("#con-connect").disabled = true;
+    $("#con-connect").textContent = "Connecting…";
+    setConsoleStatus("connecting…", true);
+  }
   try {
     consoleDevices = (await gui().DetectDevices()) || [];
   } catch (e) {
@@ -1564,7 +1573,15 @@ async function populateConsoleDevices() {
   updateConsoleSsh();
   // Auto-connect from the Devices tab; on failure the device stays selected
   // (startConsole reports the reason) so the user can just press Connect.
-  if (autoConnect) startConsole({ quiet: true });
+  if (autoConnect) {
+    startConsole({ quiet: true });
+  } else if (wantAutoConnect) {
+    // Wanted to auto-connect but the device isn't in the list; undo the
+    // optimistic connecting state.
+    $("#con-connect").textContent = "Connect";
+    $("#con-connect").disabled = false;
+    setConsoleStatus("");
+  }
 }
 
 function selectedConsoleDevice() {
@@ -1600,9 +1617,11 @@ async function startConsole(opts = {}) {
   if (!d) { toast("select a device"); return; }
   await stopConsole();
 
-  // Show a connecting state: disable Connect and report progress (with a
-  // spinner) while the adb shell / SSH session is being established.
-  $("#con-connect").disabled = true;
+  // Show a connecting state: relabel + disable Connect and report progress
+  // (with a spinner) while the adb shell / SSH session is being established.
+  const connectBtn = $("#con-connect");
+  connectBtn.disabled = true;
+  connectBtn.textContent = "Connecting…";
   setConsoleStatus("connecting…", true);
 
   let logPath = "";
@@ -1615,6 +1634,7 @@ async function startConsole(opts = {}) {
     info = await gui().ConsoleStart(d.id, d.platform,
       $("#con-user").value.trim(), $("#con-host").value.trim(), $("#con-port").value.trim(), logPath);
   } catch (e) {
+    connectBtn.textContent = "Connect";
     setConsoleConnected(false);       // re-enable Connect for a retry
     setConsoleStatus("not connected"); // clears the connecting spinner
     if (opts.quiet) {
@@ -1651,6 +1671,7 @@ async function startConsole(opts = {}) {
     setConsoleStatus(conBaseStatus + " · session ended");
     setConsoleConnected(false);
   });
+  connectBtn.textContent = "Connect";
   setConsoleConnected(true);
 }
 
