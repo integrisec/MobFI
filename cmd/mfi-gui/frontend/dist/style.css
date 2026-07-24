@@ -70,8 +70,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   transition: opacity 0.5s ease;
 }
 .splash.hide { opacity: 0; pointer-events: none; }
-/* The logo art has a white background; round it so it reads as a logo card. */
-.splash-logo { width: min(380px, 52vw); height: auto; border-radius: 18px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45); }
+.splash-logo { width: min(380px, 52vw); height: auto; }
 .splash-tag { color: var(--muted); letter-spacing: 4px; font-size: 13px; }
 
 /* Devices empty-state hero */
@@ -85,7 +84,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   padding: 6vh 20px;
 }
 .devices-hero.hidden { display: none; }
-.hero-logo { width: min(300px, 42vw); height: auto; border-radius: 16px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4); }
+.hero-logo { width: min(300px, 42vw); height: auto; }
 .hero-title { font-size: 18px; font-weight: 600; }
 .hero-sub { color: var(--muted); font-size: 13px; max-width: 460px; }
 
