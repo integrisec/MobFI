@@ -1551,6 +1551,16 @@ $("#con-connect").addEventListener("click", () => startConsole());
 $("#con-disconnect").addEventListener("click", stopConsole);
 window.addEventListener("resize", () => { if (conFit) conFit.fit(); });
 
+// Persist the window size shortly after a resize settles, so it's restored on
+// next launch. The Go side reads the authoritative size and saves it.
+let persistSizeTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(persistSizeTimer);
+  persistSizeTimer = setTimeout(() => {
+    try { gui().PersistWindowSize(); } catch (e) { /* bindings not ready */ }
+  }, 500);
+});
+
 // Scroll-to-top/bottom buttons for the main content area.
 const mainEl = document.querySelector("main");
 function updateJumpers() {

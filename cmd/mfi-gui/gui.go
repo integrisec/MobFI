@@ -30,8 +30,30 @@ type GUI struct {
 func NewGUI() *GUI { return &GUI{app: app.New()} }
 
 // startup receives the Wails runtime context; the core uses it so work is
-// cancelled when the window closes.
-func (g *GUI) startup(ctx context.Context) { g.ctx = ctx }
+// cancelled when the window closes. It also clamps a restored window size to
+// the current screen so a size saved on a larger display never opens
+// off-screen.
+func (g *GUI) startup(ctx context.Context) {
+	g.ctx = ctx
+	clampWindowToScreen(ctx)
+}
+
+// shutdown persists the final window size as the app closes.
+func (g *GUI) shutdown(ctx context.Context) {
+	w, h := wailsruntime.WindowGetSize(ctx)
+	saveWindowState(windowState{Width: w, Height: h})
+}
+
+// PersistWindowSize records the current window size. The frontend calls this
+// (debounced) on resize so geometry survives even if the size can't be read
+// during teardown.
+func (g *GUI) PersistWindowSize() {
+	if g.ctx == nil {
+		return
+	}
+	w, h := wailsruntime.WindowGetSize(g.ctx)
+	saveWindowState(windowState{Width: w, Height: h})
+}
 
 // DetectDevices lists reachable Android/iOS devices.
 func (g *GUI) DetectDevices() ([]device.Device, error) {

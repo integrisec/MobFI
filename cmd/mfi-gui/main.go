@@ -18,16 +18,31 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+const (
+	defaultWidth  = 1100
+	defaultHeight = 780
+	minWidth      = 900
+	minHeight     = 600
+)
+
 func main() {
 	gui := NewGUI()
+
+	// Restore the last window size; startup clamps it to the current screen.
+	width, height := defaultWidth, defaultHeight
+	if ws, ok := loadWindowState(); ok {
+		width, height = ws.Width, ws.Height
+	}
+
 	err := wails.Run(&options.App{
 		Title:       "MobFI",
-		Width:       1100,
-		Height:      780,
-		MinWidth:    900,
-		MinHeight:   600,
+		Width:       width,
+		Height:      height,
+		MinWidth:    minWidth,
+		MinHeight:   minHeight,
 		AssetServer: &assetserver.Options{Assets: assets},
 		OnStartup:   gui.startup,
+		OnShutdown:  gui.shutdown,
 		Bind:        []any{gui},
 	})
 	if err != nil {
