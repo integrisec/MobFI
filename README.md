@@ -298,8 +298,14 @@ go install github.com/wailsapp/wails/v2/cmd/wails@latest
 make test                                        # go test ./...
 make vet                                         # go vet ./...
 make fmt                                         # gofmt -w .
+make check-ascii                                 # .ps1 files must be pure ASCII
 go test ./internal/secrets/ -run TestScanTree    # a single package / test
 ```
+
+CI (`.github/workflows/ci.yml`) runs `go vet`/`go test` on the cgo-free core +
+CLI and enforces `make check-ascii` — PowerShell scripts must stay pure ASCII,
+since Windows PowerShell 5.1 reads BOM-less files as Windows-1252 and
+mis-parses stray non-ASCII (e.g. an em-dash pasted from a doc).
 
 Repository layout:
 

@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ascii:
+    name: PowerShell scripts are ASCII
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check .ps1 files are pure ASCII
+        run: make check-ascii
+
+  go:
+    name: Go vet / test (core + CLI)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # The GUI (cmd/mfi-gui) links Wails/WebKit (cgo); the core and CLI are
+      # cgo-free and are what we gate on here.
+      - run: go build ./cmd/mfi
+      - run: go vet ./cmd/mfi ./internal/...
+      - run: go test ./internal/...
