@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/integrisec/MobFI/internal/doctor"
 	"github.com/integrisec/MobFI/internal/extract"
 	"github.com/integrisec/MobFI/internal/render"
+	"github.com/integrisec/MobFI/internal/report"
 	"github.com/integrisec/MobFI/internal/secrets"
 )
 
@@ -25,6 +27,13 @@ import (
 type GUI struct {
 	app *app.App
 	ctx context.Context
+
+	// Last scan/diff results, cached so the Export buttons can build a report
+	// without the frontend round-tripping the data back.
+	reportMu     sync.Mutex
+	lastFindings []secrets.Finding
+	scanned      bool
+	lastDiff     *diff.Result
 }
 
 // NewGUI constructs the bindings over a fresh core App.
@@ -160,13 +169,19 @@ func (g *GUI) ScanSecrets(root string) ([]secrets.Finding, error) {
 	ctx, done := g.opContext("scan")
 	defer done()
 	var last time.Time
-	return g.app.ScanSecrets(ctx, root, func(p secrets.Progress) {
+	findings, err := g.app.ScanSecrets(ctx, root, func(p secrets.Progress) {
 		if time.Since(last) < 120*time.Millisecond {
 			return
 		}
 		last = time.Now()
 		wailsruntime.EventsEmit(g.ctx, "scan:progress", p)
 	})
+	if err == nil {
+		g.reportMu.Lock()
+		g.lastFindings, g.scanned = findings, true
+		g.reportMu.Unlock()
+	}
+	return findings, err
 }
 
 // AddKnownSecrets adds a user-supplied known-secrets file to the scanner.
@@ -180,13 +195,76 @@ func (g *GUI) Diff(rootA, rootB string) (*diff.Result, error) {
 	ctx, done := g.opContext("diff")
 	defer done()
 	var last time.Time
-	return g.app.Diff(ctx, rootA, rootB, func(p diff.Progress) {
+	res, err := g.app.Diff(ctx, rootA, rootB, func(p diff.Progress) {
 		if time.Since(last) < 120*time.Millisecond {
 			return
 		}
 		last = time.Now()
 		wailsruntime.EventsEmit(g.ctx, "diff:progress", p)
 	})
+	if err == nil {
+		g.reportMu.Lock()
+		g.lastDiff = res
+		g.reportMu.Unlock()
+	}
+	return res, err
+}
+
+// ExportReport builds a report from the last scan ("scan") or diff ("diff")
+// results, prompts for a destination, and writes it in the given format
+// ("html", "json" or "text"). Returns the saved path (empty if cancelled).
+// Secrets are redacted by report.Build, so exports are safe to share.
+func (g *GUI) ExportReport(scope, format string) (string, error) {
+	g.reportMu.Lock()
+	findings, scanned, d := g.lastFindings, g.scanned, g.lastDiff
+	g.reportMu.Unlock()
+
+	var rep *report.Report
+	switch scope {
+	case "scan":
+		if !scanned {
+			return "", fmt.Errorf("run a scan first")
+		}
+		rep = g.app.Report(findings, nil)
+	case "diff":
+		if d == nil {
+			return "", fmt.Errorf("run a diff first")
+		}
+		rep = g.app.Report(nil, d)
+	default:
+		return "", fmt.Errorf("unknown export scope %q", scope)
+	}
+
+	ext := map[string]string{"html": ".html", "json": ".json", "text": ".txt"}[format]
+	if ext == "" {
+		return "", fmt.Errorf("unknown format %q", format)
+	}
+	name := fmt.Sprintf("mobfi-%s-%s%s", scope, time.Now().Format("2006-01-02"), ext)
+	path, err := wailsruntime.SaveFileDialog(g.ctx, wailsruntime.SaveDialogOptions{
+		Title:           "Export report",
+		DefaultFilename: name,
+	})
+	if err != nil || path == "" {
+		return "", err // cancelled
+	}
+
+	f, err := os.Create(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	switch format {
+	case "html":
+		err = rep.WriteHTML(f)
+	case "json":
+		err = rep.WriteJSON(f)
+	case "text":
+		err = rep.WriteText(f)
+	}
+	if err != nil {
+		return "", err
+	}
+	return path, nil
 }
 
 // DBTables lists the tables in a SQLite file.

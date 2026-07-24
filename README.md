@@ -217,10 +217,17 @@ mfi render -file ./capture/Library/Preferences/com.example.app.plist
 
 ### Build a report
 
+Scan and/or diff, print a text summary, and optionally export a file. The
+export format follows the `-out` extension: `.html` → styled HTML, `.txt` →
+text, anything else → JSON. Discovered secrets are redacted in every format.
+
 ```sh
-# scan and/or diff, print a summary, and optionally export JSON
-mfi report -root ./capture -a ./logged-out -b ./logged-in -out report.mfi-report.json
+mfi report -root ./capture -a ./logged-out -b ./logged-in -out report.html
+mfi report -root ./capture -out report.mfi-report.json
 ```
+
+In the GUI, the **Scan** and **Diff** tabs each have an **Export** control
+(HTML / JSON / Text) that saves the same report for that tab's results.
 
 ---
 

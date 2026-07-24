@@ -767,6 +767,27 @@ function isCancelError(e) {
   return String((e && e.message) || e).toLowerCase().includes("cancel");
 }
 
+// Export the last scan/diff results as a report (HTML/JSON/text). The backend
+// builds the report from its cached results and prompts for a destination.
+function wireExport(btnId, selId, scope) {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  btn.addEventListener("click", async () => {
+    const fmt = document.getElementById(selId).value;
+    btn.disabled = true;
+    try {
+      const path = await gui().ExportReport(scope, fmt);
+      if (path) toast("exported to " + shortPath(path), true);
+    } catch (e) {
+      fail(e); // e.g. "run a scan first"
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+wireExport("btn-scan-export", "scan-export-fmt", "scan");
+wireExport("btn-diff-export", "diff-export-fmt", "diff");
+
 function shortPath(p, n = 64) {
   return p && p.length > n ? "…" + p.slice(-(n - 1)) : p || "";
 }

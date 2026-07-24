@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"text/tabwriter"
@@ -279,7 +280,7 @@ func runReport(ctx context.Context, core *app.App, args []string) error {
 		known = fs.String("known", "", "known-secrets file to add to the scan")
 		a     = fs.String("a", "", "first root to diff")
 		b     = fs.String("b", "", "second root to diff")
-		out   = fs.String("out", "", "also write the report as JSON to this file")
+		out   = fs.String("out", "", "also write the report to this file (format by extension: .html, .txt, else JSON)")
 	)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -319,10 +320,21 @@ func runReport(ctx context.Context, core *app.App, args []string) error {
 			return err
 		}
 		defer f.Close()
-		if err := rep.WriteJSON(f); err != nil {
+		// Format follows the extension: .html/.htm -> HTML, .txt -> text,
+		// anything else -> JSON.
+		kind := "JSON"
+		switch strings.ToLower(filepath.Ext(*out)) {
+		case ".html", ".htm":
+			kind, err = "HTML", rep.WriteHTML(f)
+		case ".txt":
+			kind, err = "text", rep.WriteText(f)
+		default:
+			err = rep.WriteJSON(f)
+		}
+		if err != nil {
 			return err
 		}
-		fmt.Printf("\nwrote JSON report to %s\n", *out)
+		fmt.Printf("\nwrote %s report to %s\n", kind, *out)
 	}
 	return nil
 }

@@ -23,6 +23,41 @@ func sampleReport() *Report {
 	return Build(findings, d)
 }
 
+func TestWriteHTML(t *testing.T) {
+	var buf bytes.Buffer
+	if err := sampleReport().WriteHTML(&buf); err != nil {
+		t.Fatalf("WriteHTML: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{"<!DOCTYPE html>", "MobFI report", "aws-access-key-id", "github-token", "content differs", "k-added", "k-modified"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("HTML report missing %q", want)
+		}
+	}
+	// Build() strips raw secrets; they must never reach the export.
+	if strings.Contains(out, "AKIAIOSFODNN7EXAMPLE") || strings.Contains(out, "ghp_rawtokenvalue") {
+		t.Error("HTML report leaked a raw secret")
+	}
+}
+
+func TestWriteHTMLEscapes(t *testing.T) {
+	// Untrusted path/match from extracted data must be HTML-escaped.
+	r := Build([]secrets.Finding{
+		{RuleID: "x", Path: "<script>alert(1)</script>", Line: 1, Match: "a&b"},
+	}, nil)
+	var buf bytes.Buffer
+	if err := r.WriteHTML(&buf); err != nil {
+		t.Fatalf("WriteHTML: %v", err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "<script>alert(1)</script>") {
+		t.Error("path was not HTML-escaped (XSS risk)")
+	}
+	if !strings.Contains(out, "&lt;script&gt;") {
+		t.Error("expected escaped path in output")
+	}
+}
+
 func TestSummary(t *testing.T) {
 	s := sampleReport().Summary()
 	if s.TotalFindings != 3 {
