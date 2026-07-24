@@ -10,9 +10,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/creack/pty"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+// ptyConn is a started pseudo-terminal session: read its output, write input,
+// resize it, and Close (which terminates the child). It is implemented per
+// platform — creack/pty on Unix, Windows ConPTY on Windows — so the Console
+// works on every OS.
+type ptyConn interface {
+	Read([]byte) (int, error)
+	Write([]byte) (int, error)
+	Resize(rows, cols uint16) error
+	Close() error
+}
 
 func firstNonEmpty(a, b string) string {
 	if a != "" {
@@ -22,10 +32,9 @@ func firstNonEmpty(a, b string) string {
 }
 
 type consoleSession struct {
-	ptmx *os.File
-	cmd  *exec.Cmd
-	aux  *exec.Cmd // e.g. iproxy USB port-forward for iOS SSH
-	log  *os.File  // optional session transcript
+	pty ptyConn
+	aux *exec.Cmd // e.g. iproxy USB port-forward for iOS SSH
+	log *os.File  // optional session transcript
 }
 
 var (
@@ -88,7 +97,7 @@ func (g *GUI) ConsoleStart(deviceID, platform, sshUser, sshHost, sshPort, logPat
 	}
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
 
-	ptmx, err := pty.Start(cmd)
+	p, err := startPTY(cmd)
 	if err != nil {
 		if aux != nil && aux.Process != nil {
 			_ = aux.Process.Kill()
@@ -106,13 +115,13 @@ func (g *GUI) ConsoleStart(deviceID, platform, sshUser, sshHost, sshPort, logPat
 
 	id := fmt.Sprintf("con-%d", time.Now().UnixNano())
 	consolesMu.Lock()
-	consoles[id] = &consoleSession{ptmx: ptmx, cmd: cmd, aux: aux, log: logFile}
+	consoles[id] = &consoleSession{pty: p, aux: aux, log: logFile}
 	consolesMu.Unlock()
 
 	go func() {
 		buf := make([]byte, 8192)
 		for {
-			n, err := ptmx.Read(buf)
+			n, err := p.Read(buf)
 			if n > 0 {
 				wailsruntime.EventsEmit(g.ctx, "console:data:"+id, string(buf[:n]))
 				if logFile != nil {
@@ -137,7 +146,7 @@ func (g *GUI) ConsoleWrite(id, data string) error {
 	if s == nil {
 		return errors.New("console closed")
 	}
-	_, err := s.ptmx.Write([]byte(data))
+	_, err := s.pty.Write([]byte(data))
 	return err
 }
 
@@ -149,7 +158,7 @@ func (g *GUI) ConsoleResize(id string, rows, cols int) error {
 	if s == nil || rows <= 0 || cols <= 0 {
 		return nil
 	}
-	return pty.Setsize(s.ptmx, &pty.Winsize{Rows: uint16(rows), Cols: uint16(cols)})
+	return s.pty.Resize(uint16(rows), uint16(cols))
 }
 
 // ConsoleClose ends a session.
@@ -161,10 +170,7 @@ func (g *GUI) ConsoleClose(id string) error {
 	if s == nil {
 		return nil
 	}
-	_ = s.ptmx.Close()
-	if s.cmd.Process != nil {
-		_ = s.cmd.Process.Kill()
-	}
+	_ = s.pty.Close() // closes the pty and terminates the child
 	if s.aux != nil && s.aux.Process != nil {
 		_ = s.aux.Process.Kill() // tear down the iproxy forward
 	}

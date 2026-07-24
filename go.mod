@@ -3,6 +3,7 @@ module github.com/integrisec/MobFI
 go 1.25.0
 
 require (
+	github.com/UserExistsError/conpty v0.1.4
 	github.com/alecthomas/chroma/v2 v2.27.0
 	github.com/creack/pty v1.1.24
 	github.com/wailsapp/wails/v2 v2.13.0
