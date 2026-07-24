@@ -46,7 +46,12 @@
         <button id="btn-pair">Pair</button>
       </div>
       <p class="hint">Wireless debugging → “Pair device with pairing code” gives the pairing host:port and code above. After pairing, Connect using the host:port shown on the main Wireless debugging screen (a different port).</p>
-      <table class="grid" id="devices-table">
+      <div class="devices-hero" id="devices-hero">
+        <img class="hero-logo" src="mobfi-logo-full.png" alt="MobFI" />
+        <div class="hero-title">Connect a device to begin</div>
+        <div class="hero-sub">Plug in an Android or iOS device (or start an emulator / simulator) — it appears here automatically.</div>
+      </div>
+      <table class="grid hidden" id="devices-table">
         <thead><tr><th>ID</th><th>Name</th><th>Platform</th><th>Transport</th><th>State</th><th>Root / JB</th><th class="no-resize col-actions"></th></tr></thead>
         <tbody></tbody>
       </table>
@@ -246,6 +251,13 @@
   </div>
 
   <div class="toast hidden" id="toast"></div>
+
+  <!-- Launch splash (fades out shortly after load, or on click/keypress) -->
+  <div class="splash" id="splash">
+    <img class="splash-logo" src="mobfi-logo-full.png" alt="MobFI" />
+    <div class="splash-tag">MOBILE FILESYSTEM INSPECTOR</div>
+  </div>
+
   <script src="vendor/xterm.js"></script>
   <script src="vendor/addon-fit.js"></script>
   <script src="app.js"></script>

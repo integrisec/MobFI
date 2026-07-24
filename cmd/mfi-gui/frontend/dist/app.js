@@ -232,10 +232,10 @@ async function fetchDeviceRoot(d, cell) {
 
 function renderDevices(devices) {
   clearRows("#devices-table tbody");
-  if (devices.length === 0) {
-    emptyRow("#devices-table tbody", 7, "no devices detected");
-    return;
-  }
+  // No devices → show the branded hero; otherwise show the device list.
+  $("#devices-hero").classList.toggle("hidden", devices.length > 0);
+  $("#devices-table").classList.toggle("hidden", devices.length === 0);
+  if (devices.length === 0) return;
   for (const d of devices) {
     const appsBtn = el("button", { textContent: "List apps" });
     appsBtn.addEventListener("click", () => loadApps(d.id));
@@ -1667,3 +1667,20 @@ new MutationObserver(updateJumpers).observe(mainEl, { childList: true, subtree: 
 
 // Start on the Devices step of the wizard.
 showView("devices");
+
+// Launch splash: fade out shortly after load, or on click / any key.
+(function splash() {
+  const s = document.getElementById("splash");
+  if (!s) return;
+  let done = false;
+  const dismiss = () => {
+    if (done) return;
+    done = true;
+    s.classList.add("hide");
+    setTimeout(() => s.remove(), 600);
+    window.removeEventListener("keydown", dismiss);
+  };
+  setTimeout(dismiss, 1500);
+  s.addEventListener("click", dismiss);
+  window.addEventListener("keydown", dismiss);
+})();
