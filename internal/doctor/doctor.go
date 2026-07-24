@@ -50,7 +50,7 @@ var catalog = []Tool{
 		install: map[string]string{
 			"darwin":  "brew install ideviceinstaller",
 			"linux":   "apt install ideviceinstaller",
-			"windows": "scoop install libimobiledevice",
+			"windows": "prebuilt binaries: libimobiledevice-win32/ideviceinstaller (or run scripts\\install.ps1)",
 		},
 	},
 	{
@@ -65,7 +65,7 @@ var catalog = []Tool{
 		install: map[string]string{
 			"darwin":  "brew install libusbmuxd",
 			"linux":   "apt install libusbmuxd-tools",
-			"windows": "scoop install libimobiledevice",
+			"windows": "included in the prebuilt libimobiledevice bundle (run scripts\\install.ps1)",
 		},
 	},
 	{
@@ -105,7 +105,7 @@ var catalog = []Tool{
 var liDevice = map[string]string{
 	"darwin":  "brew install libimobiledevice",
 	"linux":   "apt install libimobiledevice-utils",
-	"windows": "scoop install libimobiledevice  (also needs Apple's USB driver / iTunes)",
+	"windows": "run scripts\\install.ps1 (fetches prebuilt binaries); also needs Apple's USB driver / iTunes",
 }
 
 // Check resolves every catalog tool relevant to the current OS via PATH.

@@ -115,6 +115,44 @@ function Ensure-CCompiler {
   return $false
 }
 
+# Append a directory to the persistent per-user PATH (and the current session).
+function Add-ToUserPath($dir) {
+  $cur = [Environment]::GetEnvironmentVariable('Path', 'User')
+  if (-not (($cur -split ';') -contains $dir)) {
+    $new = if ($cur) { "$cur;$dir" } else { $dir }
+    [Environment]::SetEnvironmentVariable('Path', $new, 'User')
+  }
+  if (-not (($env:Path -split ';') -contains $dir)) { $env:Path = "$dir;$env:Path" }
+}
+
+# libimobiledevice has no scoop/winget package, so fetch the prebuilt Windows
+# binaries (x64; they run under ARM64 emulation). Resolved via the GitHub
+# latest-release API so no version is hardcoded. Best-effort: any failure just
+# warns and points to the README.
+function Install-Libimobiledevice {
+  $api  = 'https://api.github.com/repos/jrjr/libimobiledevice-windows/releases/latest'
+  $dest = Join-Path $env:LOCALAPPDATA 'MobFI\libimobiledevice'
+  try {
+    Step "Downloading libimobiledevice (prebuilt Windows binaries)"
+    # Windows PowerShell 5.1 can default to TLS 1.0/1.1, which GitHub rejects.
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+    $rel   = Invoke-RestMethod -Uri $api -Headers @{ 'User-Agent' = 'MobFI-installer' }
+    $asset = $rel.assets | Where-Object { $_.name -like '*.zip' } | Select-Object -First 1
+    if (-not $asset) { Warn "no .zip asset in the latest release"; return }
+    $zip = Join-Path $env:TEMP $asset.name
+    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -UseBasicParsing
+    if (Test-Path $dest) { Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue }
+    New-Item -ItemType Directory -Force -Path $dest | Out-Null
+    Expand-Archive -Path $zip -DestinationPath $dest -Force
+    Remove-Item $zip -Force -ErrorAction SilentlyContinue
+    # The binaries may sit in a subfolder; anchor PATH on idevice_id.exe.
+    $idExe = Get-ChildItem -Path $dest -Recurse -Filter 'idevice_id.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($idExe) { Add-ToUserPath (Split-Path $idExe.FullName) } else { Add-ToUserPath $dest }
+  } catch {
+    Warn "libimobiledevice download failed: $($_.Exception.Message)"
+  }
+}
+
 function Ensure-Go {
   Update-Path
   if (Have go) {
@@ -151,21 +189,18 @@ function Ensure-RuntimeTools {
 
   if (Have adb) { Ok "adb" } else { if (Winget-Install 'Google.PlatformTools') { Update-Path; Ok "adb (platform-tools)" } }
 
-  # iOS: libimobiledevice is not on winget, so bootstrap scoop and install it.
+  # iOS: libimobiledevice has no winget/scoop package, so fetch prebuilt binaries.
   if (Have idevice_id) {
     Ok "libimobiledevice"
   } else {
-    if (Ensure-Scoop) {
-      Step "Installing libimobiledevice via scoop"
-      Invoke-Native { & scoop install libimobiledevice 2>&1 | Out-Null }
-      Update-Path
-    }
-    if (Have idevice_id) { Ok "libimobiledevice" } else { Warn "libimobiledevice still unavailable (see README for a prebuilt bundle)" }
+    Install-Libimobiledevice
+    if (Have idevice_id) { Ok "libimobiledevice" } else { Warn "libimobiledevice still unavailable (see README for the manual bundle)" }
   }
 
-  # MobFI also shells out to these; warn if the scoop port omitted either.
+  # MobFI shells out to these; warn if the bundle omitted either. afcclient
+  # drives extraction; ideviceinstaller drives iOS app listing.
   foreach ($t in @('ideviceinstaller', 'afcclient')) {
-    if (Have $t) { Ok $t } else { Warn "$t not found - some iOS features need it (see README for a prebuilt bundle)" }
+    if (Have $t) { Ok $t } else { Warn "$t not found - some iOS features need it (see README for the manual bundle)" }
   }
 
   # Even with the tools installed, iOS on Windows needs Apple's USB stack.
