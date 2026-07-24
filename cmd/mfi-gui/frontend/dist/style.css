@@ -88,6 +88,21 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .hero-title { font-size: 18px; font-weight: 600; }
 .hero-sub { color: var(--muted); font-size: 13px; max-width: 460px; }
 
+.topbar-action { margin-left: auto; flex: none; }
+
+/* Global Dependencies dropdown, anchored under the top bar */
+#deps-panel {
+  position: fixed;
+  top: 60px;
+  right: 20px;
+  z-index: 20;
+  margin-top: 0;
+  width: min(560px, calc(100vw - 40px));
+  max-height: calc(100vh - 80px);
+  overflow: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
 .tabs { display: flex; gap: 4px; }
 .tab {
   background: transparent;

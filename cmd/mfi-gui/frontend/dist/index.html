@@ -12,7 +12,7 @@
   <header class="topbar">
     <div class="brand">
       <img class="brand-logo" src="mobfi-logo-full-transparent.png" alt="MobFI" />
-      <span class="sub">mobile-app file inspector</span>
+      <span class="sub">Mobile Filesystem Inspector</span>
     </div>
     <nav class="tabs" id="tabs">
       <button class="tab" data-view="devices">Devices</button>
@@ -24,7 +24,9 @@
       <button class="tab" data-view="render">Render</button>
       <button class="tab" data-view="console">Console</button>
     </nav>
+    <button id="btn-deps" class="topbar-action" title="Check which adb / libimobiledevice tools are installed">Dependencies</button>
   </header>
+  <div class="details hidden" id="deps-panel"></div>
 
   <main>
     <!-- Devices -->
@@ -33,13 +35,11 @@
         <h2>Detect devices</h2>
         <div class="row-actions">
           <input id="tcp-addr" class="search" placeholder="host:port (adb TCP)" />
-          <button id="btn-deps" title="Check which adb / libimobiledevice tools are installed">Dependencies</button>
           <button id="btn-connect">Connect</button>
           <button class="primary" id="btn-detect">Detect</button>
         </div>
       </div>
       <p class="hint">Android (adb) and iOS (libimobiledevice) devices over USB, emulator, or TCP. The list refreshes automatically; Detect forces a re-check (including root/jailbreak).</p>
-      <div class="details hidden" id="deps-panel"></div>
       <div class="form">
         <label>Pair (Android 11+ wireless) <input id="pair-addr" placeholder="pairing host:port" /></label>
         <label>Pairing code <input id="pair-code" placeholder="6 digits" /></label>
