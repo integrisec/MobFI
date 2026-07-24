@@ -160,18 +160,40 @@ func (l *IOSAppLister) exec(ctx context.Context, args ...string) ([]byte, error)
 // List returns iOS apps (user apps only unless includeSystem). Missing
 // ideviceinstaller yields no apps rather than an error.
 func (l *IOSAppLister) List(ctx context.Context, d Device, includeSystem bool) ([]InstalledApp, error) {
-	scope := "--user"
+	// Modern ideviceinstaller (>= the `list` subcommand): list --user/--all --xml.
+	scope, legacyScope := "--user", "list_user"
 	if includeSystem {
-		scope = "--all"
+		scope, legacyScope = "--all", "list_all"
 	}
 	out, err := l.exec(ctx, "-u", d.ID, "list", scope, "--xml")
-	if err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
-			return nil, nil
-		}
-		return nil, err
+	if err == nil {
+		return parseIOSApps(out)
 	}
-	return parseIOSApps(out)
+	if errors.Is(err, exec.ErrNotFound) {
+		return nil, nil
+	}
+	// Fall back to the legacy CLI (older builds, e.g. the prebuilt Windows
+	// bundle, predate the `list` subcommand): -l -o xml -o list_user.
+	if out2, err2 := l.exec(ctx, "-u", d.ID, "-l", "-o", "xml", "-o", legacyScope); err2 == nil {
+		return parseIOSApps(out2)
+	}
+	// Report the modern-syntax error; it is the more informative one.
+	return nil, ideviceErr(err)
+}
+
+// ideviceErr annotates an ideviceinstaller failure with its stderr, so the
+// caller sees the real reason (e.g. an unrecognised flag, or a lockdown/pairing
+// error against a newer iOS) rather than a bare "exit status N".
+func ideviceErr(err error) error {
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		for _, ln := range strings.Split(string(ee.Stderr), "\n") {
+			if ln = strings.TrimSpace(ln); ln != "" {
+				return fmt.Errorf("ideviceinstaller: %s", ln)
+			}
+		}
+	}
+	return fmt.Errorf("ideviceinstaller: %w", err)
 }
 
 // parseIOSApps decodes the installation_proxy property list emitted by
