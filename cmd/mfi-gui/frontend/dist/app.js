@@ -204,7 +204,7 @@ function applyRootCell(cell, status) {
 
 async function fetchDeviceRoot(d, cell) {
   try {
-    const status = await gui().DeviceRoot(d.id, d.platform);
+    const status = await gui().DeviceRoot(d.id, d.platform, d.transport);
     rootCache.set(d.id, status);
     applyRootCell(cell, status);
   } catch (e) {

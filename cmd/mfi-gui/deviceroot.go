@@ -27,9 +27,14 @@ var jailbreakApps = map[string]bool{
 // DeviceRoot reports whether a device appears rooted (Android) or
 // jailbroken (iOS). Values: "rooted"/"not rooted", "jailbroken"/"not
 // detected", or "unknown".
-func (g *GUI) DeviceRoot(deviceID, platform string) (string, error) {
+func (g *GUI) DeviceRoot(deviceID, platform, transport string) (string, error) {
 	if deviceID == "" {
 		return "unknown", nil
+	}
+	// A simulator is a sandboxed host process, not a jailbroken device; the
+	// jailbreak-app probe doesn't apply (and ideviceinstaller can't reach it).
+	if transport == "simulator" {
+		return "n/a", nil
 	}
 	if platform == "ios" {
 		return iosJailbroken(g, deviceID), nil

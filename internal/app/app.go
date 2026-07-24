@@ -86,6 +86,22 @@ func (a *App) ExtractApp(ctx context.Context, d device.Device, bundleID, dst, af
 		}
 		return extract.Run(ctx, conn, req)
 	case device.IOS:
+		// An iOS Simulator keeps its containers on the host filesystem, so
+		// copy them directly rather than going through AFC.
+		if d.Transport == device.Simulator {
+			root, err := device.SimulatorDataContainer(ctx, d.ID, bundleID)
+			if err != nil {
+				return nil, err
+			}
+			conn := transport.NewLocalConn()
+			defer conn.Close()
+			return extract.Run(ctx, conn, extract.Request{
+				BundleID:   bundleID,
+				SourceRoot: root,
+				Dest:       dst,
+				Progress:   progress,
+			})
+		}
 		conn, err := a.AFC.Connect(ctx, d, bundleID, afcScope)
 		if err != nil {
 			return nil, err

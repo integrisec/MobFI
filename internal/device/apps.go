@@ -32,7 +32,7 @@ type AppLister interface {
 
 // DefaultAppListers returns the built-in listers for Android and iOS.
 func DefaultAppListers() []AppLister {
-	return []AppLister{NewADBAppLister(), NewIOSAppLister()}
+	return []AppLister{NewADBAppLister(), NewSimctlAppLister(), NewIOSAppLister()}
 }
 
 // --- Android (adb) ---
@@ -136,7 +136,11 @@ type IOSAppLister struct {
 // NewIOSAppLister returns an IOSAppLister using ideviceinstaller from PATH.
 func NewIOSAppLister() *IOSAppLister { return &IOSAppLister{} }
 
-func (l *IOSAppLister) Supports(d Device) bool { return d.Platform == IOS }
+// Supports matches physical iOS devices only; simulators are handled by
+// SimctlAppLister (they don't respond to ideviceinstaller).
+func (l *IOSAppLister) Supports(d Device) bool {
+	return d.Platform == IOS && d.Transport != Simulator
+}
 
 func (l *IOSAppLister) bin() string {
 	if l.Bin != "" {

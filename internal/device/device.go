@@ -21,9 +21,10 @@ const (
 type Transport string
 
 const (
-	USB      Transport = "usb"
-	TCP      Transport = "tcp"
-	Emulator Transport = "emulator"
+	USB       Transport = "usb"
+	TCP       Transport = "tcp"
+	Emulator  Transport = "emulator"
+	Simulator Transport = "simulator" // iOS Simulator managed by `xcrun simctl`
 )
 
 // Device is a single Android/iOS target seen by a detector.
@@ -56,6 +57,7 @@ func DefaultRegistry() *Registry {
 	r := &Registry{}
 	r.Add(NewADBDetector())
 	r.Add(NewIOSDetector())
+	r.Add(NewSimctlDetector())
 	return r
 }
 
