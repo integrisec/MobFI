@@ -1,4 +1,8 @@
-# MobFI
+<p align="center">
+  <img src="mobfi-logo-full.png" alt="MobFI — Mobile Filesystem Inspector" width="420" />
+</p>
+
+# MobFI — Mobile Filesystem Inspector
 
 **MobFI** is a cross-platform **desktop app and CLI** for inspecting and
 exploring the file structures of installed **Android and iOS** applications.

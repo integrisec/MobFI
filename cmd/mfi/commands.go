@@ -21,7 +21,7 @@ import (
 )
 
 func usage(w io.Writer) {
-	fmt.Fprint(w, `mfi - mobile-app file inspector
+	fmt.Fprint(w, `mfi - MobFI, the Mobile Filesystem Inspector
 
 Usage:
   mfi [command]

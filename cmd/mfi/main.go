@@ -1,4 +1,4 @@
-// Command mfi is the CLI frontend for the MFI mobile-app file inspector.
+// Command mfi is the CLI frontend for MobFI, the Mobile Filesystem Inspector.
 // It is a thin wrapper over internal/app; the Wails GUI wraps the same core.
 package main
 
