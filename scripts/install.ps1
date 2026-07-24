@@ -3,9 +3,9 @@
   MobFI installer for Windows.
 
 .DESCRIPTION
-  Resolves everything a newcomer needs — the Go toolchain, the Wails CLI, the
+  Resolves everything a newcomer needs - the Go toolchain, the Wails CLI, the
   WebView2 runtime, and the runtime tools MobFI shells out to (Android
-  platform-tools / adb; libimobiledevice for iOS where available) — then builds
+  platform-tools / adb; libimobiledevice for iOS where available) - then builds
   the CLI and GUI. Uses winget; falls back to scoop for iOS tools. Safe to
   re-run: anything already present is left alone.
 
@@ -125,7 +125,7 @@ function Build-Gui {
 }
 
 # --- main --------------------------------------------------------------------
-Write-Host "MobFI installer — Windows`n" -ForegroundColor White
+Write-Host "MobFI installer - Windows`n" -ForegroundColor White
 $buildCli = -not $GuiOnly
 $buildGui = -not $CliOnly
 
