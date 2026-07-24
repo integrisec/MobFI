@@ -2,16 +2,19 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 	"text/tabwriter"
 
 	"github.com/integrisec/MobFI/internal/app"
 	"github.com/integrisec/MobFI/internal/device"
 	"github.com/integrisec/MobFI/internal/diff"
+	"github.com/integrisec/MobFI/internal/doctor"
 	"github.com/integrisec/MobFI/internal/extract"
 	"github.com/integrisec/MobFI/internal/secrets"
 )
@@ -35,6 +38,7 @@ Commands:
   report    Scan and/or diff, then summarise into a report
   db        Inspect a SQLite database file (read-only)
   render    Render a file (XML, JSON, plist, SQLite, text, hex)
+  doctor    Check for the external device tools (adb, libimobiledevice)
   help      Show this help
 `)
 }
@@ -50,6 +54,54 @@ func runWizard(ctx context.Context, core *app.App) error {
 	fmt.Println("  5. Review the report")
 	_ = ctx
 	_ = core
+	return nil
+}
+
+func runDoctor(ctx context.Context, core *app.App, args []string) error {
+	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
+	asJSON := fs.Bool("json", false, "output the check as JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	_ = ctx
+	tools := core.Doctor()
+
+	if *asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(tools)
+	}
+
+	fmt.Printf("MobFI dependency check (%s/%s)\n\n", runtime.GOOS, runtime.GOARCH)
+	tw := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
+	fmt.Fprintln(tw, "STATUS\tTOOL\tPURPOSE\tLOCATION / INSTALL")
+	for _, t := range tools {
+		status, loc := "ok", t.Path
+		if !t.Found {
+			status = "MISSING"
+			if t.Optional {
+				status = "optional"
+			}
+			hint := t.Hint
+			if hint == "" {
+				hint = "(see README)"
+			}
+			loc = "-> " + hint
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", status, t.Name, t.Purpose, loc)
+	}
+	if err := tw.Flush(); err != nil {
+		return err
+	}
+
+	fmt.Println()
+	if missing := doctor.MissingCore(tools); len(missing) == 0 {
+		fmt.Println("All core device tools are present.")
+	} else {
+		fmt.Printf("%d core tool(s) missing: %s\n", len(missing), strings.Join(missing, ", "))
+		fmt.Println("Install the ones you need (see the INSTALL column), or run scripts/install.sh.")
+	}
+	fmt.Println("Runtime tools are optional — a feature that needs a missing tool is simply unavailable.")
 	return nil
 }
 

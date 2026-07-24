@@ -135,6 +135,16 @@ mfi                 # guided wizard (advanced users can run subcommands)
 mfi help            # list all commands
 ```
 
+### Check device tools
+
+See which external tools (`adb`, `libimobiledevice`, …) are installed, with
+install hints for any that are missing:
+
+```sh
+mfi doctor          # human-readable report
+mfi doctor -json    # machine-readable, for scripts
+```
+
 ### Detect devices
 
 ```sh

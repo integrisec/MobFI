@@ -45,6 +45,8 @@ func run(args []string) error {
 		return runDB(ctx, core, args[1:])
 	case "render":
 		return runRender(ctx, core, args[1:])
+	case "doctor":
+		return runDoctor(ctx, core, args[1:])
 	case "help", "-h", "--help":
 		usage(os.Stdout)
 		return nil

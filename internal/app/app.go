@@ -11,6 +11,7 @@ import (
 	"github.com/integrisec/MobFI/internal/dbview"
 	"github.com/integrisec/MobFI/internal/device"
 	"github.com/integrisec/MobFI/internal/diff"
+	"github.com/integrisec/MobFI/internal/doctor"
 	"github.com/integrisec/MobFI/internal/extract"
 	"github.com/integrisec/MobFI/internal/render"
 	"github.com/integrisec/MobFI/internal/report"
@@ -49,6 +50,10 @@ func New() *App {
 func (a *App) DetectDevices(ctx context.Context) ([]device.Device, error) {
 	return a.Detectors.DetectAll(ctx)
 }
+
+// Doctor reports which external runtime tools (adb, libimobiledevice, ...) are
+// present on the host, with install hints for those that are missing.
+func (a *App) Doctor() []doctor.Tool { return doctor.Check() }
 
 // ListApps enumerates the applications on a device. When includeSystem is
 // true, system apps are listed alongside user-installed ones.
