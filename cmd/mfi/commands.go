@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"text/tabwriter"
@@ -42,21 +41,6 @@ Commands:
   doctor    Check for the external device tools (adb, libimobiledevice)
   help      Show this help
 `)
-}
-
-func runWizard(ctx context.Context, core *app.App) error {
-	// TODO: drive the user through detect -> select device -> select app
-	// -> extract -> scan/diff -> report. For now, list the steps.
-	printLogo(os.Stdout)
-	fmt.Println("MobFI guided wizard (advanced users can run subcommands directly; see `mfi help`).")
-	fmt.Println("  1. Detect devices")
-	fmt.Println("  2. Select a device and target application")
-	fmt.Println("  3. Extract the application file tree")
-	fmt.Println("  4. Scan for secrets and/or diff against another capture")
-	fmt.Println("  5. Review the report")
-	_ = ctx
-	_ = core
-	return nil
 }
 
 func runDoctor(ctx context.Context, core *app.App, args []string) error {
@@ -315,22 +299,9 @@ func runReport(ctx context.Context, core *app.App, args []string) error {
 		return err
 	}
 	if *out != "" {
-		f, err := os.Create(*out)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
 		// Format follows the extension: .html/.htm -> HTML, .txt -> text,
 		// anything else -> JSON.
-		kind := "JSON"
-		switch strings.ToLower(filepath.Ext(*out)) {
-		case ".html", ".htm":
-			kind, err = "HTML", rep.WriteHTML(f)
-		case ".txt":
-			kind, err = "text", rep.WriteText(f)
-		default:
-			err = rep.WriteJSON(f)
-		}
+		kind, err := writeReportFile(rep, *out)
 		if err != nil {
 			return err
 		}
