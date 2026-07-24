@@ -1,7 +1,14 @@
 BINARY := mfi
 BIN_DIR := bin
 
-.PHONY: setup build test vet fmt run tidy clean
+# Version is canonical in internal/version; builds only stamp the git commit
+# and date on top of it. Override VERSION_PKG for a fork of the module path.
+VERSION_PKG := github.com/integrisec/MobFI/internal/version
+COMMIT      := $(shell git rev-parse --short HEAD 2>/dev/null)
+DATE        := $(shell date -u +%Y-%m-%d)
+LDFLAGS     := -X $(VERSION_PKG).Commit=$(COMMIT) -X $(VERSION_PKG).Date=$(DATE)
+
+.PHONY: setup build test vet fmt run tidy clean version
 
 # One-shot bootstrap for newcomers: installs Go, Wails, adb and
 # libimobiledevice, then builds the CLI and GUI (macOS/Linux).
@@ -9,7 +16,10 @@ setup:
 	./scripts/install.sh
 
 build:
-	go build -o $(BIN_DIR)/$(BINARY) ./cmd/mfi
+	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY) ./cmd/mfi
+
+version:
+	@go run -ldflags "$(LDFLAGS)" ./cmd/mfi version
 
 test:
 	go test ./...

@@ -11,6 +11,7 @@
   },
   "info": {
     "productName": "MobFI",
+    "productVersion": "1.0.0",
     "comments": "Mobile Filesystem Inspector"
   }
 }

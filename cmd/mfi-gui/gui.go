@@ -18,6 +18,7 @@ import (
 	"github.com/integrisec/MobFI/internal/render"
 	"github.com/integrisec/MobFI/internal/report"
 	"github.com/integrisec/MobFI/internal/secrets"
+	"github.com/integrisec/MobFI/internal/version"
 )
 
 // GUI is the object bound to the frontend. Each exported method becomes a
@@ -38,6 +39,9 @@ type GUI struct {
 
 // NewGUI constructs the bindings over a fresh core App.
 func NewGUI() *GUI { return &GUI{app: app.New()} }
+
+// Version returns the MobFI release version (e.g. "v1.0.0") for display in the UI.
+func (g *GUI) Version() string { return version.String() }
 
 // startup receives the Wails runtime context; the core uses it so work is
 // cancelled when the window closes. It also restores the saved window size and

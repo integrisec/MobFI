@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/integrisec/MobFI/internal/app"
+	"github.com/integrisec/MobFI/internal/version"
 )
 
 func main() {
@@ -47,6 +48,9 @@ func run(args []string) error {
 		return runRender(ctx, core, args[1:])
 	case "doctor":
 		return runDoctor(ctx, core, args[1:])
+	case "version", "--version", "-v":
+		fmt.Println("mfi " + version.String())
+		return nil
 	case "help", "-h", "--help":
 		printLogo(os.Stdout)
 		usage(os.Stdout)

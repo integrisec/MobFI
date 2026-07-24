@@ -39,6 +39,7 @@ Commands:
   db        Inspect a SQLite database file (read-only)
   render    Render a file (XML, JSON, plist, SQLite, text, hex)
   doctor    Check for the external device tools (adb, libimobiledevice)
+  version   Print the MobFI version
   help      Show this help
 `)
 }

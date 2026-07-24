@@ -149,6 +149,12 @@ mfi doctor          # human-readable report
 mfi doctor -json    # machine-readable, for scripts
 ```
 
+### Check the version
+
+```sh
+mfi version         # or: mfi --version / mfi -v  ->  mfi v1.0.0
+```
+
 ### Detect devices
 
 ```sh
@@ -306,6 +312,16 @@ Repository layout:
 
 New device detectors, transports, secret rules, structural differs and file
 renderers are all pluggable — see the registries in the relevant packages.
+
+### Versioning
+
+MobFI follows [semantic versioning](https://semver.org). The canonical version
+lives in one place — `internal/version` (`Version`) — and is reported by both
+the CLI (`mfi version`) and the GUI (top-bar badge). Bump it there on a release
+and mirror it in `cmd/mfi-gui/wails.json` (`info.productVersion`) for the OS
+bundle metadata, then tag the commit (`git tag v<x.y.z>`). `make build` stamps
+the short git commit and build date on top of the version; a plain `go build`
+reports just the version.
 
 ---
 

@@ -1668,6 +1668,15 @@ new MutationObserver(updateJumpers).observe(mainEl, { childList: true, subtree: 
 // Start on the Devices step of the wizard.
 showView("devices");
 
+// Show the app version in the top bar (best-effort; bindings may lag).
+(function showVersion() {
+  const el = document.getElementById("app-version");
+  if (!el) return;
+  try {
+    gui().Version().then((v) => { if (v) el.textContent = v; }).catch(() => {});
+  } catch (e) { /* bindings not ready yet */ }
+})();
+
 // Launch splash: fade out shortly after load, or on click / any key.
 (function splash() {
   const s = document.getElementById("splash");
