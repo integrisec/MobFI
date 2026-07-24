@@ -105,7 +105,7 @@ var catalog = []Tool{
 var liDevice = map[string]string{
 	"darwin":  "brew install libimobiledevice",
 	"linux":   "apt install libimobiledevice-utils",
-	"windows": "run scripts\\install.ps1 (fetches prebuilt binaries); also needs Apple's USB driver / iTunes",
+	"windows": "run scripts\\install.ps1 (fetches binaries + Apple Mobile Device Support); iOS-over-USB is x64-only",
 }
 
 // Check resolves every catalog tool relevant to the current OS via PATH.

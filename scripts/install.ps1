@@ -216,9 +216,50 @@ function Ensure-RuntimeTools {
     if (Have $t) { Ok $t } else { Warn "$t not found - some iOS features need it (see README for the manual bundle)" }
   }
 
-  # Even with the tools installed, iOS on Windows needs Apple's USB stack.
-  Warn "iOS on Windows also needs Apple's USB driver + Apple Mobile Device Service:"
-  Warn "  install iTunes from apple.com, plug in the device, then tap 'Trust'."
+  # The tools alone are not enough over USB: libimobiledevice talks to the
+  # usbmuxd that Apple Mobile Device Service provides. Without it, idevice_id
+  # reports "Unable to retrieve device list". Install just that component.
+  Ensure-AppleMobileDeviceSupport
+
+  Warn "For iOS over USB: plug in the device and tap 'Trust', then run 'mfi detect'."
+}
+
+# Locate Apple Mobile Device Service by its service or display name.
+function Get-AMDS {
+  $svc = Get-Service -Name 'Apple Mobile Device Service' -ErrorAction SilentlyContinue
+  if (-not $svc) { $svc = Get-Service -DisplayName 'Apple Mobile Device Service' -ErrorAction SilentlyContinue }
+  return $svc
+}
+
+# Install Apple Mobile Device Support (the USB driver + Apple Mobile Device
+# Service / usbmuxd that libimobiledevice needs). This is the lightweight
+# component, not full iTunes -- winget's Apple.iTunes often skips the driver.
+function Ensure-AppleMobileDeviceSupport {
+  $svc = Get-AMDS
+  if ($svc) {
+    Ok "Apple Mobile Device Service ($($svc.Status))"
+    if ($svc.Status -ne 'Running') {
+      try { Start-Service $svc.Name; Ok "started Apple Mobile Device Service" }
+      catch { Warn "could not start Apple Mobile Device Service: $($_.Exception.Message)" }
+    }
+    return
+  }
+  Step "Installing Apple Mobile Device Support (iOS USB driver + service)"
+  if (Winget-Install 'Apple.AppleMobileDeviceSupport') {
+    Update-Path
+    if (Get-AMDS) { Ok "Apple Mobile Device Service installed" }
+    else { Warn "installed, but the service is not registered yet - a reboot may be required" }
+  } else {
+    Warn "could not install Apple Mobile Device Support via winget."
+    Warn "Install iTunes from apple.com (the .exe, not the Store app) to get it."
+  }
+  # Apple's USB driver is kernel-mode x64/x86 and Windows on ARM cannot load
+  # x64 kernel drivers, so iOS-over-USB may be blocked there even with the
+  # service installed.
+  if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64') {
+    Warn "Windows on ARM: Apple's USB driver is x64 kernel-mode and may not load;"
+    Warn "  if idevice_id still fails, use a Mac/x64 host for iPhones (Android is fine here)."
+  }
 }
 
 function Build-Cli {

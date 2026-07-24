@@ -118,11 +118,12 @@ Windows-only: `-NoShortcuts` skips creating the Start Menu / Desktop shortcuts.
   `scoop` for **gcc** (Wails links WebView2 via cgo, so the GUI build needs a C
   compiler — the CLI is cgo-free and does not). For iOS it downloads prebuilt
   **libimobiledevice** binaries (there is no winget/scoop package) and adds them
-  to PATH. It then builds both binaries and adds Start Menu / Desktop shortcuts
-  to the GUI. iOS additionally needs Apple's USB driver + Apple Mobile Device
-  Service (install iTunes from apple.com, then *trust* the device); Android
-  works without any of the iOS pieces. `scoop` bootstrapping requires a
-  non-elevated PowerShell.
+  to PATH, and (for iOS over USB) installs **Apple Mobile Device Support** via
+  winget — the `usbmuxd` service libimobiledevice needs — so you don't have to
+  install full iTunes. It then builds both binaries and adds Start Menu /
+  Desktop shortcuts to the GUI. After it finishes, plug in the device and
+  *trust* the computer; Android works without any of the iOS pieces. `scoop`
+  bootstrapping requires a non-elevated PowerShell.
   - **iOS tools, manual fallback:** the installer pulls the core tools
     (`idevice_id`, `ideviceinfo`, `afcclient`) from the
     [jrjr/libimobiledevice-windows](https://github.com/jrjr/libimobiledevice-windows/releases)
@@ -134,7 +135,10 @@ Windows-only: `-NoShortcuts` skips creating the Start Menu / Desktop shortcuts.
   - **Windows on ARM64:** scoop's `gcc` is x86-64, so the installer builds the
     GUI as `windows/amd64` and it runs under the OS's x64 emulation. (A native
     arm64 GUI would need an aarch64 mingw toolchain, e.g. llvm-mingw.) The
-    cgo-free CLI builds natively as arm64.
+    cgo-free CLI builds natively as arm64. **iOS over USB is the exception:**
+    Apple's Mobile Device USB driver is x64 *kernel-mode*, and Windows on ARM
+    cannot load x64 kernel drivers — so iPhones may not enumerate even with the
+    service installed. Use a Mac or x64 host for iOS; Android works fine on ARM.
 
 ### Manual build
 
