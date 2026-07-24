@@ -161,6 +161,14 @@ function emptyRow(tbodySel, cols, text) {
   $(tbodySel).append(tr);
 }
 
+// loadingRow shows a spinner + message while an async table load is in flight.
+// Reuses the shared .busy::before spinner.
+function loadingRow(tbodySel, cols, text) {
+  const label = el("span", { className: "busy", textContent: text || "Loading…" });
+  const tr = el("tr", { className: "empty loading" }, el("td", { colSpan: cols }, label));
+  $(tbodySel).replaceChildren(tr);
+}
+
 // --- Devices (auto-refreshing) ---
 const rootCache = new Map(); // deviceID -> "rooted"/"jailbroken"/...
 let devicePollTimer = null;
@@ -477,7 +485,8 @@ async function loadApps(deviceID) {
   clearDetails(); // a fresh listing (incl. system-apps toggle) resets the panel
   showView("apps");
   $("#apps-device").textContent = deviceID;
-  clearRows("#apps-table tbody");
+  loadingRow("#apps-table tbody", 7, "Loading apps…");
+  $("#apps-count").textContent = "loading…";
   try {
     currentApps = (await gui().ListApps(deviceID, $("#apps-system").checked)) || [];
   } catch (e) {
@@ -1451,8 +1460,10 @@ let conExitOff = null;
 let conBaseStatus = "";
 let conFontSize = parseInt(localStorage.getItem("mobfi.console.fontSize"), 10) || 13;
 
-function setConsoleStatus(text) {
-  $("#con-status").textContent = text || "";
+function setConsoleStatus(text, busy = false) {
+  const s = $("#con-status");
+  s.classList.toggle("busy", !!busy);
+  s.textContent = text || "";
 }
 function applyConsoleFont() {
   localStorage.setItem("mobfi.console.fontSize", String(conFontSize));
@@ -1589,6 +1600,11 @@ async function startConsole(opts = {}) {
   if (!d) { toast("select a device"); return; }
   await stopConsole();
 
+  // Show a connecting state: disable Connect and report progress (with a
+  // spinner) while the adb shell / SSH session is being established.
+  $("#con-connect").disabled = true;
+  setConsoleStatus("connecting…", true);
+
   let logPath = "";
   if ($("#con-log").checked) {
     try { logPath = await gui().PickSaveFile("mobfi-console.log"); } catch (e) { logPath = ""; }
@@ -1599,8 +1615,9 @@ async function startConsole(opts = {}) {
     info = await gui().ConsoleStart(d.id, d.platform,
       $("#con-user").value.trim(), $("#con-host").value.trim(), $("#con-port").value.trim(), logPath);
   } catch (e) {
+    setConsoleConnected(false);       // re-enable Connect for a retry
+    setConsoleStatus("not connected"); // clears the connecting spinner
     if (opts.quiet) {
-      setConsoleStatus("not connected");
       toast("couldn't connect — device selected; press Connect to retry");
     } else {
       fail(e);
