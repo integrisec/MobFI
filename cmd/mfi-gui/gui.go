@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -57,6 +58,8 @@ func (g *GUI) ExtractApp(deviceID, bundleID, dest, afcScope string) (*extract.Re
 	devices, _ := g.app.DetectDevices(g.ctx)
 	for i := range devices {
 		if devices[i].ID == deviceID {
+			ctx, done := g.opContext("extract")
+			defer done()
 			var last time.Time
 			progress := func(p extract.Progress) {
 				if time.Since(last) < 120*time.Millisecond {
@@ -65,17 +68,67 @@ func (g *GUI) ExtractApp(deviceID, bundleID, dest, afcScope string) (*extract.Re
 				last = time.Now()
 				wailsruntime.EventsEmit(g.ctx, "extract:progress", p)
 			}
-			return g.app.ExtractApp(g.ctx, devices[i], bundleID, dest, afcScope, progress)
+			return g.app.ExtractApp(ctx, devices[i], bundleID, dest, afcScope, progress)
 		}
 	}
 	return nil, fmt.Errorf("device %q not found; re-run detection", deviceID)
 }
 
+// --- cancellable operations ---
+
+var (
+	opMu     sync.Mutex
+	opCancel = map[string]context.CancelFunc{}
+)
+
+// opContext returns a cancellable context for a named, one-at-a-time
+// operation, and a done func to release it. CancelOp(name) cancels it.
+func (g *GUI) opContext(name string) (context.Context, func()) {
+	ctx, cancel := context.WithCancel(g.ctx)
+	opMu.Lock()
+	if prev := opCancel[name]; prev != nil {
+		prev() // supersede a stale one
+	}
+	opCancel[name] = cancel
+	opMu.Unlock()
+	return ctx, func() {
+		opMu.Lock()
+		delete(opCancel, name)
+		opMu.Unlock()
+		cancel()
+	}
+}
+
+// CancelOp cancels an in-flight operation ("scan", "diff", "extract").
+func (g *GUI) CancelOp(name string) {
+	opMu.Lock()
+	c := opCancel[name]
+	opMu.Unlock()
+	if c != nil {
+		c()
+	}
+}
+
+// Confirm shows a native Yes/No dialog and reports whether Yes was chosen.
+func (g *GUI) Confirm(title, message string) (bool, error) {
+	res, err := wailsruntime.MessageDialog(g.ctx, wailsruntime.MessageDialogOptions{
+		Type:          wailsruntime.QuestionDialog,
+		Title:         title,
+		Message:       message,
+		Buttons:       []string{"Yes", "No"},
+		DefaultButton: "No",
+		CancelButton:  "No",
+	})
+	return res == "Yes", err
+}
+
 // ScanSecrets scans an extracted tree for secrets, relaying throttled
-// progress as "scan:progress" events.
+// progress as "scan:progress" events. Cancellable via CancelOp("scan").
 func (g *GUI) ScanSecrets(root string) ([]secrets.Finding, error) {
+	ctx, done := g.opContext("scan")
+	defer done()
 	var last time.Time
-	return g.app.ScanSecrets(g.ctx, root, func(p secrets.Progress) {
+	return g.app.ScanSecrets(ctx, root, func(p secrets.Progress) {
 		if time.Since(last) < 120*time.Millisecond {
 			return
 		}
@@ -90,10 +143,12 @@ func (g *GUI) AddKnownSecrets(path string) error {
 }
 
 // Diff compares two extracted roots, relaying throttled progress as
-// "diff:progress" events.
+// "diff:progress" events. Cancellable via CancelOp("diff").
 func (g *GUI) Diff(rootA, rootB string) (*diff.Result, error) {
+	ctx, done := g.opContext("diff")
+	defer done()
 	var last time.Time
-	return g.app.Diff(g.ctx, rootA, rootB, func(p diff.Progress) {
+	return g.app.Diff(ctx, rootA, rootB, func(p diff.Progress) {
 		if time.Since(last) < 120*time.Millisecond {
 			return
 		}

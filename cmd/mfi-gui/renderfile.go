@@ -34,6 +34,41 @@ type FSEntry struct {
 	Dir  bool   `json:"dir"`
 }
 
+// DirState reports whether a path exists and (for a directory) is empty.
+type DirState struct {
+	Exists bool `json:"exists"`
+	Empty  bool `json:"empty"`
+}
+
+// DirStatus checks an extraction destination before writing to it.
+func (g *GUI) DirStatus(path string) DirState {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return DirState{Exists: false, Empty: true}
+	}
+	if !fi.IsDir() {
+		return DirState{Exists: true, Empty: false}
+	}
+	entries, err := os.ReadDir(path)
+	return DirState{Exists: true, Empty: err == nil && len(entries) == 0}
+}
+
+// RemoveDir deletes a directory tree, with guards against removing obviously
+// dangerous paths (root, home, top-level).
+func (g *GUI) RemoveDir(path string) error {
+	p := filepath.Clean(path)
+	if p == "" || p == "/" || p == "." || p == ".." {
+		return fmt.Errorf("refusing to remove %q", p)
+	}
+	if home, err := os.UserHomeDir(); err == nil && p == filepath.Clean(home) {
+		return fmt.Errorf("refusing to remove the home directory")
+	}
+	if len(strings.Split(strings.Trim(filepath.ToSlash(p), "/"), "/")) < 2 {
+		return fmt.Errorf("refusing to remove a top-level path %q", p)
+	}
+	return os.RemoveAll(p)
+}
+
 // OpenExternally opens a path in the OS default application.
 func (g *GUI) OpenExternally(path string) error {
 	if path == "" {

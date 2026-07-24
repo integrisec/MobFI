@@ -578,22 +578,41 @@ $("#apps-system").addEventListener("change", () => {
 $("#btn-extract").addEventListener("click", async () => {
   const out = $("#extract-out");
   const btn = $("#btn-extract");
-  out.textContent = "Extracting… (starting)";
-  btn.disabled = true;
+  const cancelBtn = $("#btn-extract-cancel");
+  const device = $("#ex-device").value.trim();
+  const bundle = $("#ex-bundle").value.trim();
+  const dest = $("#ex-dest").value.trim();
+  if (!device || !bundle || !dest) {
+    fail("extract requires device, app and destination");
+    return;
+  }
 
-  // Live progress from the backend.
+  // Warn if the destination already contains files.
+  let destWasEmpty = true;
+  try {
+    const st = await gui().DirStatus(dest);
+    destWasEmpty = !st.exists || st.empty;
+    if (st.exists && !st.empty) {
+      const ok = await gui().Confirm(
+        "Destination not empty",
+        `${dest} already contains files. Extraction may overwrite or mix with them. Continue?`
+      );
+      if (!ok) return;
+    }
+  } catch (e) {
+    /* if the pre-check fails, proceed anyway */
+  }
+
+  cancelling.extract = false;
+  btn.disabled = true;
+  cancelBtn.classList.remove("hidden");
+  out.textContent = "Extracting… (starting)";
   const off = window.runtime.EventsOn("extract:progress", (p) => {
-    out.textContent =
-      `Extracting… ${p.files} file(s), ${p.bytes.toLocaleString()} byte(s)\n${p.path}`;
+    out.textContent = `Extracting… ${p.files} file(s), ${p.bytes.toLocaleString()} byte(s)\n${p.path}`;
   });
 
   try {
-    const res = await gui().ExtractApp(
-      $("#ex-device").value.trim(),
-      $("#ex-bundle").value.trim(),
-      $("#ex-dest").value.trim(),
-      $("#ex-scope").value
-    );
+    const res = await gui().ExtractApp(device, bundle, dest, $("#ex-scope").value);
     let text = `Extracted ${res.file_count} file(s), ${res.byte_count.toLocaleString()} byte(s)\nto ${res.root}\n`;
     if (res.skipped && res.skipped.length) {
       text += `\nSkipped ${res.skipped.length} path(s):\n`;
@@ -601,11 +620,33 @@ $("#btn-extract").addEventListener("click", async () => {
     }
     out.textContent = text;
   } catch (e) {
-    out.textContent = "";
-    fail(e);
+    if (cancelling.extract || isCancelError(e)) {
+      out.textContent = "Extraction cancelled.";
+      if (destWasEmpty) {
+        try {
+          const clean = await gui().Confirm(
+            "Clean up?",
+            `Delete the files transferred so far under ${dest}?`
+          );
+          if (clean) {
+            await gui().RemoveDir(dest);
+            out.textContent = "Extraction cancelled; partial files removed.";
+            toast("cleaned up", true);
+          }
+        } catch (err) {
+          fail(err);
+        }
+      } else {
+        out.textContent = "Extraction cancelled. (Destination pre-existed; partial files left in place.)";
+      }
+    } else {
+      out.textContent = "";
+      fail(e);
+    }
   } finally {
     off();
     btn.disabled = false;
+    cancelBtn.classList.add("hidden");
   }
 });
 
@@ -615,14 +656,32 @@ let scanSortField = null;
 let scanSortDir = 1;
 const SCAN_COLUMNS = ["rule_id", "path", "line", "match", null];
 
+// Cancel wiring for long operations. Clicking Cancel sets a flag (so the
+// resulting rejection is treated as a cancel, not an error) and asks the
+// backend to cancel the op's context.
+const cancelling = { scan: false, diff: false, extract: false };
+function bindCancel(btnId, op) {
+  const b = document.getElementById(btnId);
+  if (b) b.addEventListener("click", () => { cancelling[op] = true; gui().CancelOp(op); });
+}
+bindCancel("btn-scan-cancel", "scan");
+bindCancel("btn-diff-cancel", "diff");
+bindCancel("btn-extract-cancel", "extract");
+function isCancelError(e) {
+  return String((e && e.message) || e).toLowerCase().includes("cancel");
+}
+
 function shortPath(p, n = 64) {
   return p && p.length > n ? "…" + p.slice(-(n - 1)) : p || "";
 }
 
 $("#btn-scan").addEventListener("click", async () => {
   const btn = $("#btn-scan");
+  const cancelBtn = $("#btn-scan-cancel");
   const status = $("#scan-status");
+  cancelling.scan = false;
   btn.disabled = true;
+  cancelBtn.classList.remove("hidden");
   status.classList.add("busy");
   status.textContent = "Scanning…";
   const off = window.runtime.EventsOn("scan:progress", (p) => {
@@ -637,11 +696,12 @@ $("#btn-scan").addEventListener("click", async () => {
     status.textContent = `${(currentFindings || []).length} finding(s)`;
   } catch (e) {
     status.classList.remove("busy");
-    status.textContent = "";
-    fail(e);
+    if (cancelling.scan || isCancelError(e)) status.textContent = "cancelled";
+    else { status.textContent = ""; fail(e); }
   } finally {
     off();
     btn.disabled = false;
+    cancelBtn.classList.add("hidden");
   }
 });
 
@@ -753,8 +813,11 @@ function sortRows(rows, field, dir) {
 
 $("#btn-diff").addEventListener("click", async () => {
   const btn = $("#btn-diff");
+  const cancelBtn = $("#btn-diff-cancel");
   const status = $("#diff-status");
+  cancelling.diff = false;
   btn.disabled = true;
+  cancelBtn.classList.remove("hidden");
   status.classList.add("busy");
   status.textContent = "Diffing…";
   const off = window.runtime.EventsOn("diff:progress", (p) => {
@@ -767,11 +830,12 @@ $("#btn-diff").addEventListener("click", async () => {
     status.textContent = `${(currentDiff.changes || []).length} change(s)`;
   } catch (e) {
     status.classList.remove("busy");
-    status.textContent = "";
-    fail(e);
+    if (cancelling.diff || isCancelError(e)) status.textContent = "cancelled";
+    else { status.textContent = ""; fail(e); }
   } finally {
     off();
     btn.disabled = false;
+    cancelBtn.classList.add("hidden");
   }
 });
 

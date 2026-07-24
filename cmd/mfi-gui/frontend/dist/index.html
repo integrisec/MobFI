@@ -83,6 +83,7 @@
           </select>
         </label>
         <button class="primary" id="btn-extract">Extract</button>
+        <button id="btn-extract-cancel" class="hidden">Cancel</button>
       </div>
       <pre class="output" id="extract-out"></pre>
     </section>
@@ -96,6 +97,7 @@
         <label>Known-secrets file <input id="sc-known" placeholder="(optional)" /></label>
         <button class="browse" id="sc-known-browse" type="button">Browse…</button>
         <button class="primary" id="btn-scan">Scan</button>
+        <button id="btn-scan-cancel" class="hidden">Cancel</button>
         <label class="inline"><input type="checkbox" id="sc-wrap" /> Wrap</label>
         <span class="mime" id="scan-status"></span>
       </div>
@@ -115,6 +117,7 @@
         <label>Root B <input id="df-b" placeholder="/path/to/B" /></label>
         <button class="browse" id="df-b-browse" type="button">Browse…</button>
         <button class="primary" id="btn-diff">Diff</button>
+        <button id="btn-diff-cancel" class="hidden">Cancel</button>
         <label class="inline"><input type="checkbox" id="df-wrap" /> Wrap</label>
         <span class="mime" id="diff-status"></span>
       </div>
