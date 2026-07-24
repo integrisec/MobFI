@@ -31,6 +31,10 @@ cmd/mfi-gui/frontend/dist/wailsjs/
 # Node deps, if a build-based frontend is ever added
 node_modules/
 
+# Local-only docs (agent guidance + founding spec) — kept out of the repo
+CLAUDE.md
+intial_claude_prompt.md
+
 # --- Project-sensitive: NEVER commit extracted device data, secrets, or reports ---
 /captures/
 /extractions/
