@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/integrisec/MobFI/internal/backup"
 	"github.com/integrisec/MobFI/internal/dbview"
 	"github.com/integrisec/MobFI/internal/device"
 	"github.com/integrisec/MobFI/internal/diff"
@@ -19,6 +20,11 @@ import (
 	"github.com/integrisec/MobFI/internal/secrets"
 	"github.com/integrisec/MobFI/internal/transport"
 )
+
+// ScopeBackup extracts an iOS app's data from a full device backup (for
+// non-jailbroken, non-dev-signed apps). It sits alongside the AFC house-arrest
+// scopes transport.ScopeContainer / transport.ScopeDocuments.
+const ScopeBackup = "backup"
 
 // App wires the pluggable subsystems together and exposes the high-level
 // operations shared by every frontend.
@@ -108,17 +114,30 @@ func (a *App) ExtractApp(ctx context.Context, d device.Device, bundleID, dst, af
 				Progress:   progress,
 			})
 		}
+		// "backup" scope pulls the app's data out of a full device backup —
+		// the only way to reach a non-dev-signed (App Store) app's private
+		// data on a stock, non-jailbroken device.
+		if afcScope == ScopeBackup {
+			return backup.Options{UDID: d.ID, BundleID: bundleID, Dest: dst, Progress: progress}.Run(ctx)
+		}
 		conn, err := a.AFC.Connect(ctx, d, bundleID, afcScope)
 		if err != nil {
 			return nil, err
 		}
 		defer conn.Close()
-		return extract.Run(ctx, conn, extract.Request{
+		res, err := extract.Run(ctx, conn, extract.Request{
 			BundleID:   bundleID,
 			SourceRoot: "/",
 			Dest:       dst,
 			Progress:   progress,
 		})
+		if err != nil && (afcScope == "" || afcScope == transport.ScopeContainer) {
+			// The full container is only vended for dev-signed apps; App Store
+			// apps deny it. Point the user at the alternatives.
+			return res, fmt.Errorf("%w\n(full container access needs a dev-signed/debug app or a jailbreak; "+
+				"try the 'documents' scope, or 'backup' scope to pull a production app's data)", err)
+		}
+		return res, err
 	default:
 		return nil, fmt.Errorf("extract: unknown platform %q", d.Platform)
 	}

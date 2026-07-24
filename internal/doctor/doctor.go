@@ -59,6 +59,12 @@ var catalog = []Tool{
 		install: liDevice,
 	},
 	{
+		Name:     "idevicebackup2",
+		Purpose:  "iOS backup-based extraction (production apps, non-jailbroken)",
+		Optional: true,
+		install:  liDevice,
+	},
+	{
 		Name:     "iproxy",
 		Purpose:  "iOS Console over USB (SSH port forward)",
 		Optional: true,

@@ -23,8 +23,10 @@ capability is available from both.
 - **App enumeration** — list the installed apps on a device with their bundle
   ids and on-device paths, to pick an extraction target.
 - **App extraction** — mirror an app's on-device file tree to a local folder.
-  Android uses `/data/data/<pkg>` over adb; iOS uses AFC house arrest
-  (`afcclient`) with a selectable scope (`container` or `documents`).
+  Android uses `/data/data/<pkg>` over adb (with `run-as`, then `su` on a
+  rooted device); iOS uses AFC house arrest (`afcclient`) with a selectable
+  scope (`container` / `documents`), or a `backup` scope (`idevicebackup2`)
+  that reconstructs a production app's data from a full device backup.
   Unreadable files are recorded, not silently dropped, and a path-escape guard
   prevents hostile device paths from writing outside the destination.
 - **Secrets scanning** — Trufflehog-style built-in detectors (AWS keys, GitHub
@@ -72,7 +74,8 @@ See [`CLAUDE.md`](./CLAUDE.md) for the architecture rationale and
 - **iOS** — `libimobiledevice` (`idevice_id`, `ideviceinfo`, `afcclient`):
   `brew install libimobiledevice`
   (pair and *trust* the device first; the AFC `container` scope needs a
-  dev-signed app or a jailbroken device — `documents` scope works more broadly)
+  dev-signed app or a jailbroken device, `documents` scope works more broadly,
+  and the `backup` scope — via `idevicebackup2` — reaches production apps)
 
 **To build the desktop GUI (in addition to the above):**
 
@@ -211,9 +214,20 @@ install/update dates, sizes, flags, signing, paths, permissions); on iOS from
 # Android
 mfi extract -device <serial> -app com.example.app -out ./capture
 
-# iOS (choose the AFC scope)
-mfi extract -device <udid> -app com.example.app -out ./capture -scope documents
+# iOS: choose the scope
+#   container - full app sandbox   (needs a dev-signed/debug app or a jailbreak)
+#   documents - the app's Documents (needs UIFileSharingEnabled)
+#   backup    - pull the app's data out of a full device backup
+#               (works for production App Store apps on a stock device)
+mfi extract -device <udid> -app com.example.app -out ./capture -scope backup
 ```
+
+On a non-jailbroken device, iOS only vends a **production** app's private data
+via a device **backup**. `-scope backup` runs `idevicebackup2` (a full,
+unencrypted device backup — disable *Encrypt Local Backup* first), then
+reconstructs just the target app's files from the backup's `Manifest.db` into a
+readable tree. `container`/`documents` still cover dev-signed and file-sharing
+apps without the backup overhead.
 
 On Android, an app's private `/data/data/<pkg>` is read via `run-as <pkg>`,
 which works for **debuggable** apps on a non-rooted device; on a rooted device

@@ -6,6 +6,11 @@ import (
 	"strings"
 )
 
+// SafeJoin joins dest with a slash-separated relative path, sanitizing each
+// component for the host filesystem (see safeLocalPath). Exposed so other
+// extractors (e.g. iOS backup reconstruction) reuse the same rules.
+func SafeJoin(dest, slashRel string) string { return safeLocalPath(dest, slashRel) }
+
 // safeLocalPath joins dest with a device-relative, slash-separated path,
 // sanitizing each component for the host filesystem via safeComponent. This
 // lets filenames that are legal on the device but not on the host (e.g. a

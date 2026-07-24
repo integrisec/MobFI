@@ -163,7 +163,7 @@ func runExtract(ctx context.Context, core *app.App, args []string) error {
 		deviceID = fs.String("device", "", "device ID to extract from")
 		bundle   = fs.String("app", "", "target application package/bundle id")
 		dst      = fs.String("out", "", "local destination directory")
-		scope    = fs.String("scope", "container", "iOS AFC scope: container or documents (iOS only)")
+		scope    = fs.String("scope", "container", "iOS scope: container, documents, or backup (iOS only)")
 	)
 	if err := fs.Parse(args); err != nil {
 		return err
