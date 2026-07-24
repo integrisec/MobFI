@@ -165,6 +165,7 @@ function emptyRow(tbodySel, cols, text) {
 const rootCache = new Map(); // deviceID -> "rooted"/"jailbroken"/...
 let devicePollTimer = null;
 let lastDevicesSig = null;
+let lastDevices = []; // most recent DetectDevices result, for form lookups
 
 function startDevicePolling() {
   refreshDevices();
@@ -185,10 +186,25 @@ async function refreshDevices(force) {
     if (force) fail(e); // stay silent during background polling
     return;
   }
+  lastDevices = devices;
+  updateExtractScope(); // a device's transport may have changed
   const sig = JSON.stringify(devices.map((d) => [d.id, d.platform, d.transport, d.state, d.name]));
   if (!force && sig === lastDevicesSig) return; // nothing changed
   lastDevicesSig = sig;
   renderDevices(devices);
+}
+
+// updateExtractScope shows the iOS AFC-scope selector only for a physical iOS
+// device (the only case where container-vs-documents applies). It is hidden
+// for Android and for iOS Simulators, whose extraction copies the whole data
+// container regardless of scope. An unrecognised device id leaves it visible.
+function updateExtractScope() {
+  const label = $("#ex-scope-label");
+  if (!label) return;
+  const id = $("#ex-device").value.trim();
+  const dev = lastDevices.find((d) => d.id === id);
+  const physicalIOS = !dev || (dev.platform === "ios" && dev.transport !== "simulator");
+  label.classList.toggle("hidden", !physicalIOS);
 }
 
 function applyRootCell(cell, status) {
@@ -224,6 +240,7 @@ function renderDevices(devices) {
     const useBtn = el("button", { textContent: "Use in Extract" });
     useBtn.addEventListener("click", () => {
       $("#ex-device").value = d.id;
+      updateExtractScope();
       $("#ex-bundle").focus();
       showView("extract");
     });
@@ -455,6 +472,7 @@ function renderApps() {
     useBtn.addEventListener("click", () => {
       $("#ex-device").value = currentAppsDevice;
       $("#ex-bundle").value = a.bundle_id;
+      updateExtractScope();
       showView("extract");
     });
     const actions = el("td", { className: "col-actions" }, copyBtn);
@@ -575,6 +593,9 @@ $("#apps-system").addEventListener("change", () => {
 });
 
 // --- Extract ---
+$("#ex-device").addEventListener("input", updateExtractScope);
+updateExtractScope(); // set initial visibility
+
 $("#btn-extract").addEventListener("click", async () => {
   const out = $("#extract-out");
   const btn = $("#btn-extract");
