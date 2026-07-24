@@ -226,8 +226,10 @@ On a non-jailbroken device, iOS only vends a **production** app's private data
 via a device **backup**. `-scope backup` runs `idevicebackup2` (a full,
 unencrypted device backup — disable *Encrypt Local Backup* first), then
 reconstructs just the target app's files from the backup's `Manifest.db` into a
-readable tree. `container`/`documents` still cover dev-signed and file-sharing
-apps without the backup overhead.
+readable tree. iOS backs up the **whole device** even to extract one app, so
+the backup is staged under `-out` and needs **free disk space for the entire
+device** (tens of GB) — point `-out` at a drive with room. `container` /
+`documents` still cover dev-signed and file-sharing apps without that overhead.
 
 On Android, an app's private `/data/data/<pkg>` is read via `run-as <pkg>`,
 which works for **debuggable** apps on a non-rooted device; on a rooted device

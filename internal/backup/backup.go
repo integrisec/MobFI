@@ -53,27 +53,32 @@ func (o Options) Run(ctx context.Context) (*extract.Result, error) {
 		return nil, err
 	}
 
-	rawParent, err := os.MkdirTemp("", "mobfi-backup-")
-	if err != nil {
+	// Stage the raw backup under the destination (a user-chosen drive) rather
+	// than the system temp dir, so a large full-device backup can land where
+	// there is room. Removed after reconstruction unless KeepRaw.
+	rawParent := filepath.Join(o.Dest, "_backup-staging")
+	if err := os.MkdirAll(rawParent, 0o755); err != nil {
 		return nil, err
 	}
-	if o.KeepRaw {
-		rawParent = filepath.Join(o.Dest, "_backup")
-		_ = os.MkdirAll(rawParent, 0o755)
-	} else {
+	if !o.KeepRaw {
 		defer os.RemoveAll(rawParent)
 	}
 
 	// The backup itself is a black box with no per-file progress; tell the
 	// user so a multi-minute, multi-GB backup does not look like a freeze.
 	if o.Progress != nil {
-		o.Progress(extract.Progress{Path: "backing up the device (whole-device backup; this can take several minutes)..."})
+		o.Progress(extract.Progress{Path: "backing up the device (a full device backup -- needs free space for the WHOLE device, and can take several minutes)..."})
 	}
 
 	// idevicebackup2 -u <UDID> backup <parent>  ->  <parent>/<UDID>/
 	cmd := sysproc.CommandContext(ctx, o.bin(), "-u", o.UDID, "backup", rawParent)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("idevicebackup2 backup failed: %w: %s", err, firstLine(out))
+		low := strings.ToLower(string(out))
+		if strings.Contains(low, "mberrordomain/105") || strings.Contains(low, "insufficient free disk space") {
+			return nil, fmt.Errorf("backup needs room for a full device backup (tens of GB) and the destination drive does not have enough free space. " +
+				"Free space, or set the destination to a drive with room for the whole device. iOS backs up the entire device even to extract one app")
+		}
+		return nil, fmt.Errorf("idevicebackup2 backup failed: %w: %s", err, errLine(out))
 	}
 
 	backupDir := filepath.Join(rawParent, o.UDID)
@@ -187,11 +192,23 @@ func copyFile(src, dst string) (int64, error) {
 	return n, err
 }
 
-func firstLine(b []byte) string {
+// errLine picks the most informative line from a tool's output: the last line
+// mentioning an error, else the last non-empty line (the summary/failure is
+// usually last, not first).
+func errLine(b []byte) string {
+	var last, errored string
 	for _, ln := range strings.Split(string(b), "\n") {
-		if ln = strings.TrimSpace(ln); ln != "" {
-			return ln
+		ln = strings.TrimSpace(ln)
+		if ln == "" {
+			continue
+		}
+		last = ln
+		if l := strings.ToLower(ln); strings.Contains(l, "error") || strings.Contains(l, "failed") {
+			errored = ln
 		}
 	}
-	return ""
+	if errored != "" {
+		return errored
+	}
+	return last
 }
