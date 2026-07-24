@@ -69,6 +69,43 @@ func (g *GUI) RemoveDir(path string) error {
 	return os.RemoveAll(p)
 }
 
+// FileMeta is filesystem metadata for a file, shown in the Render details
+// panel. Times are pre-formatted in the host's local zone; Created is empty
+// on platforms that do not expose a birth time.
+type FileMeta struct {
+	Name     string `json:"name"`
+	Path     string `json:"path"`
+	Size     int64  `json:"size"`
+	IsDir    bool   `json:"is_dir"`
+	Mode     string `json:"mode"`     // e.g. -rw-r--r--
+	Ext      string `json:"ext"`      // lowercased extension including the dot
+	Modified string `json:"modified"` // local time, "2006-01-02 15:04:05"
+	Created  string `json:"created"`  // birth time if the OS provides it
+}
+
+// FileStat returns filesystem metadata for path (used by the Render details
+// panel alongside the rendered content type).
+func (g *GUI) FileStat(path string) (FileMeta, error) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return FileMeta{}, err
+	}
+	const layout = "2006-01-02 15:04:05"
+	m := FileMeta{
+		Name:     fi.Name(),
+		Path:     path,
+		Size:     fi.Size(),
+		IsDir:    fi.IsDir(),
+		Mode:     fi.Mode().String(),
+		Ext:      strings.ToLower(filepath.Ext(path)),
+		Modified: fi.ModTime().Local().Format(layout),
+	}
+	if bt, ok := birthTime(fi); ok {
+		m.Created = bt.Local().Format(layout)
+	}
+	return m, nil
+}
+
 // OpenExternally opens a path in the OS default application.
 func (g *GUI) OpenExternally(path string) error {
 	if path == "" {

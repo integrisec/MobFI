@@ -232,6 +232,7 @@ dl.kv dd {
   word-break: break-all;
 }
 .details h4 { margin: 16px 0 8px; font-size: 13px; color: var(--muted); }
+.details h4:first-child { margin-top: 0; }
 ul.perms {
   margin: 0;
   padding-left: 18px;

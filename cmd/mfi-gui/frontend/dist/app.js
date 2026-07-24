@@ -167,6 +167,7 @@ let devicePollTimer = null;
 let lastDevicesSig = null;
 let lastDevices = []; // most recent DetectDevices result, for form lookups
 let pendingConsoleDeviceID = null; // device to auto-select next Console populate
+let pendingConsoleConnect = false; // auto-connect after that selection
 
 function startDevicePolling() {
   refreshDevices();
@@ -248,6 +249,7 @@ function renderDevices(devices) {
     const consoleBtn = el("button", { textContent: "Console" });
     consoleBtn.addEventListener("click", () => {
       pendingConsoleDeviceID = d.id;
+      pendingConsoleConnect = true; // auto-connect once selected
       showView("console");
     });
     const actions = el("td", { className: "col-actions" }, appsBtn);
@@ -1116,6 +1118,49 @@ function displayRender(res) {
     default: // text | hex | error
       pane.append(el("pre", { className: "render-text", textContent: res.text }));
   }
+
+  showRenderDetails(res);
+}
+
+function clearRenderDetails() {
+  const panel = $("#render-details");
+  panel.classList.add("hidden");
+  panel.replaceChildren();
+}
+
+// showRenderDetails fills the panel under the render window with the selected
+// file's metadata (path, size, type, dates, permissions), mirroring the Apps
+// details panel. The rendered content type (res.mime) is combined with the
+// filesystem metadata from FileStat.
+async function showRenderDetails(res) {
+  const path = currentRenderPath;
+  if (!path) { clearRenderDetails(); return; }
+  let meta;
+  try {
+    meta = await gui().FileStat(path);
+  } catch (e) {
+    clearRenderDetails();
+    return;
+  }
+  if (currentRenderPath !== path) return; // selection changed while awaiting
+
+  const typeLabel =
+    res.mime || (meta.ext ? meta.ext.replace(".", "").toUpperCase() + " file" : "file");
+  const dl = el("dl", { className: "kv" });
+  const add = (k, v) => {
+    if (v) dl.append(el("dt", { textContent: k }), el("dd", { textContent: v }));
+  };
+  add("Name", meta.name);
+  add("Full path", meta.path);
+  add("Type", typeLabel);
+  add("Size", `${humanSize(meta.size) || "0 B"} (${meta.size.toLocaleString()} bytes)`);
+  add("Modified", meta.modified);
+  add("Created", meta.created);
+  add("Permissions", meta.mode);
+
+  const panel = $("#render-details");
+  panel.replaceChildren(el("h4", { textContent: "File details" }), dl);
+  panel.classList.remove("hidden");
 }
 
 async function renderInPane(path) {
@@ -1127,6 +1172,7 @@ async function renderInPane(path) {
     displayRender(await gui().RenderPath(path, renderMode(), $("#rn-pretty").checked));
   } catch (e) {
     pane.replaceChildren();
+    clearRenderDetails();
     fail(e);
   }
 }
@@ -1168,6 +1214,7 @@ function treeNode(entry, depth) {
 
 async function openRenderFolder(root) {
   currentRenderPath = null;
+  clearRenderDetails();
   $("#btn-render-external").disabled = true;
   $("#render-tree").classList.remove("hidden");
   $("#render-hsplit").classList.remove("hidden");
@@ -1400,12 +1447,20 @@ async function populateConsoleDevices() {
     if (prev && sel.querySelector(`option[value="${prev}"]`)) sel.value = prev;
   }
   // Honour a device chosen via the Devices tab's "Console" button.
+  let autoConnect = false;
   if (pendingConsoleDeviceID) {
     const i = consoleDevices.findIndex((d) => d.id === pendingConsoleDeviceID);
-    if (i >= 0) sel.value = String(i);
+    if (i >= 0) {
+      sel.value = String(i);
+      autoConnect = pendingConsoleConnect;
+    }
     pendingConsoleDeviceID = null;
+    pendingConsoleConnect = false;
   }
   updateConsoleSsh();
+  // Auto-connect from the Devices tab; on failure the device stays selected
+  // (startConsole reports the reason) so the user can just press Connect.
+  if (autoConnect) startConsole({ quiet: true });
 }
 
 function selectedConsoleDevice() {
@@ -1436,7 +1491,7 @@ async function stopConsole() {
   setConsoleConnected(false);
 }
 
-async function startConsole() {
+async function startConsole(opts = {}) {
   const d = selectedConsoleDevice();
   if (!d) { toast("select a device"); return; }
   await stopConsole();
@@ -1451,7 +1506,12 @@ async function startConsole() {
     info = await gui().ConsoleStart(d.id, d.platform,
       $("#con-user").value.trim(), $("#con-host").value.trim(), $("#con-port").value.trim(), logPath);
   } catch (e) {
-    fail(e);
+    if (opts.quiet) {
+      setConsoleStatus("not connected");
+      toast("couldn't connect — device selected; press Connect to retry");
+    } else {
+      fail(e);
+    }
     return;
   }
   const id = info.id;
@@ -1484,7 +1544,7 @@ async function startConsole() {
   setConsoleConnected(true);
 }
 
-$("#con-connect").addEventListener("click", startConsole);
+$("#con-connect").addEventListener("click", () => startConsole());
 $("#con-disconnect").addEventListener("click", stopConsole);
 window.addEventListener("resize", () => { if (conFit) conFit.fit(); });
 
