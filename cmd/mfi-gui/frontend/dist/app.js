@@ -469,10 +469,12 @@ function applyAppMeta(row, meta) {
   if (meta.name) {
     const nameEl = row.querySelector(".app-name");
     if (nameEl) nameEl.textContent = meta.name;
+    if (row._app) row._app.name = meta.name; // keep data in sync so sorting matches the display
   }
   if (meta.version) {
     const verEl = row.querySelector(".app-version");
     if (verEl) verEl.textContent = meta.version;
+    if (row._app) row._app.version = meta.version;
   }
   if (meta.icon) {
     const iconEl = row.querySelector(".app-icon");
@@ -496,12 +498,24 @@ async function loadApps(deviceID) {
   renderApps();
 }
 
+// appSortValue returns the value to sort an app by for column f, mirroring
+// what the row actually displays. Name and Version are resolved lazily from
+// the APK (Android's pm list gives neither), so prefer the resolved metadata
+// (cached) and fall back to the same humanized name the row shows; otherwise
+// the sort would compare empty strings and appear to do nothing.
+function appSortValue(a, f) {
+  const meta = appMetaCache.get(a.bundle_id);
+  if (f === "name") return (meta && meta.name) || a.name || humanize(a.bundle_id);
+  if (f === "version") return (meta && meta.version) || a.version || "";
+  return a[f] ?? "";
+}
+
 function sortApps(rows) {
   if (!appSortField) return rows;
   const f = appSortField;
   return [...rows].sort((a, b) => {
-    const av = (a[f] ?? "").toString();
-    const bv = (b[f] ?? "").toString();
+    const av = appSortValue(a, f).toString();
+    const bv = appSortValue(b, f).toString();
     const an = parseFloat(av);
     const bn = parseFloat(bv);
     const numeric =
