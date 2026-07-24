@@ -7,6 +7,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/integrisec/MobFI/internal/dbview"
 	"github.com/integrisec/MobFI/internal/device"
@@ -148,18 +149,37 @@ func tarExtract(ctx context.Context, ts transport.TarStreamer, root string, req 
 func (a *App) androidConn(ctx context.Context, d device.Device, pkg string) (transport.Conn, error) {
 	dataDir := "/data/data/" + pkg
 	if runas, err := a.ADB.ConnectAs(ctx, d, pkg); err == nil {
-		if _, probeErr := runas.Exec(ctx, "ls", dataDir); probeErr == nil {
+		if canReadDir(ctx, runas, dataDir) {
 			return runas, nil
 		}
 		runas.Close()
 	}
 	if root, err := a.ADB.ConnectAsRoot(ctx, d); err == nil {
-		if _, probeErr := root.Exec(ctx, "ls", dataDir); probeErr == nil {
+		if canReadDir(ctx, root, dataDir) {
 			return root, nil
 		}
 		root.Close()
 	}
-	return a.ADB.Connect(ctx, d)
+	if plain, err := a.ADB.Connect(ctx, d); err == nil {
+		if canReadDir(ctx, plain, dataDir) {
+			return plain, nil
+		}
+		plain.Close()
+	}
+	return nil, fmt.Errorf("cannot read %s: check the package name is exactly right and the app is installed; "+
+		"a non-debuggable app needs root (approve the su/superuser prompt on the device)", dataDir)
+}
+
+// canReadDir reports whether conn can actually read dataDir. It checks the
+// command output rather than only the exit status, because adb does not always
+// propagate a remote command's exit code -- so an inaccessible or non-existent
+// directory can otherwise look like success and yield a silent empty extract.
+func canReadDir(ctx context.Context, conn transport.Conn, dataDir string) bool {
+	out, err := conn.Exec(ctx, "ls", "-d", dataDir)
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(out)) == dataDir
 }
 
 // ScanSecrets walks root and reports any secret matches. progress, if

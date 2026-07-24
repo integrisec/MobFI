@@ -73,7 +73,7 @@ func Run(ctx context.Context, conn transport.Conn, req Request) (*Result, error)
 			return nil
 		}
 
-		local := filepath.Join(req.Dest, filepath.FromSlash(relDevicePath(req.SourceRoot, p)))
+		local := safeLocalPath(req.Dest, relDevicePath(req.SourceRoot, p))
 		// Defend against a device path that would escape Dest (untrusted
 		// input — extracted device data must not write outside Dest).
 		if !within(req.Dest, local) {
@@ -93,7 +93,9 @@ func Run(ctx context.Context, conn transport.Conn, req Request) (*Result, error)
 		n, werr := writeLocal(local, rc)
 		_ = rc.Close()
 		if werr != nil {
-			return fmt.Errorf("write %s: %w", local, werr)
+			// One unwritable file must not abort the whole extraction.
+			res.Skipped = append(res.Skipped, SkippedFile{Path: p, Reason: werr.Error()})
+			return nil
 		}
 		res.FileCount++
 		res.ByteCount += n
@@ -139,7 +141,7 @@ func RunTar(ctx context.Context, r io.Reader, req Request) (*Result, error) {
 		if name == "." || name == ".." || name == "" {
 			continue
 		}
-		local := filepath.Join(req.Dest, filepath.FromSlash(name))
+		local := safeLocalPath(req.Dest, name)
 		if !within(req.Dest, local) {
 			res.Skipped = append(res.Skipped, SkippedFile{Path: hdr.Name, Reason: "path escapes destination"})
 			continue
@@ -153,7 +155,9 @@ func RunTar(ctx context.Context, r io.Reader, req Request) (*Result, error) {
 		case tar.TypeReg:
 			n, err := writeLocal(local, tr)
 			if err != nil {
-				return res, fmt.Errorf("write %s: %w", local, err)
+				// One unwritable file must not abort the whole extraction.
+				res.Skipped = append(res.Skipped, SkippedFile{Path: hdr.Name, Reason: err.Error()})
+				continue
 			}
 			res.FileCount++
 			res.ByteCount += n

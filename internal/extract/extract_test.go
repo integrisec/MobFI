@@ -217,3 +217,24 @@ func keys(m map[string]string) []string {
 	sort.Strings(ks)
 	return ks
 }
+
+func TestWindowsSafeName(t *testing.T) {
+	cases := map[string]string{
+		"frc_1:248:android:abc_firebase_defaults.json": "frc_1%3A248%3Aandroid%3Aabc_firebase_defaults.json",
+		"normal.json":  "normal.json",
+		"a<b>c|d?e*f":  "a%3Cb%3Ec%7Cd%3Fe%2Af",
+		"trailing.":    "trailing",
+		"trailing ":    "trailing",
+		"CON":          "_CON",
+		"NUL.txt":      "_NUL.txt",
+		"com1":         "_com1",
+		"not_reserved": "not_reserved",
+		".":            ".",
+		"..":           "..",
+	}
+	for in, want := range cases {
+		if got := windowsSafeName(in); got != want {
+			t.Errorf("windowsSafeName(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
