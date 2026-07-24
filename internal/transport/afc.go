@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -108,24 +109,26 @@ func (c *afcConn) Exec(context.Context, string, ...string) ([]byte, error) {
 }
 
 // Open downloads a file from the container to a temp file and streams it;
-// afcclient writes to a local path rather than stdout. The temp file is
-// removed on Close.
+// afcclient writes to a local path rather than stdout. The download target
+// must NOT pre-exist: afcclient's `get` leaves an already-present local file
+// untouched (0 bytes), so we download into a fresh temp directory under a
+// name that does not exist yet. The directory is removed on Close.
 func (c *afcConn) Open(ctx context.Context, path string) (io.ReadCloser, error) {
-	tmp, err := os.CreateTemp("", "mobfi-afc-*")
+	dir, err := os.MkdirTemp("", "mobfi-afc-")
 	if err != nil {
 		return nil, err
 	}
-	tmp.Close()
-	if _, err := c.afc(ctx, "get", path, tmp.Name()); err != nil {
-		os.Remove(tmp.Name())
+	local := filepath.Join(dir, "download")
+	if _, err := c.afc(ctx, "get", path, local); err != nil {
+		os.RemoveAll(dir)
 		return nil, err
 	}
-	f, err := os.Open(tmp.Name())
+	f, err := os.Open(local)
 	if err != nil {
-		os.Remove(tmp.Name())
+		os.RemoveAll(dir)
 		return nil, err
 	}
-	return &tmpFileReader{f: f, path: tmp.Name()}, nil
+	return &tmpFileReader{f: f, dir: dir}, nil
 }
 
 // Walk traverses the container depth-first. Failure to list the root is
@@ -222,17 +225,18 @@ func (c *afcConn) isDir(ctx context.Context, path string) (bool, error) {
 	return bytes.Contains(out, []byte("S_IFDIR")), nil
 }
 
-// tmpFileReader reads a downloaded temp file and deletes it on Close.
+// tmpFileReader reads a downloaded temp file and removes its temp directory
+// on Close.
 type tmpFileReader struct {
-	f    *os.File
-	path string
+	f   *os.File
+	dir string
 }
 
 func (r *tmpFileReader) Read(p []byte) (int, error) { return r.f.Read(p) }
 
 func (r *tmpFileReader) Close() error {
 	err := r.f.Close()
-	os.Remove(r.path)
+	os.RemoveAll(r.dir)
 	return err
 }
 
