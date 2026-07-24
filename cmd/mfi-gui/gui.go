@@ -30,29 +30,34 @@ type GUI struct {
 func NewGUI() *GUI { return &GUI{app: app.New()} }
 
 // startup receives the Wails runtime context; the core uses it so work is
-// cancelled when the window closes. It also clamps a restored window size to
-// the current screen so a size saved on a larger display never opens
-// off-screen.
+// cancelled when the window closes. It also restores the saved window size and
+// position, clamped/validated against the current screen so geometry saved on
+// a larger or now-disconnected display never opens off-screen.
 func (g *GUI) startup(ctx context.Context) {
 	g.ctx = ctx
-	clampWindowToScreen(ctx)
+	ws, ok := loadWindowState()
+	applyWindowGeometry(ctx, ws, ok)
 }
 
-// shutdown persists the final window size as the app closes.
-func (g *GUI) shutdown(ctx context.Context) {
-	w, h := wailsruntime.WindowGetSize(ctx)
-	saveWindowState(windowState{Width: w, Height: h})
-}
+// shutdown persists the final window geometry as the app closes.
+func (g *GUI) shutdown(ctx context.Context) { saveGeometry(ctx) }
 
-// PersistWindowSize records the current window size. The frontend calls this
-// (debounced) on resize so geometry survives even if the size can't be read
-// during teardown.
-func (g *GUI) PersistWindowSize() {
+// PersistWindow records the current window geometry. The frontend calls this
+// (debounced) on resize so geometry survives even if it can't be read during
+// teardown.
+func (g *GUI) PersistWindow() {
 	if g.ctx == nil {
 		return
 	}
-	w, h := wailsruntime.WindowGetSize(g.ctx)
-	saveWindowState(windowState{Width: w, Height: h})
+	saveGeometry(g.ctx)
+}
+
+// saveGeometry snapshots the window's current size and (screen-relative)
+// position.
+func saveGeometry(ctx context.Context) {
+	w, h := wailsruntime.WindowGetSize(ctx)
+	x, y := wailsruntime.WindowGetPosition(ctx)
+	saveWindowState(windowState{Width: w, Height: h, X: x, Y: y, Placed: true})
 }
 
 // DetectDevices lists reachable Android/iOS devices.

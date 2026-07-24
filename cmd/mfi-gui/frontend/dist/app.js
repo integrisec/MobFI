@@ -1551,13 +1551,14 @@ $("#con-connect").addEventListener("click", () => startConsole());
 $("#con-disconnect").addEventListener("click", stopConsole);
 window.addEventListener("resize", () => { if (conFit) conFit.fit(); });
 
-// Persist the window size shortly after a resize settles, so it's restored on
-// next launch. The Go side reads the authoritative size and saves it.
-let persistSizeTimer = null;
+// Persist window geometry shortly after a resize settles, so it's restored on
+// next launch. The Go side reads the authoritative size/position and saves it.
+// (Pure moves don't fire a resize event; those are captured on shutdown.)
+let persistGeomTimer = null;
 window.addEventListener("resize", () => {
-  clearTimeout(persistSizeTimer);
-  persistSizeTimer = setTimeout(() => {
-    try { gui().PersistWindowSize(); } catch (e) { /* bindings not ready */ }
+  clearTimeout(persistGeomTimer);
+  persistGeomTimer = setTimeout(() => {
+    try { gui().PersistWindow(); } catch (e) { /* bindings not ready */ }
   }, 500);
 });
 
