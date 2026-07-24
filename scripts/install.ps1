@@ -3,11 +3,12 @@
   MobFI installer for Windows.
 
 .DESCRIPTION
-  Resolves everything a newcomer needs - the Go toolchain, the Wails CLI, the
-  WebView2 runtime, and the runtime tools MobFI shells out to (Android
-  platform-tools / adb; libimobiledevice for iOS where available) - then builds
-  the CLI and GUI. Uses winget; falls back to scoop for iOS tools. Safe to
-  re-run: anything already present is left alone.
+  Resolves everything a newcomer needs - the Go toolchain, a C compiler (Wails
+  needs cgo on Windows), the Wails CLI, the WebView2 runtime, and the runtime
+  tools MobFI shells out to (Android platform-tools / adb; libimobiledevice for
+  iOS) - then builds the CLI and GUI and creates Start Menu / Desktop shortcuts
+  for the GUI. Uses winget, and bootstraps scoop for the tools winget lacks
+  (gcc, libimobiledevice). Safe to re-run: anything already present is skipped.
 
   The GUI Console tab uses the Windows ConPTY backend, so it works on
   Windows 10 1809+.
@@ -15,6 +16,7 @@
 .PARAMETER CliOnly        Build the CLI only (skip Wails/GUI).
 .PARAMETER GuiOnly        Build the GUI only (skip the standalone CLI).
 .PARAMETER NoRuntimeTools Skip adb/libimobiledevice (toolchain + build only).
+.PARAMETER NoShortcuts    Do not create Start Menu / Desktop shortcuts.
 .PARAMETER Launch         After building, run 'cli' or 'gui'.
 
 .EXAMPLE
@@ -27,12 +29,14 @@ param(
   [switch]$CliOnly,
   [switch]$GuiOnly,
   [switch]$NoRuntimeTools,
+  [switch]$NoShortcuts,
   [ValidateSet('cli', 'gui')][string]$Launch
 )
 
 $ErrorActionPreference = 'Stop'
 $GoMin = [version]'1.23'
 $Root = Split-Path -Parent $PSScriptRoot   # repo root (scripts\..)
+$script:GuiExe = $null                      # set by Build-Gui when it succeeds
 
 function Step($m) { Write-Host "==> $m" -ForegroundColor Cyan }
 function Ok($m)   { Write-Host "  [ok] $m"   -ForegroundColor Green }
@@ -57,6 +61,47 @@ function Winget-Install($id) {
   & winget install --id $id -e --accept-source-agreements --accept-package-agreements --silent 2>&1 | Out-Null
   if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq -1978335189) { return $true }  # already installed
   Warn "winget could not install '$id' (exit $LASTEXITCODE)"; return $false
+}
+
+# Install scoop (a per-user package manager) for the tools winget lacks. Scoop
+# refuses to install from an elevated shell, so bail out with guidance there.
+function Ensure-Scoop {
+  Update-Path
+  if (Have scoop) { return $true }
+  $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+  if ($admin) {
+    Warn "scoop will not install from an Administrator shell."
+    Warn "Re-run in a normal (non-admin) PowerShell, or install scoop by hand: https://scoop.sh"
+    return $false
+  }
+  Step "Bootstrapping scoop (per-user package manager)"
+  try {
+    $ep = Get-ExecutionPolicy -Scope CurrentUser
+    if ($ep -eq 'Restricted' -or $ep -eq 'AllSigned' -or $ep -eq 'Undefined') {
+      Set-ExecutionPolicy -Scope CurrentUser RemoteSigned -Force
+    }
+    Invoke-Expression (Invoke-RestMethod -Uri 'https://get.scoop.sh')
+    Update-Path
+  } catch {
+    Warn "scoop bootstrap failed: $($_.Exception.Message)"
+    return $false
+  }
+  if (Have scoop) { Ok "scoop installed"; return $true }
+  Warn "scoop still not on PATH; open a new terminal or see https://scoop.sh"
+  return $false
+}
+
+# Wails links the WebView2 loader via cgo on Windows, so a C compiler is
+# required to build the GUI (the CLI is cgo-free and needs none).
+function Ensure-CCompiler {
+  Update-Path
+  if ((Have gcc) -or (Have clang) -or (Have cc)) { Ok "C compiler present"; return $true }
+  Step "Installing a C compiler (Wails needs cgo/gcc on Windows)"
+  if (Ensure-Scoop) { & scoop install gcc 2>&1 | Out-Null; Update-Path }
+  if (Have gcc) { Ok "gcc"; return $true }
+  Warn "No C compiler found; the GUI build needs one (e.g. 'scoop install gcc')."
+  Warn "Run 'wails doctor' to check your GUI toolchain."
+  return $false
 }
 
 function Ensure-Go {
@@ -85,6 +130,7 @@ function Ensure-GuiToolchain {
     Update-Path
     if (Have wails) { Ok "Wails installed" } else { Warn "wails not on PATH; add %USERPROFILE%\go\bin to PATH" }
   }
+  Ensure-CCompiler | Out-Null
 }
 
 function Ensure-RuntimeTools {
@@ -93,19 +139,26 @@ function Ensure-RuntimeTools {
 
   if (Have adb) { Ok "adb" } else { if (Winget-Install 'Google.PlatformTools') { Update-Path; Ok "adb (platform-tools)" } }
 
-  # libimobiledevice on Windows is best-effort: try the scoop port if present.
+  # iOS: libimobiledevice is not on winget, so bootstrap scoop and install it.
   if (Have idevice_id) {
     Ok "libimobiledevice"
-  } elseif (Have scoop) {
-    Step "Installing libimobiledevice via scoop"
-    & scoop install libimobiledevice 2>&1 | Out-Null
-    if (Have idevice_id) { Ok "libimobiledevice" } else { Warn "scoop could not provide libimobiledevice" }
   } else {
-    Warn "iOS tools (libimobiledevice) are not auto-installable via winget."
-    Warn "For iOS on Windows: install Apple Devices/iTunes (USB driver), then libimobiledevice"
-    Warn "  e.g. install scoop (https://scoop.sh) and run: scoop install libimobiledevice"
-    Warn "Android (adb) works without this."
+    if (Ensure-Scoop) {
+      Step "Installing libimobiledevice via scoop"
+      & scoop install libimobiledevice 2>&1 | Out-Null
+      Update-Path
+    }
+    if (Have idevice_id) { Ok "libimobiledevice" } else { Warn "libimobiledevice still unavailable (see README for a prebuilt bundle)" }
   }
+
+  # MobFI also shells out to these; warn if the scoop port omitted either.
+  foreach ($t in @('ideviceinstaller', 'afcclient')) {
+    if (Have $t) { Ok $t } else { Warn "$t not found - some iOS features need it (see README for a prebuilt bundle)" }
+  }
+
+  # Even with the tools installed, iOS on Windows needs Apple's USB stack.
+  Warn "iOS on Windows also needs Apple's USB driver + Apple Mobile Device Service:"
+  Warn "  install iTunes from apple.com, plug in the device, then tap 'Trust'."
 }
 
 function Build-Cli {
@@ -119,9 +172,43 @@ function Build-Gui {
   Step "Building the GUI (Wails)"
   Update-Path
   if (-not (Have wails)) { Warn "wails unavailable; skipping GUI build"; return }
+  $binDir = Join-Path $Root 'cmd\mfi-gui\build\bin'
   Push-Location (Join-Path $Root 'cmd\mfi-gui')
-  try { & wails build; Ok "cmd\mfi-gui\build\bin" }
-  finally { Pop-Location }
+  try { & wails build } finally { Pop-Location }
+  $exe = Get-ChildItem -Path $binDir -Filter *.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($exe) {
+    $script:GuiExe = $exe.FullName
+    Ok "GUI: $($exe.FullName)"
+  } else {
+    Warn "GUI build produced no .exe in $binDir."
+    Warn "This usually means a missing C compiler - run 'wails doctor', then 'scoop install gcc'."
+  }
+}
+
+# Create per-user Start Menu and Desktop shortcuts to the built GUI (no admin
+# rights needed; both live under the user's profile).
+function New-Shortcuts {
+  if (-not $script:GuiExe) { return }
+  if ($NoShortcuts) { Warn "skipping shortcuts (-NoShortcuts)"; return }
+  Step "Creating shortcuts"
+  $targets = @(
+    (Join-Path ([Environment]::GetFolderPath('Programs')) 'MobFI.lnk'),
+    (Join-Path ([Environment]::GetFolderPath('Desktop'))  'MobFI.lnk')
+  )
+  $ws = New-Object -ComObject WScript.Shell
+  foreach ($lnkPath in $targets) {
+    try {
+      $lnk = $ws.CreateShortcut($lnkPath)
+      $lnk.TargetPath = $script:GuiExe
+      $lnk.WorkingDirectory = (Split-Path $script:GuiExe)
+      $lnk.IconLocation = "$($script:GuiExe),0"
+      $lnk.Description = 'MobFI - Mobile Filesystem Inspector'
+      $lnk.Save()
+      Ok $lnkPath
+    } catch {
+      Warn "could not create $lnkPath : $($_.Exception.Message)"
+    }
+  }
 }
 
 # --- main --------------------------------------------------------------------
@@ -133,12 +220,15 @@ Ensure-Go
 if ($buildGui) { Ensure-GuiToolchain }
 Ensure-RuntimeTools
 if ($buildCli) { Build-Cli }
-if ($buildGui) { Build-Gui }
+if ($buildGui) { Build-Gui; New-Shortcuts }
 
 Write-Host ""
 Step "Done"
 if ($buildCli) { Write-Host "  CLI:  $Root\bin\mfi.exe   (try: .\bin\mfi.exe detect)" }
-if ($buildGui) { Write-Host "  GUI:  $Root\cmd\mfi-gui\build\bin" }
+if ($buildGui) {
+  if ($script:GuiExe) { Write-Host "  GUI:  $script:GuiExe   (also on the Start Menu / Desktop)" }
+  else { Write-Host "  GUI:  build produced no .exe - run 'wails doctor', then re-run this script" }
+}
 Write-Host "  If go / wails are not found in new terminals, add these to PATH:"
 Write-Host "    C:\Program Files\Go\bin  and  %USERPROFILE%\go\bin"
 
@@ -146,7 +236,11 @@ switch ($Launch) {
   'cli' { Step "Launching the CLI"; & "$Root\bin\mfi.exe" }
   'gui' {
     Step "Launching the GUI"
-    $exe = Get-ChildItem -Path (Join-Path $Root 'cmd\mfi-gui\build\bin') -Filter *.exe -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($exe) { & $exe.FullName } else { Push-Location (Join-Path $Root 'cmd\mfi-gui'); try { & wails dev } finally { Pop-Location } }
+    $exe = $script:GuiExe
+    if (-not $exe) {
+      $found = Get-ChildItem -Path (Join-Path $Root 'cmd\mfi-gui\build\bin') -Filter *.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+      if ($found) { $exe = $found.FullName }
+    }
+    if ($exe) { & $exe } else { Push-Location (Join-Path $Root 'cmd\mfi-gui'); try { & wails dev } finally { Pop-Location } }
   }
 }

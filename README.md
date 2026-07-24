@@ -108,13 +108,20 @@ powershell -ExecutionPolicy Bypass -File scripts\install.ps1
 Useful flags (both scripts): `--cli-only` / `-CliOnly`, `--gui-only` /
 `-GuiOnly`, `--no-runtime-tools` / `-NoRuntimeTools`, and
 `--launch cli|gui` / `-Launch cli|gui` to run the app when it's built.
+Windows-only: `-NoShortcuts` skips creating the Start Menu / Desktop shortcuts.
 
 - **macOS** uses Homebrew (installed if missing).
 - **Linux** auto-detects `apt`/`dnf`/`pacman`/`zypper` and installs the GTK3 +
   WebKit2GTK build packages; Go is fetched from go.dev if the system's is older
   than 1.23.
-- **Windows** uses `winget` (Go, platform-tools/`adb`, WebView2). iOS tooling
-  (`libimobiledevice`) is best-effort via `scoop`; Android works without it.
+- **Windows** uses `winget` (Go, platform-tools/`adb`, WebView2) and bootstraps
+  `scoop` for what winget lacks: **gcc** (Wails links WebView2 via cgo, so the
+  GUI build needs a C compiler — the CLI is cgo-free and does not) and
+  **`libimobiledevice`** for iOS. It then builds both binaries and adds Start
+  Menu / Desktop shortcuts to the GUI. iOS additionally needs Apple's USB driver
+  + Apple Mobile Device Service (install iTunes from apple.com, then *trust* the
+  device); Android works without any of the iOS pieces. `scoop` bootstrapping
+  requires a non-elevated PowerShell.
 
 ### Manual build
 
