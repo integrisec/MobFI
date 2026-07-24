@@ -166,6 +166,7 @@ const rootCache = new Map(); // deviceID -> "rooted"/"jailbroken"/...
 let devicePollTimer = null;
 let lastDevicesSig = null;
 let lastDevices = []; // most recent DetectDevices result, for form lookups
+let pendingConsoleDeviceID = null; // device to auto-select next Console populate
 
 function startDevicePolling() {
   refreshDevices();
@@ -244,8 +245,13 @@ function renderDevices(devices) {
       $("#ex-bundle").focus();
       showView("extract");
     });
+    const consoleBtn = el("button", { textContent: "Console" });
+    consoleBtn.addEventListener("click", () => {
+      pendingConsoleDeviceID = d.id;
+      showView("console");
+    });
     const actions = el("td", { className: "col-actions" }, appsBtn);
-    actions.append(" ", useBtn);
+    actions.append(" ", useBtn, " ", consoleBtn);
 
     const rootCell = el("td", {});
     applyRootCell(rootCell, rootCache.get(d.id));
@@ -1392,6 +1398,12 @@ async function populateConsoleDevices() {
       sel.append(el("option", { value: String(i), textContent: `${d.name || d.id} — ${d.platform}` }))
     );
     if (prev && sel.querySelector(`option[value="${prev}"]`)) sel.value = prev;
+  }
+  // Honour a device chosen via the Devices tab's "Console" button.
+  if (pendingConsoleDeviceID) {
+    const i = consoleDevices.findIndex((d) => d.id === pendingConsoleDeviceID);
+    if (i >= 0) sel.value = String(i);
+    pendingConsoleDeviceID = null;
   }
   updateConsoleSsh();
 }
