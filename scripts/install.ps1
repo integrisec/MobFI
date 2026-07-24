@@ -9,7 +9,7 @@
   the CLI and GUI. Uses winget; falls back to scoop for iOS tools. Safe to
   re-run: anything already present is left alone.
 
-  The GUI's Console tab uses the Windows ConPTY backend, so it works on
+  The GUI Console tab uses the Windows ConPTY backend, so it works on
   Windows 10 1809+.
 
 .PARAMETER CliOnly        Build the CLI only (skip Wails/GUI).
@@ -93,7 +93,7 @@ function Ensure-RuntimeTools {
 
   if (Have adb) { Ok "adb" } else { if (Winget-Install 'Google.PlatformTools') { Update-Path; Ok "adb (platform-tools)" } }
 
-  # libimobiledevice on Windows is best-effort: try scoop's port if present.
+  # libimobiledevice on Windows is best-effort: try the scoop port if present.
   if (Have idevice_id) {
     Ok "libimobiledevice"
   } elseif (Have scoop) {
@@ -120,7 +120,7 @@ function Build-Gui {
   Update-Path
   if (-not (Have wails)) { Warn "wails unavailable; skipping GUI build"; return }
   Push-Location (Join-Path $Root 'cmd\mfi-gui')
-  try { & wails build; Ok "cmd\mfi-gui\build\bin\" }
+  try { & wails build; Ok "cmd\mfi-gui\build\bin" }
   finally { Pop-Location }
 }
 
@@ -138,8 +138,8 @@ if ($buildGui) { Build-Gui }
 Write-Host ""
 Step "Done"
 if ($buildCli) { Write-Host "  CLI:  $Root\bin\mfi.exe   (try: .\bin\mfi.exe detect)" }
-if ($buildGui) { Write-Host "  GUI:  $Root\cmd\mfi-gui\build\bin\" }
-Write-Host "  If 'go'/'wails' aren't found in new terminals, add to PATH:"
+if ($buildGui) { Write-Host "  GUI:  $Root\cmd\mfi-gui\build\bin" }
+Write-Host "  If go / wails are not found in new terminals, add these to PATH:"
 Write-Host "    C:\Program Files\Go\bin  and  %USERPROFILE%\go\bin"
 
 switch ($Launch) {
