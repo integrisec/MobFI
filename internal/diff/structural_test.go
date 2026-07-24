@@ -96,7 +96,7 @@ func TestTreesUsesStructuralDiff(t *testing.T) {
 	usersDB(t, filepath.Join(rootA, "app.db"), [][2]string{{"dana", "x"}})
 	usersDB(t, filepath.Join(rootB, "app.db"), [][2]string{{"dana", "x"}, {"sam", "y"}})
 
-	res, err := Trees(context.Background(), rootA, rootB)
+	res, err := Trees(context.Background(), rootA, rootB, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

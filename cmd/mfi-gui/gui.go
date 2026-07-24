@@ -71,9 +71,17 @@ func (g *GUI) ExtractApp(deviceID, bundleID, dest, afcScope string) (*extract.Re
 	return nil, fmt.Errorf("device %q not found; re-run detection", deviceID)
 }
 
-// ScanSecrets scans an extracted tree for secrets.
+// ScanSecrets scans an extracted tree for secrets, relaying throttled
+// progress as "scan:progress" events.
 func (g *GUI) ScanSecrets(root string) ([]secrets.Finding, error) {
-	return g.app.ScanSecrets(g.ctx, root)
+	var last time.Time
+	return g.app.ScanSecrets(g.ctx, root, func(p secrets.Progress) {
+		if time.Since(last) < 120*time.Millisecond {
+			return
+		}
+		last = time.Now()
+		wailsruntime.EventsEmit(g.ctx, "scan:progress", p)
+	})
 }
 
 // AddKnownSecrets adds a user-supplied known-secrets file to the scanner.
@@ -81,9 +89,17 @@ func (g *GUI) AddKnownSecrets(path string) error {
 	return g.app.AddKnownSecrets(path)
 }
 
-// Diff compares two extracted roots.
+// Diff compares two extracted roots, relaying throttled progress as
+// "diff:progress" events.
 func (g *GUI) Diff(rootA, rootB string) (*diff.Result, error) {
-	return g.app.Diff(g.ctx, rootA, rootB)
+	var last time.Time
+	return g.app.Diff(g.ctx, rootA, rootB, func(p diff.Progress) {
+		if time.Since(last) < 120*time.Millisecond {
+			return
+		}
+		last = time.Now()
+		wailsruntime.EventsEmit(g.ctx, "diff:progress", p)
+	})
 }
 
 // DBTables lists the tables in a SQLite file.

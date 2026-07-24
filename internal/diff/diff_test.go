@@ -33,7 +33,7 @@ func TestTrees(t *testing.T) {
 	write(t, a, "only_a.txt", "x") // removed
 	write(t, b, "only_b.txt", "y") // added
 
-	res, err := Trees(context.Background(), a, b)
+	res, err := Trees(context.Background(), a, b, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestTreesSorted(t *testing.T) {
 	write(t, a, "a.txt", "1")
 	write(t, a, "b.txt", "1") // all removed
 
-	res, err := Trees(context.Background(), a, b)
+	res, err := Trees(context.Background(), a, b, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

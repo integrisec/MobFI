@@ -41,10 +41,18 @@ type Result struct {
 	Changes []Change `json:"changes"`
 }
 
+// Progress reports diff progress (cumulative files compared and the current
+// relative path).
+type Progress struct {
+	Files int    `json:"files"`
+	Path  string `json:"path"`
+}
+
 // Trees diffs the file trees rooted at a and b. Changes are returned sorted
 // by path. Files present only under a are Removed, only under b are Added,
-// and files present in both whose contents differ are Modified.
-func Trees(ctx context.Context, a, b string) (*Result, error) {
+// and files present in both whose contents differ are Modified. progress, if
+// non-nil, is called as each path is compared.
+func Trees(ctx context.Context, a, b string, progress func(Progress)) (*Result, error) {
 	ia, err := indexTree(a)
 	if err != nil {
 		return nil, err
@@ -55,9 +63,14 @@ func Trees(ctx context.Context, a, b string) (*Result, error) {
 	}
 
 	res := &Result{RootA: a, RootB: b}
+	compared := 0
 	for _, rel := range unionKeys(ia, ib) {
 		if err := ctx.Err(); err != nil {
 			return res, err
+		}
+		compared++
+		if progress != nil {
+			progress(Progress{Files: compared, Path: rel})
 		}
 		ma, inA := ia[rel]
 		mb, inB := ib[rel]

@@ -133,9 +133,10 @@ func (a *App) androidConn(ctx context.Context, d device.Device, pkg string) (tra
 	return a.ADB.Connect(ctx, d)
 }
 
-// ScanSecrets walks root and reports any secret matches.
-func (a *App) ScanSecrets(ctx context.Context, root string) ([]secrets.Finding, error) {
-	return a.Scanner.ScanTree(ctx, root)
+// ScanSecrets walks root and reports any secret matches. progress, if
+// non-nil, is called as files are scanned.
+func (a *App) ScanSecrets(ctx context.Context, root string, progress func(secrets.Progress)) ([]secrets.Finding, error) {
+	return a.Scanner.ScanTree(ctx, root, progress)
 }
 
 // AddKnownSecrets loads a user-supplied list of literal secrets and adds
@@ -150,8 +151,9 @@ func (a *App) AddKnownSecrets(path string) error {
 }
 
 // Diff compares two extracted file roots at a native/semantic level.
-func (a *App) Diff(ctx context.Context, rootA, rootB string) (*diff.Result, error) {
-	return diff.Trees(ctx, rootA, rootB)
+// progress, if non-nil, is called as files are compared.
+func (a *App) Diff(ctx context.Context, rootA, rootB string, progress func(diff.Progress)) (*diff.Result, error) {
+	return diff.Trees(ctx, rootA, rootB, progress)
 }
 
 // DBTables lists the tables in a database file (opened read-only).

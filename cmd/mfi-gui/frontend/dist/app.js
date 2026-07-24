@@ -615,14 +615,33 @@ let scanSortField = null;
 let scanSortDir = 1;
 const SCAN_COLUMNS = ["rule_id", "path", "line", "match", null];
 
+function shortPath(p, n = 64) {
+  return p && p.length > n ? "…" + p.slice(-(n - 1)) : p || "";
+}
+
 $("#btn-scan").addEventListener("click", async () => {
+  const btn = $("#btn-scan");
+  const status = $("#scan-status");
+  btn.disabled = true;
+  status.classList.add("busy");
+  status.textContent = "Scanning…";
+  const off = window.runtime.EventsOn("scan:progress", (p) => {
+    status.textContent = `Scanning… ${p.files.toLocaleString()} file(s) — ${shortPath(p.path)}`;
+  });
   try {
     const known = $("#sc-known").value.trim();
     if (known) await gui().AddKnownSecrets(known);
     currentFindings = await gui().ScanSecrets($("#sc-root").value.trim());
     renderScan();
+    status.classList.remove("busy");
+    status.textContent = `${(currentFindings || []).length} finding(s)`;
   } catch (e) {
+    status.classList.remove("busy");
+    status.textContent = "";
     fail(e);
+  } finally {
+    off();
+    btn.disabled = false;
   }
 });
 
@@ -733,11 +752,26 @@ function sortRows(rows, field, dir) {
 }
 
 $("#btn-diff").addEventListener("click", async () => {
+  const btn = $("#btn-diff");
+  const status = $("#diff-status");
+  btn.disabled = true;
+  status.classList.add("busy");
+  status.textContent = "Diffing…";
+  const off = window.runtime.EventsOn("diff:progress", (p) => {
+    status.textContent = `Comparing… ${p.files.toLocaleString()} file(s) — ${shortPath(p.path)}`;
+  });
   try {
     currentDiff = await gui().Diff($("#df-a").value.trim(), $("#df-b").value.trim());
     renderDiff();
+    status.classList.remove("busy");
+    status.textContent = `${(currentDiff.changes || []).length} change(s)`;
   } catch (e) {
+    status.classList.remove("busy");
+    status.textContent = "";
     fail(e);
+  } finally {
+    off();
+    btn.disabled = false;
   }
 });
 

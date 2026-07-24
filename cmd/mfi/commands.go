@@ -181,7 +181,7 @@ func runScan(ctx context.Context, core *app.App, args []string) error {
 			return err
 		}
 	}
-	findings, err := core.ScanSecrets(ctx, *root)
+	findings, err := core.ScanSecrets(ctx, *root, nil)
 	if err != nil {
 		return err
 	}
@@ -204,7 +204,7 @@ func runDiff(ctx context.Context, core *app.App, args []string) error {
 	if *a == "" || *b == "" {
 		return fmt.Errorf("diff requires -a and -b")
 	}
-	res, err := core.Diff(ctx, *a, *b)
+	res, err := core.Diff(ctx, *a, *b, nil)
 	if err != nil {
 		return err
 	}
@@ -243,7 +243,7 @@ func runReport(ctx context.Context, core *app.App, args []string) error {
 			}
 		}
 		var err error
-		if findings, err = core.ScanSecrets(ctx, *root); err != nil {
+		if findings, err = core.ScanSecrets(ctx, *root, nil); err != nil {
 			return err
 		}
 	}
@@ -251,7 +251,7 @@ func runReport(ctx context.Context, core *app.App, args []string) error {
 	var d *diff.Result
 	if *a != "" && *b != "" {
 		var err error
-		if d, err = core.Diff(ctx, *a, *b); err != nil {
+		if d, err = core.Diff(ctx, *a, *b, nil); err != nil {
 			return err
 		}
 	}

@@ -58,11 +58,20 @@ func NewScanner(rules []Rule) *Scanner {
 // secrets alongside the built-in detectors).
 func (s *Scanner) AddRules(rules ...Rule) { s.rules = append(s.rules, rules...) }
 
+// Progress reports scan progress after each file (cumulative file count and
+// the path just scanned).
+type Progress struct {
+	Files int    `json:"files"`
+	Path  string `json:"path"`
+}
+
 // ScanTree walks root and returns every match, in filesystem order.
 // Directories and files that cannot be read are skipped rather than
-// aborting the scan; a missing root is reported as an error.
-func (s *Scanner) ScanTree(ctx context.Context, root string) ([]Finding, error) {
+// aborting the scan; a missing root is reported as an error. progress, if
+// non-nil, is called after each scanned file.
+func (s *Scanner) ScanTree(ctx context.Context, root string, progress func(Progress)) ([]Finding, error) {
 	var findings []Finding
+	scanned := 0
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			if path == root {
@@ -86,6 +95,10 @@ func (s *Scanner) ScanTree(ctx context.Context, root string) ([]Finding, error) 
 			return nil // unreadable file, keep scanning
 		}
 		findings = append(findings, found...)
+		scanned++
+		if progress != nil {
+			progress(Progress{Files: scanned, Path: path})
+		}
 		return nil
 	})
 	return findings, err

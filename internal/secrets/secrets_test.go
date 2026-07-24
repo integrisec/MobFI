@@ -26,7 +26,7 @@ func TestScanTreeFindsAndRedacts(t *testing.T) {
 	writeFile(t, dir, "token.env", "GH_TOKEN="+ghToken+"\n")
 	writeFile(t, dir, "safe.txt", "nothing secret here\n")
 
-	findings, err := NewScanner(DefaultRules()).ScanTree(context.Background(), dir)
+	findings, err := NewScanner(DefaultRules()).ScanTree(context.Background(), dir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestScanSkipsBinary(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "blob.bin", "\x00\x01"+ghToken)
 
-	findings, err := NewScanner(DefaultRules()).ScanTree(context.Background(), dir)
+	findings, err := NewScanner(DefaultRules()).ScanTree(context.Background(), dir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestLoadKnownSecrets(t *testing.T) {
 	writeFile(t, scanDir, "app.conf", "password: s3cr3t.value*\n")
 	writeFile(t, scanDir, "other.conf", "password: s3cr3tXvalueY\n") // must NOT match
 
-	findings, err := NewScanner(rules).ScanTree(context.Background(), scanDir)
+	findings, err := NewScanner(rules).ScanTree(context.Background(), scanDir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
