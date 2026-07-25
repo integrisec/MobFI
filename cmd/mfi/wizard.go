@@ -238,7 +238,7 @@ func (w *wizardIO) scanDiffReport(ctx context.Context, core *app.App, root strin
 
 	fmt.Fprintln(w.out, "\nStep 5 — Report")
 	fmt.Fprintln(w.out)
-	rep := core.Report(findings, d)
+	rep := core.Report(findings, d, false) // wizard reports stay redacted; use `mfi report -show-secrets` for raw
 	if err := rep.WriteText(w.out); err != nil {
 		return err
 	}

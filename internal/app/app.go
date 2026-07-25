@@ -249,7 +249,10 @@ func (a *App) Render(ctx context.Context, path string) (*render.View, error) {
 	return a.Renderers.Render(ctx, path)
 }
 
-// Report aggregates findings and a diff into an actionable report.
-func (a *App) Report(findings []secrets.Finding, d *diff.Result) *report.Report {
-	return report.Build(findings, d)
+// Report aggregates findings and a diff into an actionable report. When
+// unredacted is true the raw secrets are retained in the report (for
+// authorized local analysis); the safe default (false) keeps only redacted
+// fingerprints so the report can be shared.
+func (a *App) Report(findings []secrets.Finding, d *diff.Result, unredacted bool) *report.Report {
+	return report.BuildWith(findings, d, unredacted)
 }

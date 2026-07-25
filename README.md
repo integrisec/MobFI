@@ -303,9 +303,19 @@ mfi report -root ./capture -a ./logged-out -b ./logged-in -out report.html
 mfi report -root ./capture -out report.mfi-report.json
 ```
 
+Secrets are **redacted by default** (leading characters + length). To include
+the raw, unredacted secret values — for authorized local analysis only — add
+`-show-secrets`; the resulting report contains plaintext secrets, so do not
+share it:
+
+```sh
+mfi report -root ./capture -show-secrets -out report.html
+```
+
 In the GUI, the **Scan** and **Diff** tabs each have an **Export** control —
 choose the scope (that tab's results, or a **Combined** scan + diff report)
-and the format (HTML / JSON / Text) and save.
+and the format (HTML / JSON / Text) and save. Tick **Unredacted** next to
+Export (and confirm the prompt) to include raw secrets in that export.
 
 ---
 

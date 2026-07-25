@@ -793,15 +793,19 @@ function isCancelError(e) {
 // Export a report (HTML/JSON/text) at the selected scope — this tab's results
 // or a combined scan+diff report. The backend builds it from its cached
 // results and prompts for a destination.
-function wireExport(btnId, scopeSelId, fmtSelId) {
+function wireExport(btnId, scopeSelId, fmtSelId, rawId) {
   const btn = document.getElementById(btnId);
   if (!btn) return;
   btn.addEventListener("click", async () => {
     const scope = document.getElementById(scopeSelId).value;
     const fmt = document.getElementById(fmtSelId).value;
+    const raw = !!(rawId && document.getElementById(rawId) && document.getElementById(rawId).checked);
+    if (raw && !confirm("Export UNREDACTED secrets?\n\nThe report will contain raw secret values in plain text. Only do this for authorized local analysis, and do not share the file.")) {
+      return;
+    }
     btn.disabled = true;
     try {
-      const path = await gui().ExportReport(scope, fmt);
+      const path = await gui().ExportReport(scope, fmt, raw);
       if (path) toast("exported to " + shortPath(path), true);
     } catch (e) {
       fail(e); // e.g. "run a scan first"
@@ -810,8 +814,8 @@ function wireExport(btnId, scopeSelId, fmtSelId) {
     }
   });
 }
-wireExport("btn-scan-export", "scan-export-scope", "scan-export-fmt");
-wireExport("btn-diff-export", "diff-export-scope", "diff-export-fmt");
+wireExport("btn-scan-export", "scan-export-scope", "scan-export-fmt", "scan-export-raw");
+wireExport("btn-diff-export", "diff-export-scope", "diff-export-fmt", "diff-export-raw");
 
 function shortPath(p, n = 64) {
   return p && p.length > n ? "…" + p.slice(-(n - 1)) : p || "";

@@ -97,6 +97,35 @@ func TestBuildStripsRawSecrets(t *testing.T) {
 	}
 }
 
+func TestBuildWithUnredacted(t *testing.T) {
+	findings := []secrets.Finding{
+		{RuleID: "aws-access-key-id", Path: "a.txt", Line: 1, Match: "AKIA…(20 chars)", Secret: "AKIAIOSFODNN7EXAMPLE"},
+		{RuleID: "github-token", Path: "c.txt", Line: 3, Match: "ghp_…(40 chars)", Secret: "ghp_rawtokenvalue"},
+	}
+	rep := BuildWith(findings, nil, true)
+	if !rep.Unredacted {
+		t.Fatal("BuildWith(unredacted=true) should set Unredacted")
+	}
+	// Raw secrets are retained on the findings.
+	if rep.Findings[0].Secret != "AKIAIOSFODNN7EXAMPLE" {
+		t.Errorf("raw secret not retained: %+v", rep.Findings[0])
+	}
+	// Every output format shows the raw secret, not the redacted fingerprint.
+	for name, write := range map[string]func(*bytes.Buffer) error{
+		"text": func(b *bytes.Buffer) error { return rep.WriteText(b) },
+		"html": func(b *bytes.Buffer) error { return rep.WriteHTML(b) },
+		"json": func(b *bytes.Buffer) error { return rep.WriteJSON(b) },
+	} {
+		var buf bytes.Buffer
+		if err := write(&buf); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if !strings.Contains(buf.String(), "AKIAIOSFODNN7EXAMPLE") {
+			t.Errorf("%s output should contain the raw secret when unredacted", name)
+		}
+	}
+}
+
 func TestWriteJSONRoundTrips(t *testing.T) {
 	var buf bytes.Buffer
 	if err := sampleReport().WriteJSON(&buf); err != nil {

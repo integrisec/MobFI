@@ -217,8 +217,9 @@ func (g *GUI) Diff(rootA, rootB string) (*diff.Result, error) {
 // ExportReport builds a report from the last scan ("scan") or diff ("diff")
 // results, prompts for a destination, and writes it in the given format
 // ("html", "json" or "text"). Returns the saved path (empty if cancelled).
-// Secrets are redacted by report.Build, so exports are safe to share.
-func (g *GUI) ExportReport(scope, format string) (string, error) {
+// By default secrets are redacted so exports are safe to share; when
+// unredacted is true the raw secrets are included (authorized local analysis).
+func (g *GUI) ExportReport(scope, format string, unredacted bool) (string, error) {
 	g.reportMu.Lock()
 	findings, scanned, d := g.lastFindings, g.scanned, g.lastDiff
 	g.reportMu.Unlock()
@@ -229,12 +230,12 @@ func (g *GUI) ExportReport(scope, format string) (string, error) {
 		if !scanned {
 			return "", fmt.Errorf("run a scan first")
 		}
-		rep = g.app.Report(findings, nil)
+		rep = g.app.Report(findings, nil, unredacted)
 	case "diff":
 		if d == nil {
 			return "", fmt.Errorf("run a diff first")
 		}
-		rep = g.app.Report(nil, d)
+		rep = g.app.Report(nil, d, unredacted)
 	case "combined":
 		// Whatever has run: scan findings and/or diff in one report.
 		if !scanned && d == nil {
@@ -243,7 +244,7 @@ func (g *GUI) ExportReport(scope, format string) (string, error) {
 		if !scanned {
 			findings = nil
 		}
-		rep = g.app.Report(findings, d)
+		rep = g.app.Report(findings, d, unredacted)
 	default:
 		return "", fmt.Errorf("unknown export scope %q", scope)
 	}

@@ -14,23 +14,46 @@ import (
 	"github.com/integrisec/MobFI/internal/secrets"
 )
 
-// Report is the actionable summary of an inspection session. Findings
-// already carry only redacted secrets, so a report is safe to export.
+// Report is the actionable summary of an inspection session. By default
+// findings carry only redacted secrets, so a report is safe to export; when
+// Unredacted is set the raw secrets are included (see BuildWith).
 type Report struct {
 	GeneratedAt time.Time         `json:"generated_at"`
 	Findings    []secrets.Finding `json:"findings,omitempty"`
 	Diff        *diff.Result      `json:"diff,omitempty"`
+	// Unredacted reports whether raw secrets are retained in this report.
+	Unredacted bool `json:"unredacted,omitempty"`
 }
 
-// Build assembles a report from the collected findings and diff. Raw
-// secrets are stripped so the report (text or JSON) is safe to share.
+// Build assembles a report from the collected findings and diff with raw
+// secrets stripped, so the report (text, JSON or HTML) is safe to share.
 func Build(findings []secrets.Finding, d *diff.Result) *Report {
-	safe := make([]secrets.Finding, len(findings))
+	return BuildWith(findings, d, false)
+}
+
+// BuildWith assembles a report, optionally retaining the raw secret values.
+// When unredacted is false (the safe default) each finding's raw Secret is
+// stripped and only the redacted fingerprint (Match) is kept. When true the
+// raw secrets are preserved and shown in every output format -- intended for
+// authorized local analysis, never for sharing.
+func BuildWith(findings []secrets.Finding, d *diff.Result, unredacted bool) *Report {
+	out := make([]secrets.Finding, len(findings))
 	for i, f := range findings {
-		f.Secret = ""
-		safe[i] = f
+		if !unredacted {
+			f.Secret = ""
+		}
+		out[i] = f
 	}
-	return &Report{GeneratedAt: time.Now().UTC(), Findings: safe, Diff: d}
+	return &Report{GeneratedAt: time.Now().UTC(), Findings: out, Diff: d, Unredacted: unredacted}
+}
+
+// value returns what a finding should display: the raw secret when the report
+// is unredacted (and one is present), otherwise the redacted fingerprint.
+func (r *Report) value(f secrets.Finding) string {
+	if r.Unredacted && f.Secret != "" {
+		return f.Secret
+	}
+	return f.Match
 }
 
 // Summary is the headline count of what an inspection turned up.
@@ -65,12 +88,16 @@ func (r *Report) WriteText(w io.Writer) error {
 		return err
 	}
 
-	fmt.Fprintf(w, "\nSecrets: %d finding(s)\n", s.TotalFindings)
+	fmt.Fprintf(w, "\nSecrets: %d finding(s)", s.TotalFindings)
+	if r.Unredacted {
+		fmt.Fprintf(w, "  [UNREDACTED - contains raw secrets]")
+	}
+	fmt.Fprintln(w)
 	for _, rule := range sortedKeys(s.FindingsByRule) {
 		fmt.Fprintf(w, "  %-28s %d\n", rule, s.FindingsByRule[rule])
 	}
 	for _, f := range r.Findings {
-		fmt.Fprintf(w, "  - [%s] %s:%d  %s\n", f.RuleID, f.Path, f.Line, f.Match)
+		fmt.Fprintf(w, "  - [%s] %s:%d  %s\n", f.RuleID, f.Path, f.Line, r.value(f))
 	}
 
 	if r.Diff != nil {
@@ -98,8 +125,9 @@ func (r *Report) WriteJSON(w io.Writer) error {
 type htmlModel struct {
 	GeneratedAt   string
 	TotalFindings int
+	Unredacted    bool
 	RuleRows      []ruleCount
-	Findings      []secrets.Finding
+	Findings      []findingRow
 	HasDiff       bool
 	RootA, RootB  string
 	Added         int
@@ -113,6 +141,15 @@ type ruleCount struct {
 	Count int
 }
 
+// findingRow is one secret finding as shown in the report, with Value already
+// resolved to the raw or redacted form per the report's redaction state.
+type findingRow struct {
+	RuleID string
+	Path   string
+	Line   int
+	Value  string
+}
+
 // WriteHTML renders the report as a self-contained HTML document (inline CSS,
 // no external assets). html/template escapes all values, so the untrusted
 // paths and matches from extracted data are safe to embed.
@@ -121,7 +158,10 @@ func (r *Report) WriteHTML(w io.Writer) error {
 	m := htmlModel{
 		GeneratedAt:   r.GeneratedAt.Format(time.RFC1123),
 		TotalFindings: s.TotalFindings,
-		Findings:      r.Findings,
+		Unredacted:    r.Unredacted,
+	}
+	for _, f := range r.Findings {
+		m.Findings = append(m.Findings, findingRow{RuleID: f.RuleID, Path: f.Path, Line: f.Line, Value: r.value(f)})
 	}
 	for _, rule := range sortedKeys(s.FindingsByRule) {
 		m.RuleRows = append(m.RuleRows, ruleCount{Rule: rule, Count: s.FindingsByRule[rule]})
@@ -165,12 +205,14 @@ const htmlTemplate = `<!DOCTYPE html>
   .k-removed { color:var(--danger); border-color:var(--danger); }
   .k-modified { color:var(--warn); border-color:var(--warn); }
   .empty { color:var(--muted); font-style:italic; }
+  .warnbar { margin:12px 0; padding:10px 14px; border-radius:8px; background:rgba(255,107,107,.12); border:1px solid var(--danger); color:var(--danger); font-size:13px; }
   footer { margin-top:32px; color:var(--muted); font-size:11px; }
 </style>
 </head>
 <body>
   <h1>MobFI report</h1>
   <div class="meta">Generated {{.GeneratedAt}}</div>
+  {{if .Unredacted}}<div class="warnbar">This report contains <strong>UNREDACTED</strong> raw secrets. Handle and store it securely; do not share.</div>{{end}}
 
   <h2>Secrets</h2>
   <div class="cards">
@@ -181,7 +223,7 @@ const htmlTemplate = `<!DOCTYPE html>
   <table>
     <thead><tr><th>Rule</th><th>Path</th><th>Line</th><th>Match</th></tr></thead>
     <tbody>
-    {{range .Findings}}<tr><td><code>{{.RuleID}}</code></td><td class="path">{{.Path}}</td><td>{{.Line}}</td><td class="match">{{.Match}}</td></tr>{{end}}
+    {{range .Findings}}<tr><td><code>{{.RuleID}}</code></td><td class="path">{{.Path}}</td><td>{{.Line}}</td><td class="match">{{.Value}}</td></tr>{{end}}
     </tbody>
   </table>
   {{else}}<p class="empty">No secrets found.</p>{{end}}
@@ -204,7 +246,7 @@ const htmlTemplate = `<!DOCTYPE html>
   {{else}}<p class="empty">No differences.</p>{{end}}
   {{end}}
 
-  <footer>Generated by MobFI · discovered secrets are redacted</footer>
+  <footer>Generated by MobFI · {{if .Unredacted}}secrets shown UNREDACTED{{else}}discovered secrets are redacted{{end}}</footer>
 </body>
 </html>
 `

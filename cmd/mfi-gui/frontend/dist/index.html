@@ -121,6 +121,7 @@
           <option value="json">JSON</option>
           <option value="text">Text</option>
         </select>
+        <label class="inline" title="Include raw, unredacted secrets in the exported report. For authorized local analysis only -- do not share the file."><input type="checkbox" id="scan-export-raw" /> Unredacted</label>
         <button id="btn-scan-export" title="Export the scan results (or a combined scan+diff report)">Export</button>
         <span class="mime" id="scan-status"></span>
       </div>
@@ -151,6 +152,7 @@
           <option value="json">JSON</option>
           <option value="text">Text</option>
         </select>
+        <label class="inline" title="Include raw, unredacted secrets in the exported report. For authorized local analysis only -- do not share the file."><input type="checkbox" id="diff-export-raw" /> Unredacted</label>
         <button id="btn-diff-export" title="Export the diff results (or a combined scan+diff report)">Export</button>
         <span class="mime" id="diff-status"></span>
       </div>
