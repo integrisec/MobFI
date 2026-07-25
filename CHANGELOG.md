@@ -9,36 +9,7 @@ heading to the version and date and start a fresh `Unreleased` section.
 
 ## [Unreleased]
 
-### Added
-- Update check at launch: MobFI now detects when a newer **GitHub release** is
-  available (works for prebuilt binaries) and, in a git checkout, how many
-  commits you are **behind upstream**. The GUI shows a dismissable banner with
-  a "View release" button; the CLI wizard prints a one-line notice and
-  `mfi update` reports on demand (`-json` supported). Advisory only -- it never
-  modifies anything; set `MFI_NO_UPDATE_CHECK=1` to silence the launch check.
-- Option to include raw, **unredacted** secrets in a report, for authorized
-  local analysis: `mfi report -show-secrets` on the CLI, and an **Unredacted**
-  checkbox (with a confirm prompt) next to the GUI's Export controls. Reports
-  stay redacted by default; unredacted output carries a plaintext warning
-  banner and is not meant to be shared.
-
-### Fixed
-- macOS: the GUI showed all runtime tools as "missing" and found no devices
-  when launched from Finder/Dock, because a bundled app inherits only a minimal
-  PATH without Homebrew's `/opt/homebrew/bin`. The installer now bakes an
-  `LSEnvironment` PATH into the app bundle (from where the tools actually
-  resolve) and re-registers it with LaunchServices.
-- Device detection no longer blanks the GUI list when one detector fails: a
-  partial error (e.g. `simctl` on a host without full Xcode) is logged and the
-  devices the other detectors found are still shown. `simctl` exiting 72
-  ("utility not a developer tool") is now treated as "no simulators" rather
-  than an error.
-- Linux: the GUI window/taskbar showed a blank icon. The app icon is now
-  supplied to Wails at runtime (`linux.Options.Icon`) and the installer
-  registers a per-user `.desktop` launcher + icon (with `StartupWMClass`) so
-  the app menu and panel pair the correct icon.
-
-## [1.0.0] - 2026-07-24
+## [1.0.0] - 2026-07-25
 
 First official release. MobFI is a cross-platform (macOS, Windows, Linux)
 mobile-forensics and secrets-inspection tool for exploring the file structures
@@ -76,13 +47,21 @@ built on a single shared Go core.
 - Native rendering per file type: JSON, XML, binary + XML plists, SQLite
   summaries, text, hex, images, and PDFs, with syntax highlighting.
 - Reporting: aggregate scan + diff results into text, JSON, and HTML exports.
+  Secrets are redacted by default; an opt-in (`mfi report -show-secrets` / the
+  GUI's **Unredacted** checkbox, behind a confirm prompt) includes raw values
+  for authorized local analysis, with a plaintext warning in the output.
 
 ### Frontends
 - Guided wizard by default with an advanced path, in both the GUI and the CLI.
 - Wails desktop GUI (vanilla HTML/JS/CSS frontend over the Go core) with
   persisted window geometry and toggles, sortable tables, side-by-side file
-  diff, and a global Dependencies panel.
+  diff, and a global Dependencies panel. Device detection is resilient -- one
+  failing detector never blanks the list.
 - `mfi doctor` reports the presence of the runtime device tools.
+- Launch update check: detects a newer GitHub release (works for prebuilt
+  binaries) and, in a git checkout, how many commits behind upstream. The GUI
+  shows a dismissable banner; the CLI prints a notice and `mfi update` reports
+  on demand. Advisory only; `MFI_NO_UPDATE_CHECK=1` silences it.
 
 ### Packaging & tooling
 - Cross-platform install scripts: `scripts/install.sh` (macOS/Linux) and
@@ -90,9 +69,16 @@ built on a single shared Go core.
   and libimobiledevice, then build both binaries.
 - Windows-on-ARM support: emulated amd64 GUI build, scoop bootstrap, prebuilt
   libimobiledevice, and Apple Mobile Device Support for iOS-over-USB.
-- Linux GUI builds against webkit2gtk-4.1 (the `webkit2_41` tag) when 4.0 is
-  absent, e.g. on Debian bookworm and Raspberry Pi OS.
-- Version reporting shared by both binaries via `internal/version`.
+- macOS: the installer bakes an `LSEnvironment` PATH into the app bundle so a
+  Finder/Dock-launched GUI finds Homebrew-installed adb / libimobiledevice
+  (otherwise the bundle's minimal PATH hides them and every device shows as
+  missing).
+- Linux: GUI builds against webkit2gtk-4.1 (the `webkit2_41` tag) when 4.0 is
+  absent (Debian bookworm / Raspberry Pi OS); the window/taskbar icon is set at
+  runtime and the installer registers a `.desktop` launcher + icon.
+- Prebuilt, version-stamped `mfi` CLI binaries for macOS, Linux and Windows are
+  attached to the release; version reporting is shared by both binaries via
+  `internal/version`.
 
 [Unreleased]: https://github.com/integrisec/MobFI/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/integrisec/MobFI/releases/tag/v1.0.0
