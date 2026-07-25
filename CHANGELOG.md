@@ -23,6 +23,16 @@ heading to the version and date and start a fresh `Unreleased` section.
   banner and is not meant to be shared.
 
 ### Fixed
+- macOS: the GUI showed all runtime tools as "missing" and found no devices
+  when launched from Finder/Dock, because a bundled app inherits only a minimal
+  PATH without Homebrew's `/opt/homebrew/bin`. The installer now bakes an
+  `LSEnvironment` PATH into the app bundle (from where the tools actually
+  resolve) and re-registers it with LaunchServices.
+- Device detection no longer blanks the GUI list when one detector fails: a
+  partial error (e.g. `simctl` on a host without full Xcode) is logged and the
+  devices the other detectors found are still shown. `simctl` exiting 72
+  ("utility not a developer tool") is now treated as "no simulators" rather
+  than an error.
 - Linux: the GUI window/taskbar showed a blank icon. The app icon is now
   supplied to Wails at runtime (`linux.Options.Icon`) and the installer
   registers a per-user `.desktop` launcher + icon (with `StartupWMClass`) so

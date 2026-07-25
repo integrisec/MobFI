@@ -2,9 +2,28 @@ package device
 
 import (
 	"context"
+	"os/exec"
 	"reflect"
 	"testing"
 )
+
+func TestSimctlUnavailable(t *testing.T) {
+	// exit 72 is xcrun's "utility not a developer tool" -- treat as no sims.
+	if err := exec.Command("sh", "-c", "exit 72").Run(); !simctlUnavailable(err) {
+		t.Errorf("exit 72 should be treated as unavailable, got %v", err)
+	}
+	// A missing binary means simctl isn't installed -- also no sims.
+	if !simctlUnavailable(exec.ErrNotFound) {
+		t.Error("ErrNotFound should be treated as unavailable")
+	}
+	// A genuine non-zero exit (e.g. 1) must still surface as an error.
+	if err := exec.Command("sh", "-c", "exit 1").Run(); simctlUnavailable(err) {
+		t.Error("exit 1 should not be degraded to 'unavailable'")
+	}
+	if simctlUnavailable(nil) {
+		t.Error("nil error should not be 'unavailable'")
+	}
+}
 
 func TestParseSimctlDevices(t *testing.T) {
 	// One booted sim, one shut-down sim (dropped), and an empty runtime.

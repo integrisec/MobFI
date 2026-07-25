@@ -235,9 +235,48 @@ build_gui() {
   # shellcheck disable=SC2086 -- word-splitting of $tags into flags is intended.
   ( cd "$ROOT/cmd/mfi-gui" && wails build $tags )
   case "$OS" in
-    Darwin) ok "cmd/mfi-gui/build/bin/MobFI.app" ;;
+    Darwin) ok "cmd/mfi-gui/build/bin/MobFI.app"; set_macos_app_path ;;
     *)      ok "cmd/mfi-gui/build/bin/"; install_linux_desktop_entry ;;
   esac
+}
+
+# set_macos_app_path teaches the built .app where the runtime tools live. A GUI
+# launched from Finder/Dock inherits only a minimal PATH (/usr/bin:/bin:...),
+# so Homebrew-installed adb / libimobiledevice are invisible and every device
+# shows as "missing". We bake an LSEnvironment PATH into the bundle's Info.plist
+# -- built from where the tools ACTUALLY resolve now, plus the usual Homebrew /
+# MacPorts locations -- so LaunchServices hands the GUI a PATH that finds them.
+set_macos_app_path() {
+  [ "$OS" = "Darwin" ] || return 0
+  local app plist pb
+  app="$ROOT/cmd/mfi-gui/build/bin/MobFI.app"
+  plist="$app/Contents/Info.plist"
+  pb="/usr/libexec/PlistBuddy"
+  [ -f "$plist" ] && [ -x "$pb" ] || { warn "could not locate app Info.plist; GUI may not find tools when launched from Finder"; return 0; }
+
+  # Collect directories: where each tool resolves now, then standard locations.
+  local dirs=() seen=" " d p
+  for t in adb idevice_id ideviceinfo ideviceinstaller afcclient idevicebackup2 iproxy ssh aapt plutil xcrun; do
+    p="$(command -v "$t" 2>/dev/null)" || continue
+    d="$(cd "$(dirname "$p")" && pwd)" || continue
+    case "$seen" in *" $d "*) ;; *) dirs+=("$d"); seen="$seen$d " ;; esac
+  done
+  for d in "$(brew --prefix 2>/dev/null)/bin" /opt/homebrew/bin /usr/local/bin /opt/local/bin /usr/bin /bin /usr/sbin /sbin; do
+    [ -n "$d" ] && [ -d "$d" ] || continue
+    case "$seen" in *" $d "*) ;; *) dirs+=("$d"); seen="$seen$d " ;; esac
+  done
+
+  local path_value; path_value="$(IFS=:; echo "${dirs[*]}")"
+  "$pb" -c "Delete :LSEnvironment" "$plist" >/dev/null 2>&1 || true
+  "$pb" -c "Add :LSEnvironment dict" "$plist" >/dev/null 2>&1 || true
+  if "$pb" -c "Add :LSEnvironment:PATH string $path_value" "$plist" >/dev/null 2>&1; then
+    # Re-register so LaunchServices picks up the new environment immediately.
+    local lsreg="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+    [ -x "$lsreg" ] && "$lsreg" -f "$app" >/dev/null 2>&1 || true
+    ok "app PATH set for Finder launch (adb / libimobiledevice discoverable)"
+  else
+    warn "could not set app PATH; if the GUI shows tools as missing, launch it from a terminal"
+  fi
 }
 
 # install_linux_desktop_entry adds a per-user .desktop launcher + icon so the

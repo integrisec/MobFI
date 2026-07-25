@@ -48,12 +48,37 @@ func (d *SimctlDetector) Detect(ctx context.Context) ([]Device, error) {
 	}
 	out, err := d.exec(ctx, "xcrun", "simctl", "list", "devices", "booted", "--json")
 	if err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
+		if simctlUnavailable(err) {
 			return nil, nil
 		}
 		return nil, err
 	}
 	return parseSimctlDevices(out)
+}
+
+// simctlUnavailable reports whether the error means simctl simply is not
+// available on this host (so there are no simulators to report), as opposed to
+// a real failure. This is common on machines with only the Command Line Tools
+// and no full Xcode: `xcrun` runs but exits 72 with "unable to find utility
+// simctl", which must not surface as a device-detection error.
+func simctlUnavailable(err error) bool {
+	if errors.Is(err, exec.ErrNotFound) {
+		return true
+	}
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		if ee.ExitCode() == 72 { // xcrun EX_OSERR: utility not a developer tool
+			return true
+		}
+		msg := strings.ToLower(string(ee.Stderr))
+		if strings.Contains(msg, "unable to find utility") ||
+			strings.Contains(msg, "not a developer tool") ||
+			strings.Contains(msg, "requires xcode") ||
+			strings.Contains(msg, "no developer tools") {
+			return true
+		}
+	}
+	return false
 }
 
 // simctlList models `simctl list devices --json`: a map of runtime id to the

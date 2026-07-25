@@ -93,7 +93,16 @@ func saveGeometry(ctx context.Context) {
 
 // DetectDevices lists reachable Android/iOS devices.
 func (g *GUI) DetectDevices() ([]device.Device, error) {
-	return g.app.DetectDevices(g.ctx)
+	devices, err := g.app.DetectDevices(g.ctx)
+	if err != nil {
+		// DetectAll returns partial results plus a joined error when some
+		// detectors fail (e.g. simctl on a host without Xcode). Wails rejects
+		// the JS promise on any non-nil error, which would blank the list and
+		// hide the devices the other detectors DID find. Log it and still
+		// return what we have -- a detector failing is not user-actionable here.
+		wailsruntime.LogWarningf(g.ctx, "device detection (partial): %v", err)
+	}
+	return devices, nil
 }
 
 // Doctor reports which external device tools (adb, libimobiledevice, ...) are
