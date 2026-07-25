@@ -72,6 +72,7 @@ func noticeUpdate(ctx context.Context, core *app.App, w io.Writer) {
 func runUpdate(ctx context.Context, core *app.App, args []string) error {
 	fs := flag.NewFlagSet("update", flag.ContinueOnError)
 	asJSON := fs.Bool("json", false, "output the check as JSON")
+	apply := fs.Bool("apply", false, "perform the update: git pull + rebuild in a checkout, or download+replace a prebuilt binary")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -79,6 +80,22 @@ func runUpdate(ctx context.Context, core *app.App, args []string) error {
 	info, err := core.CheckUpdate(ctx)
 	if err != nil && (info == nil || info.Latest == "") {
 		return fmt.Errorf("update check failed: %w", err)
+	}
+
+	if *apply {
+		if !*asJSON && info != nil && !info.Available && !(info.GitCheckout && info.GitBehind > 0) {
+			fmt.Println("Already up to date; nothing to apply.")
+			return nil
+		}
+		res, err := core.ApplyUpdate(ctx, "cli", func(msg string) { fmt.Println("  " + msg) })
+		if err != nil {
+			return fmt.Errorf("update failed: %w", err)
+		}
+		fmt.Printf("\n%s\n", res.Message)
+		if res.RestartRequired {
+			fmt.Println("Re-run mfi to use the updated version.")
+		}
+		return nil
 	}
 
 	if *asJSON {
@@ -101,8 +118,7 @@ func runUpdate(ctx context.Context, core *app.App, args []string) error {
 		if info.ReleaseURL != "" {
 			fmt.Printf("  %s\n", info.ReleaseURL)
 		}
-		fmt.Println("  Update: download the new binary from the release, or in a git")
-		fmt.Println("  checkout run: git pull && ./scripts/install.sh")
+		fmt.Println("  Update now:  mfi update -apply")
 	}
 	if info.GitCheckout && info.GitBehind > 0 {
 		updated = false
@@ -111,7 +127,7 @@ func runUpdate(ctx context.Context, core *app.App, args []string) error {
 			branch = "your branch"
 		}
 		fmt.Printf("\nThis git checkout is %d commit(s) behind %s's upstream.\n", info.GitBehind, branch)
-		fmt.Println("  Update: git pull && ./scripts/install.sh")
+		fmt.Println("  Update now:  mfi update -apply")
 	}
 	if updated && info.Latest != "" {
 		fmt.Println("\nYou are on the latest release.")

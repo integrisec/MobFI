@@ -257,6 +257,14 @@ func (a *App) CheckUpdate(ctx context.Context) (*selfupdate.Info, error) {
 	return selfupdate.Check(ctx)
 }
 
+// ApplyUpdate performs an in-place update: in a git checkout it pulls and
+// rebuilds the given target ("cli" or "gui"); for a standalone prebuilt binary
+// it downloads, verifies, and swaps the running executable. progress receives
+// status lines. The caller must relaunch afterwards (Result.RestartRequired).
+func (a *App) ApplyUpdate(ctx context.Context, target string, progress func(string)) (*selfupdate.Result, error) {
+	return selfupdate.Apply(ctx, target, progress)
+}
+
 // Report aggregates findings and a diff into an actionable report. When
 // unredacted is true the raw secrets are retained in the report (for
 // authorized local analysis); the safe default (false) keeps only redacted

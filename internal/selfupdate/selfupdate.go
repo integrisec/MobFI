@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -43,14 +44,24 @@ type Info struct {
 	GitBranch   string `json:"gitBranch"`
 	GitBehind   int    `json:"gitBehind"`
 	GitError    string `json:"gitError,omitempty"`
+
+	// Release asset for THIS platform, used by a binary (non-git) self-update.
+	AssetName    string `json:"assetName,omitempty"`
+	AssetURL     string `json:"assetUrl,omitempty"`
+	ChecksumsURL string `json:"checksumsUrl,omitempty"`
+
+	// CanApply reports whether Apply can perform the update in place: true in a
+	// git checkout, or when a matching prebuilt asset exists for a newer release.
+	CanApply bool `json:"canApply"`
 }
 
 const (
-	releasesAPI = "https://api.github.com/repos/%s/%s/releases/latest"
-	maxNotesLen = 4000
-	httpTimeout = 6 * time.Second
-	gitTimeout  = 8 * time.Second
-	userAgent   = "MobFI-update-check"
+	releasesAPI    = "https://api.github.com/repos/%s/%s/releases/latest"
+	checksumsAsset = "SHA256SUMS.txt"
+	maxNotesLen    = 4000
+	httpTimeout    = 6 * time.Second
+	gitTimeout     = 8 * time.Second
+	userAgent      = "MobFI-update-check"
 )
 
 // Check queries the latest release and (best effort) the local git checkout,
@@ -76,7 +87,34 @@ func Check(ctx context.Context) (*Info, error) {
 	if info.Latest != "" && Compare(info.Latest, info.Current) > 0 {
 		info.Available = true
 	}
+
+	// Locate the prebuilt asset for this platform + the checksums file, so a
+	// standalone binary install can self-update from the release.
+	info.AssetName = platformAssetName(info.Latest)
+	for _, a := range rel.Assets {
+		switch a.Name {
+		case info.AssetName:
+			info.AssetURL = a.BrowserDownloadURL
+		case checksumsAsset:
+			info.ChecksumsURL = a.BrowserDownloadURL
+		}
+	}
+
+	// Apply is possible in a git checkout (pull + rebuild) or, for a newer
+	// release, when a matching prebuilt binary asset is available to swap in.
+	info.CanApply = info.GitCheckout || (info.Available && info.AssetURL != "")
 	return info, nil
+}
+
+// platformAssetName is the release asset name for the running OS/arch, matching
+// the names published by the release workflow (e.g. mfi_v1.0.0_darwin_arm64,
+// mfi_v1.0.0_windows_amd64.exe).
+func platformAssetName(ver string) string {
+	name := fmt.Sprintf("mfi_v%s_%s_%s", ver, runtime.GOOS, runtime.GOARCH)
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	return name
 }
 
 type ghRelease struct {
@@ -87,6 +125,12 @@ type ghRelease struct {
 	Draft       bool      `json:"draft"`
 	Prerelease  bool      `json:"prerelease"`
 	PublishedAt time.Time `json:"published_at"`
+	Assets      []ghAsset `json:"assets"`
+}
+
+type ghAsset struct {
+	Name               string `json:"name"`
+	BrowserDownloadURL string `json:"browser_download_url"`
 }
 
 func latestRelease(ctx context.Context) (*ghRelease, error) {
@@ -161,6 +205,13 @@ func repoDir(ctx context.Context, git string) string {
 	if exe, err := os.Executable(); err == nil {
 		candidates = append(candidates, filepath.Dir(exe))
 	}
+	// A GUI installed to /Applications (or launched from a shortcut) runs
+	// detached from the source tree, so also consult the checkout path the
+	// installer recorded. This lets "Update now" git-pull + rebuild even when
+	// the running app is nowhere near the repo.
+	if rec := recordedRepoDir(); rec != "" {
+		candidates = append(candidates, rec)
+	}
 	for _, c := range candidates {
 		top, err := gitOut(ctx, git, c, "rev-parse", "--show-toplevel")
 		if err != nil || top == "" || seen[top] {
@@ -174,6 +225,21 @@ func repoDir(ctx context.Context, git string) string {
 		}
 	}
 	return ""
+}
+
+// recordedRepoDir returns the source-checkout path the installer saved (see
+// scripts/install.*), or "" if none. The file lives under the OS config dir so
+// it matches os.UserConfigDir() used by the frontends.
+func recordedRepoDir() string {
+	dir, err := os.UserConfigDir()
+	if err != nil || dir == "" {
+		return ""
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "MobFI", "source-repo.txt"))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
 }
 
 func gitOut(ctx context.Context, git, dir string, args ...string) (string, error) {
