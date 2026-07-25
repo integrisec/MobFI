@@ -18,6 +18,7 @@ import (
 	"github.com/integrisec/MobFI/internal/render"
 	"github.com/integrisec/MobFI/internal/report"
 	"github.com/integrisec/MobFI/internal/secrets"
+	"github.com/integrisec/MobFI/internal/selfupdate"
 	"github.com/integrisec/MobFI/internal/transport"
 )
 
@@ -247,6 +248,13 @@ func (a *App) DBRead(ctx context.Context, path, table string, limit int) (*dbvie
 // Render produces a human-readable view of a single file.
 func (a *App) Render(ctx context.Context, path string) (*render.View, error) {
 	return a.Renderers.Render(ctx, path)
+}
+
+// CheckUpdate reports whether a newer MobFI release is available and/or the
+// local git checkout is behind its upstream. It never modifies anything -- the
+// frontends surface the result and let the user choose how to update.
+func (a *App) CheckUpdate(ctx context.Context) (*selfupdate.Info, error) {
+	return selfupdate.Check(ctx)
 }
 
 // Report aggregates findings and a diff into an actionable report. When

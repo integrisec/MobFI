@@ -48,6 +48,8 @@ func run(args []string) error {
 		return runRender(ctx, core, args[1:])
 	case "doctor":
 		return runDoctor(ctx, core, args[1:])
+	case "update":
+		return runUpdate(ctx, core, args[1:])
 	case "version", "--version", "-v":
 		fmt.Println("mfi " + version.String())
 		return nil

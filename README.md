@@ -352,6 +352,20 @@ build-tools) and use Chroma; they degrade gracefully when unavailable.
 
 ## Updating
 
+MobFI checks for a newer version at launch (the GUI shows a banner; the wizard
+prints a one-line notice) and `mfi update` reports it on demand:
+
+```sh
+mfi update             # is a newer release out? is this checkout behind?
+mfi update -json       # machine-readable
+```
+
+It compares the built-in version against the latest **GitHub release** (works
+for prebuilt binaries too) and, when run from a git checkout, how many commits
+you are **behind upstream**. The check only *reports* — it never modifies
+anything. Set `MFI_NO_UPDATE_CHECK=1` to silence the launch check. To actually
+update:
+
 ```sh
 git pull
 go mod download        # if dependencies changed

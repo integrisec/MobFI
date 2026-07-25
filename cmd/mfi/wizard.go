@@ -26,6 +26,7 @@ func runWizard(ctx context.Context, core *app.App) error {
 	printLogo(os.Stdout)
 	fmt.Println("MobFI guided wizard  —  type `q` (or Ctrl-D) at any prompt to quit.")
 	fmt.Println("Advanced users can run subcommands directly; see `mfi help`.")
+	noticeUpdate(ctx, core, os.Stdout)
 
 	w := &wizardIO{in: bufio.NewReader(os.Stdin), out: os.Stdout}
 

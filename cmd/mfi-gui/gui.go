@@ -18,6 +18,7 @@ import (
 	"github.com/integrisec/MobFI/internal/render"
 	"github.com/integrisec/MobFI/internal/report"
 	"github.com/integrisec/MobFI/internal/secrets"
+	"github.com/integrisec/MobFI/internal/selfupdate"
 	"github.com/integrisec/MobFI/internal/version"
 )
 
@@ -42,6 +43,22 @@ func NewGUI() *GUI { return &GUI{app: app.New()} }
 
 // Version returns the MobFI release version (e.g. "v1.0.0") for display in the UI.
 func (g *GUI) Version() string { return version.String() }
+
+// CheckForUpdate reports whether a newer MobFI release exists and/or the local
+// git checkout is behind upstream. It modifies nothing; the frontend shows a
+// banner and lets the user open the release page. Errors (e.g. offline) are
+// returned so the frontend can silently ignore them.
+func (g *GUI) CheckForUpdate() (*selfupdate.Info, error) {
+	ctx, cancel := context.WithTimeout(g.ctx, 20*time.Second)
+	defer cancel()
+	return g.app.CheckUpdate(ctx)
+}
+
+// OpenURL opens a URL in the user's default browser (used by the update banner
+// to reach the release page).
+func (g *GUI) OpenURL(url string) {
+	wailsruntime.BrowserOpenURL(g.ctx, url)
+}
 
 // startup receives the Wails runtime context; the core uses it so work is
 // cancelled when the window closes. It also restores the saved window size and

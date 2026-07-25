@@ -27,6 +27,13 @@
     </nav>
     <button id="btn-deps" class="topbar-action" title="Check which adb / libimobiledevice tools are installed">Dependencies</button>
   </header>
+  <div class="update-banner hidden" id="update-banner">
+    <span class="update-msg" id="update-msg"></span>
+    <span class="update-actions">
+      <button id="update-view" class="topbar-action">View release</button>
+      <button id="update-dismiss" class="topbar-action" title="Dismiss">Dismiss</button>
+    </span>
+  </div>
   <div class="details hidden" id="deps-panel"></div>
 
   <main>

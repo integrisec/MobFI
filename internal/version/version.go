@@ -18,6 +18,13 @@ var (
 	Date    = ""
 )
 
+// Repo identifies the GitHub repository MobFI releases are published to, used
+// by the update check to find the latest release.
+const (
+	RepoOwner = "integrisec"
+	RepoName  = "MobFI"
+)
+
 // String renders the version for display (e.g. "v1.0.0" or, when stamped,
 // "v1.0.0 (a1b2c3d, 2026-07-24)").
 func String() string {

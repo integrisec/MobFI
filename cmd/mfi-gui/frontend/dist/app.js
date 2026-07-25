@@ -1733,6 +1733,59 @@ showView("devices");
   } catch (e) { /* bindings not ready yet */ }
 })();
 
+// Check for a newer release (or a git checkout behind upstream) once at launch
+// and show a dismissable banner. Purely advisory -- it opens the release page
+// but never changes anything on disk. Fails silently when offline.
+(function checkUpdate() {
+  const banner = document.getElementById("update-banner");
+  const msg = document.getElementById("update-msg");
+  const viewBtn = document.getElementById("update-view");
+  const dismissBtn = document.getElementById("update-dismiss");
+  if (!banner || !msg) return;
+
+  dismissBtn.addEventListener("click", () => banner.classList.add("hidden"));
+
+  let attempts = 0;
+  const run = () => {
+    let p;
+    try {
+      p = gui().CheckForUpdate();
+    } catch (e) {
+      if (attempts++ < 10) setTimeout(run, 500); // bindings not ready yet
+      return;
+    }
+    p.then((info) => {
+      if (!info) return;
+      const parts = [];
+      if (info.available && info.latest) {
+        parts.push(
+          "MobFI <strong>v" + info.latest + "</strong> is available (you have v" +
+            info.current + ")."
+        );
+      }
+      if (info.gitCheckout && info.gitBehind > 0) {
+        parts.push(
+          "Your checkout is <strong>" + info.gitBehind + "</strong> commit" +
+            (info.gitBehind === 1 ? "" : "s") + " behind " +
+            (info.gitBranch ? info.gitBranch + "'s upstream" : "upstream") +
+            " -- git pull to update."
+        );
+      }
+      if (!parts.length) return; // up to date
+
+      msg.innerHTML = parts.join(" ");
+      if (info.releaseUrl) {
+        viewBtn.classList.remove("hidden");
+        viewBtn.onclick = () => { try { gui().OpenURL(info.releaseUrl); } catch (e) {} };
+      } else {
+        viewBtn.classList.add("hidden");
+      }
+      banner.classList.remove("hidden");
+    }).catch(() => { /* offline or rate-limited: stay quiet */ });
+  };
+  run();
+})();
+
 // Launch splash: fade out shortly after load, or on click / any key.
 (function splash() {
   const s = document.getElementById("splash");

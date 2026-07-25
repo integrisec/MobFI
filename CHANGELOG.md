@@ -10,6 +10,12 @@ heading to the version and date and start a fresh `Unreleased` section.
 ## [Unreleased]
 
 ### Added
+- Update check at launch: MobFI now detects when a newer **GitHub release** is
+  available (works for prebuilt binaries) and, in a git checkout, how many
+  commits you are **behind upstream**. The GUI shows a dismissable banner with
+  a "View release" button; the CLI wizard prints a one-line notice and
+  `mfi update` reports on demand (`-json` supported). Advisory only -- it never
+  modifies anything; set `MFI_NO_UPDATE_CHECK=1` to silence the launch check.
 - Option to include raw, **unredacted** secrets in a report, for authorized
   local analysis: `mfi report -show-secrets` on the CLI, and an **Unredacted**
   checkbox (with a confirm prompt) next to the GUI's Export controls. Reports

@@ -99,6 +99,22 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 
 .topbar-action { margin-left: auto; flex: none; }
 
+/* Update-available banner, spanning under the top bar */
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: rgba(76, 159, 254, 0.12);
+  border-bottom: 1px solid var(--accent);
+  color: var(--text);
+  font-size: 13px;
+}
+.update-banner .update-msg { flex: 1; }
+.update-banner .update-msg strong { color: var(--accent); }
+.update-banner .update-actions { display: flex; gap: 8px; }
+.update-banner .topbar-action { margin-left: 0; }
+
 /* Global Dependencies dropdown, anchored under the top bar */
 #deps-panel {
   position: fixed;

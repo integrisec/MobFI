@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/integrisec/MobFI/internal/app"
 	"github.com/integrisec/MobFI/internal/device"
@@ -39,9 +40,83 @@ Commands:
   db        Inspect a SQLite database file (read-only)
   render    Render a file (XML, JSON, plist, SQLite, text, hex)
   doctor    Check for the external device tools (adb, libimobiledevice)
+  update    Check whether a newer MobFI release is available
   version   Print the MobFI version
   help      Show this help
 `)
+}
+
+// noticeUpdate prints a one-line hint at wizard launch if a newer release
+// exists or the git checkout is behind. It is best-effort and time-boxed so it
+// never noticeably delays startup; set MFI_NO_UPDATE_CHECK to disable it.
+func noticeUpdate(ctx context.Context, core *app.App, w io.Writer) {
+	if os.Getenv("MFI_NO_UPDATE_CHECK") != "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2500*time.Millisecond)
+	defer cancel()
+	info, err := core.CheckUpdate(ctx)
+	if err != nil || info == nil {
+		return // offline / rate-limited: stay quiet
+	}
+	switch {
+	case info.Available && info.Latest != "":
+		fmt.Fprintf(w, "\nUpdate available: MobFI v%s (you have v%s) - run `mfi update` for details.\n", info.Latest, info.Current)
+	case info.GitCheckout && info.GitBehind > 0:
+		fmt.Fprintf(w, "\nYour git checkout is %d commit(s) behind upstream - run `mfi update` for details.\n", info.GitBehind)
+	}
+}
+
+// runUpdate checks for a newer release (and a git checkout behind upstream) and
+// prints how to update. It only reports -- it changes nothing on disk.
+func runUpdate(ctx context.Context, core *app.App, args []string) error {
+	fs := flag.NewFlagSet("update", flag.ContinueOnError)
+	asJSON := fs.Bool("json", false, "output the check as JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	info, err := core.CheckUpdate(ctx)
+	if err != nil && (info == nil || info.Latest == "") {
+		return fmt.Errorf("update check failed: %w", err)
+	}
+
+	if *asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(info)
+	}
+
+	fmt.Printf("Current: v%s\n", info.Current)
+	if info.Latest != "" {
+		fmt.Printf("Latest:  v%s\n", info.Latest)
+	} else {
+		fmt.Println("Latest:  (could not reach GitHub)")
+	}
+
+	updated := true
+	if info.Available {
+		updated = false
+		fmt.Printf("\nA newer release is available: v%s\n", info.Latest)
+		if info.ReleaseURL != "" {
+			fmt.Printf("  %s\n", info.ReleaseURL)
+		}
+		fmt.Println("  Update: download the new binary from the release, or in a git")
+		fmt.Println("  checkout run: git pull && ./scripts/install.sh")
+	}
+	if info.GitCheckout && info.GitBehind > 0 {
+		updated = false
+		branch := info.GitBranch
+		if branch == "" {
+			branch = "your branch"
+		}
+		fmt.Printf("\nThis git checkout is %d commit(s) behind %s's upstream.\n", info.GitBehind, branch)
+		fmt.Println("  Update: git pull && ./scripts/install.sh")
+	}
+	if updated && info.Latest != "" {
+		fmt.Println("\nYou are on the latest release.")
+	}
+	return nil
 }
 
 func runDoctor(ctx context.Context, core *app.App, args []string) error {
