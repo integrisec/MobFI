@@ -91,6 +91,33 @@ devices are found).
 
 ## Installation
 
+### Download a prebuilt CLI (fastest)
+
+Grab a ready-to-run `mfi` CLI from the
+[latest release](https://github.com/integrisec/MobFI/releases/latest) — no Go
+toolchain needed. Binaries are cgo-free and version-stamped.
+
+| OS | Chip | Asset |
+|----|------|-------|
+| macOS | Apple Silicon | [`mfi_v1.0.0_darwin_arm64`](https://github.com/integrisec/MobFI/releases/download/v1.0.0/mfi_v1.0.0_darwin_arm64) |
+| macOS | Intel | [`mfi_v1.0.0_darwin_amd64`](https://github.com/integrisec/MobFI/releases/download/v1.0.0/mfi_v1.0.0_darwin_amd64) |
+| Linux | arm64 (incl. Raspberry Pi) | [`mfi_v1.0.0_linux_arm64`](https://github.com/integrisec/MobFI/releases/download/v1.0.0/mfi_v1.0.0_linux_arm64) |
+| Linux | x86-64 | [`mfi_v1.0.0_linux_amd64`](https://github.com/integrisec/MobFI/releases/download/v1.0.0/mfi_v1.0.0_linux_amd64) |
+| Windows | x86-64 (runs on ARM via emulation) | [`mfi_v1.0.0_windows_amd64.exe`](https://github.com/integrisec/MobFI/releases/download/v1.0.0/mfi_v1.0.0_windows_amd64.exe) |
+
+```sh
+# macOS / Linux: make it runnable, verify, and check the version
+chmod +x mfi_v1.0.0_*                              # then rename to `mfi` if you like
+shasum -a 256 -c SHA256SUMS.txt --ignore-missing   # SHA256SUMS.txt is on the release
+./mfi_v1.0.0_darwin_arm64 version                  # -> mfi v1.0.0 (…)
+```
+
+On macOS, clear the download quarantine if Gatekeeper blocks it:
+`xattr -d com.apple.quarantine mfi_v1.0.0_darwin_arm64`.
+
+The **desktop GUI** is not shipped prebuilt (it needs per-OS cgo/WebKit
+toolchains) — build it with the install scripts below.
+
 ### Quick install (recommended if you don't build Go projects)
 
 One command resolves **everything** — the Go toolchain, the Wails CLI and its
