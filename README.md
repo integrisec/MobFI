@@ -140,7 +140,8 @@ Useful flags (both scripts): `--cli-only` / `-CliOnly`, `--gui-only` /
 `--launch cli|gui` / `-Launch cli|gui` to run the app when it's built.
 Windows-only: `-NoShortcuts` skips creating the Start Menu / Desktop shortcuts.
 
-- **macOS** uses Homebrew (installed if missing).
+- **macOS** uses Homebrew (installed if missing) and copies the built
+  **MobFI.app to `/Applications`**.
 - **Linux** auto-detects `apt`/`dnf`/`pacman`/`zypper` and installs the GTK3 +
   WebKit2GTK build packages; Go is fetched from go.dev if the system's is older
   than 1.23.
@@ -358,13 +359,26 @@ prints a one-line notice) and `mfi update` reports it on demand:
 ```sh
 mfi update             # is a newer release out? is this checkout behind?
 mfi update -json       # machine-readable
+mfi update -apply      # perform the update now
 ```
 
 It compares the built-in version against the latest **GitHub release** (works
 for prebuilt binaries too) and, when run from a git checkout, how many commits
-you are **behind upstream**. The check only *reports* — it never modifies
-anything. Set `MFI_NO_UPDATE_CHECK=1` to silence the launch check. To actually
-update:
+you are **behind upstream**. Set `MFI_NO_UPDATE_CHECK=1` to silence the launch
+check.
+
+**Updating in place** — `mfi update -apply` (CLI) or the **Update now** button
+on the GUI banner performs the update for you:
+
+- **Source checkout**: runs `git pull --ff-only` and rebuilds via the install
+  script. The **GUI does this out-of-process** — it closes, a detached worker
+  updates and rebuilds, then the app relaunches automatically and toasts the
+  result. (The installer records the checkout path so this works even when the
+  app runs from `/Applications`.)
+- **Prebuilt binary**: downloads the matching release asset, verifies its
+  SHA-256, and atomically replaces the running executable.
+
+To update manually instead:
 
 ```sh
 git pull

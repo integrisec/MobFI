@@ -1733,6 +1733,17 @@ showView("devices");
   } catch (e) { /* bindings not ready yet */ }
 })();
 
+// If a self-update ran just before this launch, toast its result once.
+(function updateResult() {
+  const run = (attempt) => {
+    let p;
+    try { p = gui().TakeUpdateResult(); }
+    catch (e) { if (attempt < 10) setTimeout(() => run(attempt + 1), 500); return; }
+    p.then((st) => { if (st && st.message) toast(st.message, !!st.ok); }).catch(() => {});
+  };
+  run(0);
+})();
+
 // Check for a newer release (or a git checkout behind upstream) once at launch
 // and show a dismissable banner. Purely advisory -- it opens the release page
 // but never changes anything on disk. Fails silently when offline.
@@ -1740,10 +1751,39 @@ showView("devices");
   const banner = document.getElementById("update-banner");
   const msg = document.getElementById("update-msg");
   const viewBtn = document.getElementById("update-view");
+  const applyBtn = document.getElementById("update-apply");
   const dismissBtn = document.getElementById("update-dismiss");
   if (!banner || !msg) return;
 
   dismissBtn.addEventListener("click", () => banner.classList.add("hidden"));
+
+  // Run the update out-of-process: MobFI closes, a detached worker performs the
+  // update (git pull + rebuild, or binary swap), then reopens the app. The
+  // outcome is toasted on relaunch (see the update-result handler below).
+  function wireApply(info) {
+    if (!info.canApply) { applyBtn.classList.add("hidden"); return; }
+    applyBtn.classList.remove("hidden");
+    applyBtn.onclick = async () => {
+      if (!confirm("Update MobFI now?\n\nMobFI will close, update, and reopen automatically. This can take a minute.")) {
+        return;
+      }
+      applyBtn.disabled = true;
+      viewBtn.disabled = true;
+      dismissBtn.disabled = true;
+      try {
+        await gui().StartUpdate();
+        msg.innerHTML = "<strong>Updating...</strong> MobFI will close and reopen automatically.";
+        applyBtn.classList.add("hidden");
+        viewBtn.classList.add("hidden");
+        dismissBtn.classList.add("hidden");
+      } catch (e) {
+        fail(e);
+        applyBtn.disabled = false;
+        viewBtn.disabled = false;
+        dismissBtn.disabled = false;
+      }
+    };
+  }
 
   let attempts = 0;
   const run = () => {
@@ -1780,6 +1820,7 @@ showView("devices");
       } else {
         viewBtn.classList.add("hidden");
       }
+      wireApply(info);
       banner.classList.remove("hidden");
     }).catch(() => { /* offline or rate-limited: stay quiet */ });
   };

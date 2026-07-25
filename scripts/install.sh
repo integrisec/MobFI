@@ -235,7 +235,7 @@ build_gui() {
   # shellcheck disable=SC2086 -- word-splitting of $tags into flags is intended.
   ( cd "$ROOT/cmd/mfi-gui" && wails build $tags )
   case "$OS" in
-    Darwin) ok "cmd/mfi-gui/build/bin/MobFI.app"; set_macos_app_path ;;
+    Darwin) ok "cmd/mfi-gui/build/bin/MobFI.app"; set_macos_app_path; install_macos_app ;;
     *)      ok "cmd/mfi-gui/build/bin/"; install_linux_desktop_entry ;;
   esac
 }
@@ -261,7 +261,13 @@ set_macos_app_path() {
     d="$(cd "$(dirname "$p")" && pwd)" || continue
     case "$seen" in *" $d "*) ;; *) dirs+=("$d"); seen="$seen$d " ;; esac
   done
-  for d in "$(brew --prefix 2>/dev/null)/bin" /opt/homebrew/bin /usr/local/bin /opt/local/bin /usr/bin /bin /usr/sbin /sbin; do
+  # Standard tool locations, plus the Go toolchain dirs so a GUI-initiated
+  # "Update now" (which shells out to this script to rebuild) can find go/wails.
+  local gopath goroot
+  gopath="$(go env GOPATH 2>/dev/null)"; goroot="$(go env GOROOT 2>/dev/null)"
+  for d in "$(brew --prefix 2>/dev/null)/bin" /opt/homebrew/bin /usr/local/bin /opt/local/bin \
+           ${goroot:+"$goroot/bin"} /usr/local/go/bin ${gopath:+"$gopath/bin"} "$HOME/go/bin" \
+           /usr/bin /bin /usr/sbin /sbin; do
     [ -n "$d" ] && [ -d "$d" ] || continue
     case "$seen" in *" $d "*) ;; *) dirs+=("$d"); seen="$seen$d " ;; esac
   done
@@ -297,6 +303,23 @@ install_linux_desktop_entry() {
   icon_dst="$icons/mobfi.png"
   [ -f "$icon_src" ] && cp -f "$icon_src" "$icon_dst" 2>/dev/null || icon_dst="$icon_src"
 
+  # Bake a PATH into the launcher so a menu-launched GUI (which otherwise gets
+  # only the session PATH) can find adb / libimobiledevice AND the toolchain
+  # (go, wails, git) it shells out to for an in-app "Update now" rebuild.
+  local pathdirs=() seen=" " d p gopath goroot launch_path
+  for p in adb idevice_id ideviceinfo ideviceinstaller afcclient idevicebackup2 iproxy ssh git go wails aapt; do
+    d="$(command -v "$p" 2>/dev/null)" || continue
+    d="$(cd "$(dirname "$d")" && pwd)" || continue
+    case "$seen" in *" $d "*) ;; *) pathdirs+=("$d"); seen="$seen$d " ;; esac
+  done
+  gopath="$(go env GOPATH 2>/dev/null)"; goroot="$(go env GOROOT 2>/dev/null)"
+  for d in /usr/local/go/bin ${goroot:+"$goroot/bin"} ${gopath:+"$gopath/bin"} "$HOME/go/bin" \
+           /usr/local/bin /usr/bin /bin /usr/sbin /sbin; do
+    [ -d "$d" ] || continue
+    case "$seen" in *" $d "*) ;; *) pathdirs+=("$d"); seen="$seen$d " ;; esac
+  done
+  launch_path="$(IFS=:; echo "${pathdirs[*]}")"
+
   desktop="$apps/mobfi.desktop"
   cat > "$desktop" <<EOF
 [Desktop Entry]
@@ -304,7 +327,7 @@ Type=Application
 Name=MobFI
 GenericName=Mobile Filesystem Inspector
 Comment=Inspect Android and iOS app file structures
-Exec="$bin"
+Exec=/usr/bin/env PATH=$launch_path "$bin"
 Icon=$icon_dst
 Terminal=false
 Categories=Development;Utility;
@@ -313,6 +336,40 @@ EOF
   chmod +x "$desktop" 2>/dev/null || true
   have update-desktop-database && update-desktop-database "$apps" >/dev/null 2>&1 || true
   ok "desktop entry: $desktop"
+}
+
+# install_macos_app copies the built bundle to /Applications (the conventional
+# location) and re-registers it. The plist PATH patch from set_macos_app_path
+# travels with the copy. MACOS_APP_DST records where the app ended up.
+MACOS_APP_DST=""
+install_macos_app() {
+  [ "$OS" = "Darwin" ] || return 0
+  local src dst lsreg
+  src="$ROOT/cmd/mfi-gui/build/bin/MobFI.app"
+  [ -d "$src" ] || return 0
+  dst="/Applications/MobFI.app"
+  if rm -rf "$dst" 2>/dev/null && cp -R "$src" "$dst" 2>/dev/null; then
+    lsreg="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+    [ -x "$lsreg" ] && "$lsreg" -f "$dst" >/dev/null 2>&1 || true
+    MACOS_APP_DST="$dst"
+    ok "installed to /Applications/MobFI.app"
+  else
+    MACOS_APP_DST="$src"
+    warn "could not copy to /Applications (permissions?); using $src"
+  fi
+}
+
+# record_source_repo saves this checkout's path so an in-app "Update now" can
+# git-pull + rebuild even when the GUI runs from /Applications (detached from
+# the source tree). Written under the OS config dir to match os.UserConfigDir().
+record_source_repo() {
+  local cfg
+  case "$OS" in
+    Darwin) cfg="$HOME/Library/Application Support/MobFI" ;;
+    *)      cfg="${XDG_CONFIG_HOME:-$HOME/.config}/MobFI" ;;
+  esac
+  mkdir -p "$cfg" 2>/dev/null || return 0
+  printf '%s\n' "$ROOT" > "$cfg/source-repo.txt" 2>/dev/null || true
 }
 
 # --- run ---------------------------------------------------------------------
@@ -324,12 +381,13 @@ main() {
   ensure_runtime_tools
   [ "$BUILD_CLI" -eq 1 ] && build_cli
   [ "$BUILD_GUI" -eq 1 ] && build_gui || true
+  record_source_repo
 
   echo
   step "Done"
   [ "$BUILD_CLI" -eq 1 ] && echo "  CLI:  ${ROOT}/bin/mfi        (try: ./bin/mfi detect)"
   case "$OS" in
-    Darwin) [ "$BUILD_GUI" -eq 1 ] && echo "  GUI:  open ${ROOT}/cmd/mfi-gui/build/bin/MobFI.app" ;;
+    Darwin) [ "$BUILD_GUI" -eq 1 ] && echo "  GUI:  open ${MACOS_APP_DST:-/Applications/MobFI.app}" ;;
     *)      [ "$BUILD_GUI" -eq 1 ] && echo "  GUI:  ${ROOT}/cmd/mfi-gui/build/bin/" ;;
   esac
   echo "  If 'go'/'wails' aren't found in new shells, add these to your profile:"
@@ -340,7 +398,7 @@ main() {
     gui)
       step "Launching the GUI"
       case "$OS" in
-        Darwin) open "${ROOT}/cmd/mfi-gui/build/bin/MobFI.app" ;;
+        Darwin) open "${MACOS_APP_DST:-/Applications/MobFI.app}" ;;
         # shellcheck disable=SC2086 -- word-splitting of tags into flags is intended.
         *)      ( cd "$ROOT/cmd/mfi-gui" && exec wails dev $(wails_tags) ) ;;
       esac

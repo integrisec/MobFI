@@ -58,10 +58,17 @@ built on a single shared Go core.
   diff, and a global Dependencies panel. Device detection is resilient -- one
   failing detector never blanks the list.
 - `mfi doctor` reports the presence of the runtime device tools.
-- Launch update check: detects a newer GitHub release (works for prebuilt
-  binaries) and, in a git checkout, how many commits behind upstream. The GUI
-  shows a dismissable banner; the CLI prints a notice and `mfi update` reports
-  on demand. Advisory only; `MFI_NO_UPDATE_CHECK=1` silences it.
+- Launch update check with in-place update: detects a newer GitHub release
+  (works for prebuilt binaries) and, in a git checkout, how many commits behind
+  upstream. The GUI shows a dismissable banner and the CLI prints a notice /
+  `mfi update`. Updating in place is a click (**Update now**) or
+  `mfi update -apply`: a source checkout runs `git pull` + rebuild, a prebuilt
+  binary downloads the release asset, verifies its SHA-256, and swaps itself.
+  The GUI update is done out-of-process -- MobFI closes, a detached worker
+  updates and rebuilds, then relaunches the app automatically and toasts the
+  result. The installer records the source-checkout path so this works even
+  when the app runs from `/Applications` or a shortcut.
+  `MFI_NO_UPDATE_CHECK=1` silences the launch check.
 
 ### Packaging & tooling
 - Cross-platform install scripts: `scripts/install.sh` (macOS/Linux) and
@@ -69,13 +76,14 @@ built on a single shared Go core.
   and libimobiledevice, then build both binaries.
 - Windows-on-ARM support: emulated amd64 GUI build, scoop bootstrap, prebuilt
   libimobiledevice, and Apple Mobile Device Support for iOS-over-USB.
-- macOS: the installer bakes an `LSEnvironment` PATH into the app bundle so a
-  Finder/Dock-launched GUI finds Homebrew-installed adb / libimobiledevice
-  (otherwise the bundle's minimal PATH hides them and every device shows as
-  missing).
+- macOS: the installer copies the app to `/Applications` and bakes an
+  `LSEnvironment` PATH into the bundle so a Finder/Dock-launched GUI finds
+  Homebrew-installed adb / libimobiledevice and the toolchain (otherwise the
+  bundle's minimal PATH hides them and every device shows as missing).
 - Linux: GUI builds against webkit2gtk-4.1 (the `webkit2_41` tag) when 4.0 is
   absent (Debian bookworm / Raspberry Pi OS); the window/taskbar icon is set at
-  runtime and the installer registers a `.desktop` launcher + icon.
+  runtime and the installer registers a `.desktop` launcher + icon with a baked
+  PATH (so a menu-launched GUI finds the device tools and the update toolchain).
 - Prebuilt, version-stamped `mfi` CLI binaries for macOS, Linux and Windows are
   attached to the release; version reporting is shared by both binaries via
   `internal/version`.

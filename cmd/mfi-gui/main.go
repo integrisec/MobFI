@@ -34,6 +34,13 @@ const (
 )
 
 func main() {
+	// If we were launched as the detached update worker, do the update (waiting
+	// for the old GUI to exit, replacing files, relaunching) and exit -- never
+	// open a window in that mode.
+	if runUpdateWorkerIfRequested() {
+		return
+	}
+
 	// A GUI launched from a Start Menu / Desktop shortcut inherits Explorer's
 	// login-time PATH, which can predate tools installed since (adb via winget,
 	// the libimobiledevice bundle). Refresh it from the registry so the bound

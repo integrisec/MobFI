@@ -60,6 +60,33 @@ func (g *GUI) OpenURL(url string) {
 	wailsruntime.BrowserOpenURL(g.ctx, url)
 }
 
+// StartUpdate launches a detached worker that waits for this GUI to exit,
+// performs the update (git pull + rebuild, or binary swap), and relaunches the
+// app -- then quits the GUI so its files can be replaced while it is closed.
+// The result is shown as a toast when the app reopens (see TakeUpdateResult).
+func (g *GUI) StartUpdate() error {
+	if err := startUpdateWorker("gui"); err != nil {
+		return err
+	}
+	// Let the frontend paint its "closing to update" message, then quit so the
+	// worker (which is waiting on our exit) can proceed.
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		wailsruntime.Quit(g.ctx)
+	}()
+	return nil
+}
+
+// TakeUpdateResult returns (and clears) the outcome of an update performed by
+// the worker before this launch, or nil if there was none. The frontend calls
+// it once at startup to toast the result.
+func (g *GUI) TakeUpdateResult() *updateStatus {
+	if st, ok := takeUpdateStatus(); ok {
+		return &st
+	}
+	return nil
+}
+
 // startup receives the Wails runtime context; the core uses it so work is
 // cancelled when the window closes. It also restores the saved window size and
 // position, clamped/validated against the current screen so geometry saved on

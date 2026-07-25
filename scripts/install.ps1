@@ -335,6 +335,12 @@ Ensure-RuntimeTools
 if ($buildCli) { Build-Cli }
 if ($buildGui) { Build-Gui; New-Shortcuts }
 
+# Record this checkout so an in-app "Update now" can git-pull + rebuild even
+# when the GUI runs from a shortcut. Under %APPDATA% to match os.UserConfigDir().
+$cfgDir = Join-Path $env:APPDATA 'MobFI'
+New-Item -ItemType Directory -Force -Path $cfgDir -ErrorAction SilentlyContinue | Out-Null
+Set-Content -Path (Join-Path $cfgDir 'source-repo.txt') -Value $Root -Encoding ascii -ErrorAction SilentlyContinue
+
 Write-Host ""
 Step "Done"
 if ($buildCli) { Write-Host "  CLI:  $Root\bin\mfi.exe   (try: .\bin\mfi.exe detect)" }
