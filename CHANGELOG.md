@@ -9,6 +9,19 @@ heading to the version and date and start a fresh `Unreleased` section.
 
 ## [Unreleased]
 
+### Added
+- Option to include raw, **unredacted** secrets in a report, for authorized
+  local analysis: `mfi report -show-secrets` on the CLI, and an **Unredacted**
+  checkbox (with a confirm prompt) next to the GUI's Export controls. Reports
+  stay redacted by default; unredacted output carries a plaintext warning
+  banner and is not meant to be shared.
+
+### Fixed
+- Linux: the GUI window/taskbar showed a blank icon. The app icon is now
+  supplied to Wails at runtime (`linux.Options.Icon`) and the installer
+  registers a per-user `.desktop` launcher + icon (with `StartupWMClass`) so
+  the app menu and panel pair the correct icon.
+
 ## [1.0.0] - 2026-07-24
 
 First official release. MobFI is a cross-platform (macOS, Windows, Linux)

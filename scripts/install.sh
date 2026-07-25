@@ -236,8 +236,44 @@ build_gui() {
   ( cd "$ROOT/cmd/mfi-gui" && wails build $tags )
   case "$OS" in
     Darwin) ok "cmd/mfi-gui/build/bin/MobFI.app" ;;
-    *)      ok "cmd/mfi-gui/build/bin/" ;;
+    *)      ok "cmd/mfi-gui/build/bin/"; install_linux_desktop_entry ;;
   esac
+}
+
+# install_linux_desktop_entry adds a per-user .desktop launcher + icon so the
+# GUI shows up (with its icon) in the application menu, and so the desktop
+# environment can pair the running window's icon via StartupWMClass. Wails
+# already supplies the in-window icon at runtime; this covers the menu/taskbar.
+install_linux_desktop_entry() {
+  [ "$OS" = "Linux" ] || return 0
+  local bin icon_src apps icons desktop icon_dst
+  bin="$(find "$ROOT/cmd/mfi-gui/build/bin" -maxdepth 1 -type f -perm -u+x 2>/dev/null | head -1)"
+  [ -n "$bin" ] || { warn "GUI binary not found; skipping desktop entry"; return 0; }
+  icon_src="$ROOT/cmd/mfi-gui/build/appicon.png"
+
+  apps="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+  icons="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/256x256/apps"
+  mkdir -p "$apps" "$icons" 2>/dev/null || { warn "could not create desktop dirs; skipping"; return 0; }
+
+  icon_dst="$icons/mobfi.png"
+  [ -f "$icon_src" ] && cp -f "$icon_src" "$icon_dst" 2>/dev/null || icon_dst="$icon_src"
+
+  desktop="$apps/mobfi.desktop"
+  cat > "$desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=MobFI
+GenericName=Mobile Filesystem Inspector
+Comment=Inspect Android and iOS app file structures
+Exec="$bin"
+Icon=$icon_dst
+Terminal=false
+Categories=Development;Utility;
+StartupWMClass=MobFI
+EOF
+  chmod +x "$desktop" 2>/dev/null || true
+  have update-desktop-database && update-desktop-database "$apps" >/dev/null 2>&1 || true
+  ok "desktop entry: $desktop"
 }
 
 # --- run ---------------------------------------------------------------------

@@ -13,10 +13,18 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/linux"
 )
 
 //go:embed all:frontend/dist
 var assets embed.FS
+
+// appIcon is the window / taskbar icon. macOS and Windows bake build/appicon
+// into the app bundle at package time, but on Linux Wails needs the icon bytes
+// at runtime (via linux.Options.Icon) or the window shows a blank placeholder.
+//
+//go:embed build/appicon.png
+var appIcon []byte
 
 const (
 	defaultWidth  = 1100
@@ -50,6 +58,12 @@ func main() {
 		OnStartup:   gui.startup,
 		OnShutdown:  gui.shutdown,
 		Bind:        []any{gui},
+		// Linux needs the window/taskbar icon supplied at runtime; ProgramName
+		// sets the WM class so a matching .desktop entry can pair its icon.
+		Linux: &linux.Options{
+			Icon:        appIcon,
+			ProgramName: "MobFI",
+		},
 	})
 	if err != nil {
 		log.Fatal(err)
