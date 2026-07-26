@@ -1,7 +1,8 @@
-//go:build !windows
+//go:build !windows && !darwin
 
 package main
 
-// refreshPath is a no-op off Windows: the CLI and GUI inherit PATH from the
-// shell or launcher, and there is no Explorer PATH-caching quirk to work around.
+// refreshPath is a no-op on Linux: a GUI launched from the app menu inherits
+// the session PATH (and our .desktop entry bakes one in), so there is no
+// launcher PATH quirk to work around here.
 func refreshPath() {}

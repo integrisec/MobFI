@@ -76,12 +76,15 @@ built on a single shared Go core.
   and libimobiledevice, then build both binaries.
 - Windows-on-ARM support: emulated amd64 GUI build, scoop bootstrap, prebuilt
   libimobiledevice, and Apple Mobile Device Support for iOS-over-USB.
-- macOS: the installer copies the app to `/Applications` and bakes an
-  `LSEnvironment` PATH into the bundle so a Finder/Dock-launched GUI finds
-  Homebrew-installed adb / libimobiledevice and the toolchain (otherwise the
-  bundle's minimal PATH hides them and every device shows as missing). The
-  bundle is re-signed (ad-hoc) after the plist edit, since editing `Info.plist`
-  invalidates Wails' signature and Apple Silicon then refuses to launch it.
+- macOS: the GUI finds command-line tools (adb, libimobiledevice, ...)
+  regardless of how it is launched. At runtime it merges the user's login-shell
+  PATH and the standard Homebrew/MacPorts/toolchain locations (LaunchServices
+  does not reliably honor the bundle's `LSEnvironment`), so a Finder-launched
+  GUI resolves the same `adb` as the terminal -- including adb-over-TCP devices
+  (e.g. Corellium). The installer also copies the app to `/Applications`, bakes
+  an `LSEnvironment` PATH, and re-signs the bundle (ad-hoc) after the plist edit
+  (editing `Info.plist` invalidates Wails' signature and Apple Silicon then
+  refuses to launch it).
 - Linux: GUI builds against webkit2gtk-4.1 (the `webkit2_41` tag) when 4.0 is
   absent (Debian bookworm / Raspberry Pi OS); the window/taskbar icon is set at
   runtime and the installer registers a `.desktop` launcher + icon with a baked
