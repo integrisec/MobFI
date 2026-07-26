@@ -276,6 +276,13 @@ set_macos_app_path() {
   "$pb" -c "Delete :LSEnvironment" "$plist" >/dev/null 2>&1 || true
   "$pb" -c "Add :LSEnvironment dict" "$plist" >/dev/null 2>&1 || true
   if "$pb" -c "Add :LSEnvironment:PATH string $path_value" "$plist" >/dev/null 2>&1; then
+    # Editing Info.plist invalidates Wails' ad-hoc code signature; Apple Silicon
+    # refuses to launch a bundle whose signature no longer matches its contents
+    # (Finder reports a "(null)" permission error). Re-sign ad-hoc to re-seal it.
+    if have codesign; then
+      codesign --force --deep --sign - "$app" >/dev/null 2>&1 \
+        || warn "re-sign failed; the app may not launch (run: codesign --force --deep --sign - \"$app\")"
+    fi
     # Re-register so LaunchServices picks up the new environment immediately.
     local lsreg="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
     [ -x "$lsreg" ] && "$lsreg" -f "$app" >/dev/null 2>&1 || true
@@ -349,6 +356,9 @@ install_macos_app() {
   [ -d "$src" ] || return 0
   dst="/Applications/MobFI.app"
   if rm -rf "$dst" 2>/dev/null && cp -R "$src" "$dst" 2>/dev/null; then
+    # Ensure the launched copy carries a valid signature (Apple Silicon requires
+    # it). The source is already re-signed; this re-seals the /Applications copy.
+    have codesign && codesign --force --deep --sign - "$dst" >/dev/null 2>&1 || true
     lsreg="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
     [ -x "$lsreg" ] && "$lsreg" -f "$dst" >/dev/null 2>&1 || true
     MACOS_APP_DST="$dst"

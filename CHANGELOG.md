@@ -79,7 +79,9 @@ built on a single shared Go core.
 - macOS: the installer copies the app to `/Applications` and bakes an
   `LSEnvironment` PATH into the bundle so a Finder/Dock-launched GUI finds
   Homebrew-installed adb / libimobiledevice and the toolchain (otherwise the
-  bundle's minimal PATH hides them and every device shows as missing).
+  bundle's minimal PATH hides them and every device shows as missing). The
+  bundle is re-signed (ad-hoc) after the plist edit, since editing `Info.plist`
+  invalidates Wails' signature and Apple Silicon then refuses to launch it.
 - Linux: GUI builds against webkit2gtk-4.1 (the `webkit2_41` tag) when 4.0 is
   absent (Debian bookworm / Raspberry Pi OS); the window/taskbar icon is set at
   runtime and the installer registers a `.desktop` launcher + icon with a baked
