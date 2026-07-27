@@ -61,6 +61,16 @@ func updateWorker() {
 	}
 	lg.Printf("worker start: pid=%d ppid=%s target=%s", os.Getpid(), os.Getenv(envPPID), target)
 
+	// Hard re-entry guard: if another worker ran seconds ago, a relaunch loop is
+	// underway (e.g. the worker env leaked into a relaunched app). Abort WITHOUT
+	// relaunching -- that breaks the loop instead of spawning yet another
+	// instance. Legitimate updates are minutes apart, so this never trips them.
+	if recentWorkerRun() {
+		lg.Printf("re-entry guard tripped (a worker ran <%s ago): aborting to prevent a relaunch loop", workerReentryWindow)
+		return
+	}
+	markWorkerRun()
+
 	relaunch := os.Getenv(envRelaunch)
 	// Guarantee a recorded status and a relaunch, even on panic, so clicking
 	// Update never leaves the user with a closed app and no explanation.
@@ -121,12 +131,42 @@ func (l *updateLog) Close() {
 
 // updateLogPath is where the worker writes its trace (handy for diagnosing a
 // failed update): <UserConfigDir>/MobFI/update.log.
+// updateLogPath is where the worker writes its trace (handy for diagnosing a
+// failed update): <UserConfigDir>/MobFI/update.log.
 func updateLogPath() string {
 	dir, err := os.UserConfigDir()
 	if err != nil || dir == "" {
 		dir = os.TempDir()
 	}
 	return filepath.Join(dir, "MobFI", "update.log")
+}
+
+// workerReentryWindow is how recently a prior worker run makes a new one abort
+// (see the re-entry guard). Legitimate updates are far more than this apart.
+const workerReentryWindow = 25 * time.Second
+
+func workerMarkerPath() string {
+	return filepath.Join(filepath.Dir(updateLogPath()), "worker-run.txt")
+}
+
+// recentWorkerRun reports whether a worker recorded a run within the guard
+// window -- the signature of a relaunch loop.
+func recentWorkerRun() bool {
+	b, err := os.ReadFile(workerMarkerPath())
+	if err != nil {
+		return false
+	}
+	t, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(string(b)))
+	if err != nil {
+		return false
+	}
+	return time.Since(t) < workerReentryWindow
+}
+
+func markWorkerRun() {
+	p := workerMarkerPath()
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	_ = os.WriteFile(p, []byte(time.Now().Format(time.RFC3339Nano)), 0o644)
 }
 
 // startUpdateWorker copies this executable to a temp location and launches it

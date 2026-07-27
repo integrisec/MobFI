@@ -38,8 +38,13 @@ func sysDetach(cmd *exec.Cmd) {
 // Linux (detached so it outlives the worker). Returns any launch error.
 func launchApp(target string) error {
 	if runtime.GOOS == "darwin" {
-		// Run (not Start) so `open`'s non-zero exit surfaces as an error.
-		out, err := exec.Command("open", "-n", target).CombinedOutput()
+		// Run (not Start) so `open`'s non-zero exit surfaces as an error. Give
+		// `open` the worker-stripped env: it can pass its environment to the
+		// launched app, and if MOBFI_UPDATE_WORKER leaked through the relaunched
+		// app would start as another worker -> a relaunch fork bomb.
+		oc := exec.Command("open", "-n", target)
+		oc.Env = relaunchEnv()
+		out, err := oc.CombinedOutput()
 		if err == nil {
 			return nil
 		}

@@ -79,9 +79,11 @@ built on a single shared Go core.
   `<config>/MobFI/update.log`, streams the rebuild output, always relaunches
   the app (even on a crash), and on macOS falls back to exec'ing the bundle's
   binary if `open` cannot relaunch it from the detached process. The relaunched
-  app runs with the worker control vars stripped from its environment, so it
-  never restarts as another worker (which previously caused a relaunch loop
-  spawning many app instances). The worker pulls over the public HTTPS URL (not
+  app runs with the worker control vars stripped from its environment on every
+  relaunch path (including the macOS `open` command, which can pass its env to
+  the launched app), so it never restarts as another worker -- previously a
+  relaunch loop spawned many app instances. A hard re-entry guard also aborts a
+  worker that starts within seconds of a prior one, capping any future loop. The worker pulls over the public HTTPS URL (not
   the configured SSH remote) and runs git non-interactively
   (`GIT_TERMINAL_PROMPT=0`, `ssh -o BatchMode=yes`), so it never hangs on an
   SSH key/host-key prompt it cannot answer -- the previous symptom where the app
