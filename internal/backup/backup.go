@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	_ "modernc.org/sqlite" // sql driver "sqlite" (cgo-free)
@@ -28,6 +29,7 @@ type Options struct {
 	BundleID string // app whose data to reconstruct
 	Dest     string // local destination directory for the reconstructed tree
 	Bin      string // idevicebackup2 binary; empty means "idevicebackup2" from PATH
+	InfoBin  string // ideviceinfo binary; empty means "ideviceinfo" from PATH
 	Progress func(extract.Progress)
 	// KeepRaw leaves the raw backup on disk (under Dest/_backup) instead of
 	// deleting it after reconstruction. Off by default to save space.
@@ -39,6 +41,54 @@ func (o Options) bin() string {
 		return o.Bin
 	}
 	return "idevicebackup2"
+}
+
+func (o Options) infoBin() string {
+	if o.InfoBin != "" {
+		return o.InfoBin
+	}
+	return "ideviceinfo"
+}
+
+// EstimateBackupSize returns the device's used data in bytes, which approximates
+// the size of a full (unencrypted) backup -- the dominant contents (photos,
+// videos, app data) are backed up, while the OS and app binaries are not, so a
+// backup is usually somewhat smaller. It reads the com.apple.disk_usage domain
+// via ideviceinfo. bin may be "" for "ideviceinfo" from PATH. A zero result
+// with a nil error means the value could not be determined.
+func EstimateBackupSize(ctx context.Context, udid, bin string) (int64, error) {
+	if bin == "" {
+		bin = "ideviceinfo"
+	}
+	args := []string{"-q", "com.apple.disk_usage"}
+	if udid != "" {
+		args = append([]string{"-u", udid}, args...)
+	}
+	out, err := sysproc.CommandContext(ctx, bin, args...).Output()
+	if err != nil {
+		return 0, err
+	}
+	var capacity, avail int64
+	for _, line := range strings.Split(string(out), "\n") {
+		k, v, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		n, perr := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
+		if perr != nil {
+			continue
+		}
+		switch strings.TrimSpace(k) {
+		case "TotalDataCapacity":
+			capacity = n
+		case "TotalDataAvailable":
+			avail = n
+		}
+	}
+	if capacity > 0 && avail >= 0 && capacity >= avail {
+		return capacity - avail, nil
+	}
+	return 0, nil
 }
 
 // Run backs up the device and reconstructs BundleID's files into Dest. It
@@ -62,6 +112,27 @@ func (o Options) Run(ctx context.Context) (*extract.Result, error) {
 	}
 	if !o.KeepRaw {
 		defer os.RemoveAll(rawParent)
+	}
+
+	// Pre-flight: estimate the backup size (the device's used data) and make
+	// sure the destination drive has room, so we fail fast with a clear message
+	// instead of dying partway through a long backup. Best effort -- if either
+	// value can't be read we proceed and let idevicebackup2 report a shortage.
+	est, _ := EstimateBackupSize(ctx, o.UDID, o.infoBin())
+	free, ferr := freeSpace(o.Dest)
+	if est > 0 && o.Progress != nil {
+		msg := fmt.Sprintf("estimated backup size ~%.1f GB (full device)", gb(est))
+		if ferr == nil {
+			msg = fmt.Sprintf("estimated backup size ~%.1f GB; destination free ~%.1f GB", gb(est), gb(int64(free)))
+		}
+		o.Progress(extract.Progress{Path: msg})
+	}
+	if est > 0 && ferr == nil {
+		need := est + est/10 // require the estimate plus a ~10% margin
+		if int64(free) < need {
+			return nil, fmt.Errorf("not enough free space at %s: ~%.1f GB free, but a full-device backup needs ~%.1f GB (the device's used data). "+
+				"Free space or choose a destination with room -- iOS backs up the whole device even to extract one app", o.Dest, gb(int64(free)), gb(need))
+		}
 	}
 
 	// The backup itself is a black box with no per-file progress; tell the
@@ -191,6 +262,10 @@ func copyFile(src, dst string) (int64, error) {
 	}
 	return n, err
 }
+
+// gb converts a byte count to gigabytes (decimal, matching how iOS storage is
+// reported) for display.
+func gb(b int64) float64 { return float64(b) / 1e9 }
 
 // errLine picks the most informative line from a tool's output: the last line
 // mentioning an error, else the last non-empty line (the summary/failure is

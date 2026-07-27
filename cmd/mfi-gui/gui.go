@@ -65,7 +65,15 @@ func (g *GUI) OpenURL(url string) {
 // app -- then quits the GUI so its files can be replaced while it is closed.
 // The result is shown as a toast when the app reopens (see TakeUpdateResult).
 func (g *GUI) StartUpdate() error {
-	if err := startUpdateWorker("gui"); err != nil {
+	// Mint a one-time approval token: this method is only reachable after the
+	// user clicked Update now and confirmed, so it is the point of approval. The
+	// worker refuses to run without a matching token, so no leaked env or stray
+	// process can ever trigger an update without the user's explicit go-ahead.
+	token, err := approveUpdate()
+	if err != nil {
+		return err
+	}
+	if err := startUpdateWorker("gui", token); err != nil {
 		return err
 	}
 	// Let the frontend paint its "closing to update" message, then quit so the

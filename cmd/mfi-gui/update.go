@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -29,7 +31,11 @@ const (
 	envTarget   = "MOBFI_UPDATE_TARGET"   // "gui" (or "cli")
 	envRelaunch = "MOBFI_UPDATE_RELAUNCH" // app/bundle path to reopen afterwards
 	envStatus   = "MOBFI_UPDATE_STATUS"   // status file the GUI reads on next launch
+	envToken    = "MOBFI_UPDATE_TOKEN"    // one-time approval token (see approval token)
 )
+
+// approvalTTL is how long a written approval token stays valid.
+const approvalTTL = 2 * time.Minute
 
 // updateStatus is the outcome of a worker run, surfaced as a toast on relaunch.
 type updateStatus struct {
@@ -60,6 +66,15 @@ func updateWorker() {
 		target = "gui"
 	}
 	lg.Printf("worker start: pid=%d ppid=%s target=%s", os.Getpid(), os.Getenv(envPPID), target)
+
+	// Approval gate: the update NEVER runs without explicit user approval. The
+	// GUI writes a one-time token when the user clicks Update now and confirms,
+	// and passes it via env. Without a matching, recent, unused token (e.g. a
+	// leaked env var or a stray relaunch), refuse and exit WITHOUT relaunching.
+	if !consumeApprovalToken(os.Getenv(envToken)) {
+		lg.Printf("no valid approval token; refusing to update (updates require explicit user approval)")
+		return
+	}
 
 	// Hard re-entry guard: if another worker ran seconds ago, a relaunch loop is
 	// underway (e.g. the worker env leaked into a relaunched app). Abort WITHOUT
@@ -172,7 +187,7 @@ func markWorkerRun() {
 // startUpdateWorker copies this executable to a temp location and launches it
 // detached as the update worker, so the original binary/bundle can be replaced
 // while the worker runs. It returns after spawning; the caller then quits.
-func startUpdateWorker(target string) error {
+func startUpdateWorker(target, token string) error {
 	self, err := os.Executable()
 	if err != nil {
 		return err
@@ -196,9 +211,51 @@ func startUpdateWorker(target string) error {
 		envTarget+"="+target,
 		envRelaunch+"="+relaunchTarget(self),
 		envStatus+"="+status,
+		envToken+"="+token,
 	)
 	sysDetach(cmd) // platform-specific: detach from the GUI, no console window
 	return cmd.Start()
+}
+
+// approveUpdate records a fresh one-time approval token (called when the user
+// confirms Update now) and returns it to pass to the worker.
+func approveUpdate() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	tok := hex.EncodeToString(b)
+	p := approvalTokenPath()
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(p, []byte(tok), 0o600); err != nil {
+		return "", err
+	}
+	return tok, nil
+}
+
+// consumeApprovalToken reports whether envTok matches a recent, unused approval
+// token, and deletes it (one-time use) whether or not it matched.
+func consumeApprovalToken(envTok string) bool {
+	p := approvalTokenPath()
+	defer os.Remove(p) // one-time use, always
+	if envTok == "" {
+		return false
+	}
+	fi, err := os.Stat(p)
+	if err != nil || time.Since(fi.ModTime()) > approvalTTL {
+		return false
+	}
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(b)) == envTok
+}
+
+func approvalTokenPath() string {
+	return filepath.Join(filepath.Dir(updateLogPath()), "update-approval.token")
 }
 
 // relaunchEnv is the environment for the relaunched app with the worker control
@@ -212,7 +269,8 @@ func relaunchEnv() []string {
 			strings.HasPrefix(e, envPPID+"=") ||
 			strings.HasPrefix(e, envTarget+"=") ||
 			strings.HasPrefix(e, envRelaunch+"=") ||
-			strings.HasPrefix(e, envStatus+"=") {
+			strings.HasPrefix(e, envStatus+"=") ||
+			strings.HasPrefix(e, envToken+"=") {
 			continue
 		}
 		out = append(out, e)

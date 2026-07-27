@@ -33,7 +33,10 @@ built on a single shared Go core.
 - iOS extraction via AFC house arrest with a selectable scope: `container`,
   `documents`, or `backup` (full-device backup + `Manifest.db` reconstruction
   to reach a production App Store app's private data on a non-jailbroken
-  device).
+  device). The `backup` scope runs a space pre-flight -- it estimates the
+  backup size from the device's used data (`ideviceinfo com.apple.disk_usage`)
+  and checks the destination's free space, failing fast with a clear message
+  instead of dying partway through a multi-GB backup.
 - Live progress with cancellation; destination path-traversal guards and
   Windows-safe filename handling.
 
@@ -83,7 +86,11 @@ built on a single shared Go core.
   relaunch path (including the macOS `open` command, which can pass its env to
   the launched app), so it never restarts as another worker -- previously a
   relaunch loop spawned many app instances. A hard re-entry guard also aborts a
-  worker that starts within seconds of a prior one, capping any future loop. The worker pulls over the public HTTPS URL (not
+  worker that starts within seconds of a prior one, capping any future loop.
+  Most importantly, the update **never runs without explicit user approval**:
+  the worker requires a one-time approval token that the GUI writes only when
+  the user clicks Update now and confirms, so a leaked env var or stray process
+  can never trigger an update on its own. The worker pulls over the public HTTPS URL (not
   the configured SSH remote) and runs git non-interactively
   (`GIT_TERMINAL_PROMPT=0`, `ssh -o BatchMode=yes`), so it never hangs on an
   SSH key/host-key prompt it cannot answer -- the previous symptom where the app
