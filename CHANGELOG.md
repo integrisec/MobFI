@@ -75,7 +75,10 @@ built on a single shared Go core.
   `MFI_NO_UPDATE_CHECK=1` silences the launch check. GUI confirmations (Update
   now, unredacted export) use the native dialog, since the Wails webview
   (WKWebView) does not implement `window.confirm()` -- previously "Update now"
-  appeared to do nothing.
+  appeared to do nothing. The GUI update worker logs every step to
+  `<config>/MobFI/update.log`, streams the rebuild output, always relaunches
+  the app (even on a crash), and on macOS falls back to exec'ing the bundle's
+  binary if `open` cannot relaunch it from the detached process.
 
 ### Packaging & tooling
 - Cross-platform install scripts: `scripts/install.sh` (macOS/Linux) and

@@ -30,11 +30,11 @@ func sysDetach(cmd *exec.Cmd) {
 	}
 }
 
-// launchApp reopens the GUI executable, detached.
-func launchApp(target string) {
+// launchApp reopens the GUI executable, detached. Returns any launch error.
+func launchApp(target string) error {
 	cmd := exec.Command(target)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		CreationFlags: windows.DETACHED_PROCESS | windows.CREATE_NO_WINDOW,
 	}
-	_ = cmd.Start()
+	return cmd.Start()
 }

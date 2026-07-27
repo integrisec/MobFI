@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -46,27 +47,82 @@ func runUpdateWorkerIfRequested() bool {
 }
 
 // updateWorker waits for the GUI to exit, runs the update, records the result,
-// and relaunches the app. It never opens a Wails window.
+// and relaunches the app. It never opens a Wails window. Everything is logged
+// to updateLogPath() and the app is relaunched even on panic, so a failure is
+// never silent and the user is never left without the app.
 func updateWorker() {
-	refreshPath() // Windows: pick up registry PATH so go/git/wails resolve
-
-	if pid, err := strconv.Atoi(os.Getenv(envPPID)); err == nil {
-		waitForExit(pid, 45*time.Second)
-	}
+	lg := newUpdateLog()
+	defer lg.Close()
 	target := os.Getenv(envTarget)
 	if target == "" {
 		target = "gui"
 	}
+	lg.Printf("worker start: pid=%d ppid=%s target=%s", os.Getpid(), os.Getenv(envPPID), target)
+
+	relaunch := os.Getenv(envRelaunch)
+	// Guarantee a recorded status and a relaunch, even on panic, so clicking
+	// Update never leaves the user with a closed app and no explanation.
+	defer func() {
+		if r := recover(); r != nil {
+			lg.Printf("PANIC: %v", r)
+			writeUpdateStatus(os.Getenv(envStatus), nil, fmt.Errorf("update crashed: %v", r))
+		}
+		if relaunch != "" {
+			lg.Printf("relaunching: %s", relaunch)
+			if err := launchApp(relaunch); err != nil {
+				lg.Printf("relaunch error: %v", err)
+			}
+		}
+		lg.Printf("worker done")
+	}()
+
+	refreshPath() // resolve go/git/wails via the login-shell / registry PATH
+	if pid, err := strconv.Atoi(os.Getenv(envPPID)); err == nil {
+		lg.Printf("waiting for GUI (pid %d) to exit...", pid)
+		waitForExit(pid, 45*time.Second)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
 	defer cancel()
-	res, err := app.New().ApplyUpdate(ctx, target, func(string) {})
+	lg.Printf("applying update (PATH=%s)", os.Getenv("PATH"))
+	res, err := app.New().ApplyUpdate(ctx, target, func(msg string) { lg.Printf("  %s", msg) })
 	writeUpdateStatus(os.Getenv(envStatus), res, err)
-
-	// Relaunch regardless of success so the user is never left without the app.
-	if relaunch := os.Getenv(envRelaunch); relaunch != "" {
-		launchApp(relaunch)
+	if err != nil {
+		lg.Printf("update FAILED: %v", err)
+	} else {
+		lg.Printf("update OK: %+v", res)
 	}
+}
+
+// updateLog is a tiny timestamped logger for the detached worker.
+type updateLog struct{ f *os.File }
+
+func newUpdateLog() *updateLog {
+	p := updateLogPath()
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	f, _ := os.Create(p) // best effort; nil f is tolerated
+	return &updateLog{f: f}
+}
+
+func (l *updateLog) Printf(format string, a ...any) {
+	if l == nil || l.f == nil {
+		return
+	}
+	fmt.Fprintf(l.f, time.Now().Format("15:04:05")+" "+format+"\n", a...)
+}
+
+func (l *updateLog) Close() {
+	if l != nil && l.f != nil {
+		_ = l.f.Close()
+	}
+}
+
+func updateLogPath() string {
+	dir, err := os.UserConfigDir()
+	if err != nil || dir == "" {
+		dir = os.TempDir()
+	}
+	return filepath.Join(dir, "MobFI", "update.log")
 }
 
 // startUpdateWorker copies this executable to a temp location and launches it

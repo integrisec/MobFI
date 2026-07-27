@@ -1,6 +1,7 @@
 package selfupdate
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -63,15 +65,15 @@ func applyGit(ctx context.Context, target string, progress func(string)) (*Resul
 		return nil, fmt.Errorf("not a MobFI git checkout")
 	}
 
-	progress("Pulling latest changes (git pull)...")
-	if out, err := runIn(ctx, dir, git, "pull", "--ff-only"); err != nil {
-		return nil, fmt.Errorf("git pull failed: %w\n%s", err, tail(out, 12))
+	progress("Pulling latest changes (git pull --ff-only)...")
+	if err := runInStream(ctx, dir, progress, git, "pull", "--ff-only"); err != nil {
+		return nil, fmt.Errorf("git pull failed: %w", err)
 	}
 
 	name, args := rebuildCmd(target)
-	progress(fmt.Sprintf("Rebuilding %s (this can take a minute)...", target))
-	if out, err := runIn(ctx, dir, name, args...); err != nil {
-		return nil, fmt.Errorf("rebuild failed: %w\n%s", err, tail(out, 20))
+	progress(fmt.Sprintf("Rebuilding %s via %s (this can take a minute)...", target, name))
+	if err := runInStream(ctx, dir, progress, name, args...); err != nil {
+		return nil, fmt.Errorf("rebuild failed: %w", err)
 	}
 	return &Result{
 		Method:          "git",
@@ -236,27 +238,74 @@ func sha256File(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// runIn runs a command in dir, returning combined output. It allows a long
-// timeout because rebuilds (especially the GUI) are slow.
-func runIn(ctx context.Context, dir, name string, args ...string) (string, error) {
+// runInStream runs a command in dir, streaming each output line to progress as
+// it appears (so a caller/log sees live output and can tell where a slow or
+// hung rebuild is). A long timeout is allowed because GUI rebuilds are slow. On
+// failure the error carries the last lines of output.
+func runInStream(ctx context.Context, dir string, progress func(string), name string, args ...string) error {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
-	out, err := cmd.CombinedOutput()
-	return string(out), err
+	w := &progressWriter{progress: progress}
+	cmd.Stdout = w
+	cmd.Stderr = w
+	err := cmd.Run()
+	w.flush()
+	if err != nil {
+		return fmt.Errorf("%w\n%s", err, w.tailStr())
+	}
+	return nil
 }
 
-// tail returns the last n non-empty lines of s (for compact error reporting).
-func tail(s string, n int) string {
-	var lines []string
-	for _, ln := range strings.Split(s, "\n") {
-		if strings.TrimSpace(ln) != "" {
-			lines = append(lines, ln)
+// progressWriter splits writes into lines, forwarding each to progress and
+// keeping the last few for error context. Safe for concurrent stdout+stderr.
+type progressWriter struct {
+	progress func(string)
+	mu       sync.Mutex
+	buf      []byte
+	tail     []string
+}
+
+func (w *progressWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.buf = append(w.buf, p...)
+	for {
+		i := bytes.IndexByte(w.buf, '\n')
+		if i < 0 {
+			break
 		}
+		w.emit(strings.TrimRight(string(w.buf[:i]), "\r"))
+		w.buf = w.buf[i+1:]
 	}
-	if len(lines) > n {
-		lines = lines[len(lines)-n:]
+	return len(p), nil
+}
+
+func (w *progressWriter) emit(line string) {
+	if strings.TrimSpace(line) == "" {
+		return
 	}
-	return strings.Join(lines, "\n")
+	if w.progress != nil {
+		w.progress(line)
+	}
+	w.tail = append(w.tail, line)
+	if len(w.tail) > 40 {
+		w.tail = w.tail[len(w.tail)-40:]
+	}
+}
+
+func (w *progressWriter) flush() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if len(w.buf) > 0 {
+		w.emit(string(w.buf))
+		w.buf = nil
+	}
+}
+
+func (w *progressWriter) tailStr() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return strings.Join(w.tail, "\n")
 }

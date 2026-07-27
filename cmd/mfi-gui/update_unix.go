@@ -3,9 +3,12 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -31,14 +34,44 @@ func sysDetach(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 }
 
-// launchApp reopens the app: `open` the bundle on macOS, exec the binary on
-// Linux (detached so it outlives the worker).
-func launchApp(target string) {
+// launchApp reopens the app: `open -n` the bundle on macOS, exec the binary on
+// Linux (detached so it outlives the worker). Returns any launch error.
+func launchApp(target string) error {
 	if runtime.GOOS == "darwin" {
-		_ = exec.Command("open", target).Start()
-		return
+		// Run (not Start) so `open`'s non-zero exit surfaces as an error.
+		out, err := exec.Command("open", "-n", target).CombinedOutput()
+		if err == nil {
+			return nil
+		}
+		openErr := fmt.Errorf("open %s: %v: %s", target, err, strings.TrimSpace(string(out)))
+		// `open` can fail from a detached (setsid) process with no Aqua session.
+		// Fall back to exec'ing the bundle's inner binary directly.
+		if bin := macAppBinary(target); bin != "" {
+			c := exec.Command(bin)
+			c.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+			if e2 := c.Start(); e2 == nil {
+				return nil
+			}
+		}
+		return openErr
 	}
 	c := exec.Command(target)
 	c.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	_ = c.Start()
+	return c.Start()
+}
+
+// macAppBinary returns the first executable inside an .app's Contents/MacOS,
+// or "" if none -- used as a fallback when `open` cannot launch the bundle.
+func macAppBinary(appPath string) string {
+	dir := filepath.Join(appPath, "Contents", "MacOS")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			return filepath.Join(dir, e.Name())
+		}
+	}
+	return ""
 }
