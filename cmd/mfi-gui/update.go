@@ -20,7 +20,9 @@ import (
 // The GUI updates itself out-of-process so it can be fully closed while its
 // files are replaced, then reopened. A detached copy of this binary runs as the
 // "update worker": it waits for the GUI to exit, performs the update, writes a
-// status file, and relaunches the app. The env vars below wire that up.
+// status file, and relaunches the app. The env vars below wire that up; they
+// are stripped from the relaunched app's environment (see relaunchEnv) so it
+// never restarts as another worker.
 const (
 	envWorker   = "MOBFI_UPDATE_WORKER"   // set on the worker process
 	envPPID     = "MOBFI_UPDATE_PPID"     // GUI pid the worker waits to exit
