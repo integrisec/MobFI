@@ -119,6 +119,8 @@ func (l *updateLog) Close() {
 	}
 }
 
+// updateLogPath is where the worker writes its trace (handy for diagnosing a
+// failed update): <UserConfigDir>/MobFI/update.log.
 func updateLogPath() string {
 	dir, err := os.UserConfigDir()
 	if err != nil || dir == "" {
