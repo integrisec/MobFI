@@ -157,6 +157,25 @@ func startUpdateWorker(target string) error {
 	return cmd.Start()
 }
 
+// relaunchEnv is the environment for the relaunched app with the worker control
+// vars stripped, so it starts as a NORMAL GUI. If these leaked through, the
+// relaunched process would run as another update worker and relaunch again --
+// an infinite loop (a fork bomb of app instances).
+func relaunchEnv() []string {
+	var out []string
+	for _, e := range os.Environ() {
+		if strings.HasPrefix(e, envWorker+"=") ||
+			strings.HasPrefix(e, envPPID+"=") ||
+			strings.HasPrefix(e, envTarget+"=") ||
+			strings.HasPrefix(e, envRelaunch+"=") ||
+			strings.HasPrefix(e, envStatus+"=") {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
 // relaunchTarget is what launchApp should reopen: the .app bundle on macOS
 // (so LaunchServices applies its environment), otherwise the executable.
 func relaunchTarget(exe string) string {

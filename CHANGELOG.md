@@ -78,7 +78,10 @@ built on a single shared Go core.
   appeared to do nothing. The GUI update worker logs every step to
   `<config>/MobFI/update.log`, streams the rebuild output, always relaunches
   the app (even on a crash), and on macOS falls back to exec'ing the bundle's
-  binary if `open` cannot relaunch it from the detached process.
+  binary if `open` cannot relaunch it from the detached process. The relaunched
+  app runs with the worker control vars stripped from its environment, so it
+  never restarts as another worker (which previously caused a relaunch loop
+  spawning many app instances).
 
 ### Packaging & tooling
 - Cross-platform install scripts: `scripts/install.sh` (macOS/Linux) and

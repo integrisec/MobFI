@@ -45,9 +45,11 @@ func launchApp(target string) error {
 		}
 		openErr := fmt.Errorf("open %s: %v: %s", target, err, strings.TrimSpace(string(out)))
 		// `open` can fail from a detached (setsid) process with no Aqua session.
-		// Fall back to exec'ing the bundle's inner binary directly.
+		// Fall back to exec'ing the bundle's inner binary directly -- with the
+		// worker env stripped so it starts as a normal GUI, not another worker.
 		if bin := macAppBinary(target); bin != "" {
 			c := exec.Command(bin)
+			c.Env = relaunchEnv()
 			c.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 			if e2 := c.Start(); e2 == nil {
 				return nil
@@ -56,6 +58,7 @@ func launchApp(target string) error {
 		return openErr
 	}
 	c := exec.Command(target)
+	c.Env = relaunchEnv()
 	c.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	return c.Start()
 }
