@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/integrisec/MobFI/internal/sysproc"
 )
 
 // Result describes the outcome of an in-place update.
@@ -245,7 +247,7 @@ func sha256File(path string) (string, error) {
 func runInStream(ctx context.Context, dir string, progress func(string), name string, args ...string) error {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := sysproc.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 	w := &progressWriter{progress: progress}
 	cmd.Stdout = w

@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/integrisec/MobFI/internal/sysproc"
 	"github.com/integrisec/MobFI/internal/version"
 )
 
@@ -245,7 +246,7 @@ func recordedRepoDir() string {
 func gitOut(ctx context.Context, git, dir string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, gitTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, git, append([]string{"-C", dir}, args...)...)
+	cmd := sysproc.CommandContext(ctx, git, append([]string{"-C", dir}, args...)...)
 	out, err := cmd.Output()
 	return strings.TrimSpace(string(out)), err
 }

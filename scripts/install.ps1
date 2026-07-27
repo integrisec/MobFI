@@ -78,6 +78,13 @@ function Winget-Install($id) {
 # refuses to install from an elevated shell, so bail out with guidance there.
 function Ensure-Scoop {
   Update-Path
+  # scoop may already be installed but its shims not yet on PATH (e.g. a fresh
+  # registry read misses it). Add them so we skip a needless re-bootstrap (which
+  # otherwise prints a scary "destination path already exists" git error).
+  $scoopShims = Join-Path $env:USERPROFILE 'scoop\shims'
+  if ((Test-Path (Join-Path $scoopShims 'scoop.ps1')) -or (Test-Path (Join-Path $scoopShims 'scoop.cmd'))) {
+    if ($env:Path -notlike "*$scoopShims*") { $env:Path = "$scoopShims;$env:Path" }
+  }
   if (Have scoop) { return $true }
   $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
   if ($admin) {

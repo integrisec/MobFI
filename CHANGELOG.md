@@ -88,7 +88,10 @@ built on a single shared Go core.
   `scripts/install.ps1` (Windows) that resolve Go, the Wails toolchain, adb,
   and libimobiledevice, then build both binaries.
 - Windows-on-ARM support: emulated amd64 GUI build, scoop bootstrap, prebuilt
-  libimobiledevice, and Apple Mobile Device Support for iOS-over-USB.
+  libimobiledevice, and Apple Mobile Device Support for iOS-over-USB. The update
+  check runs its git commands through the no-console-window wrapper so the GUI
+  no longer flashes console windows at launch, and the installer reuses an
+  existing scoop install instead of re-bootstrapping it.
 - macOS: the GUI finds command-line tools (adb, libimobiledevice, ...)
   regardless of how it is launched. At runtime it merges the user's login-shell
   PATH and the standard Homebrew/MacPorts/toolchain locations (LaunchServices
