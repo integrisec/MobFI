@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/integrisec/MobFI/internal/sysproc"
+	"github.com/integrisec/MobFI/internal/version"
 )
 
 // Result describes the outcome of an in-place update.
@@ -67,14 +68,23 @@ func applyGit(ctx context.Context, target string, progress func(string)) (*Resul
 		return nil, fmt.Errorf("not a MobFI git checkout")
 	}
 
-	progress("Pulling latest changes (git pull --ff-only)...")
-	if err := runInStream(ctx, dir, progress, git, "pull", "--ff-only"); err != nil {
+	// Pull from the public HTTPS URL rather than the configured remote (often
+	// SSH), so the unattended worker needs no SSH key/agent -- which it may not
+	// have in a GUI/LaunchServices session. The repo is public, so HTTPS fetches
+	// anonymously. Fast-forward the current branch onto the fetched tip.
+	branch, _ := gitOut(ctx, git, dir, "rev-parse", "--abbrev-ref", "HEAD")
+	if branch == "" || branch == "HEAD" {
+		branch = "main"
+	}
+	httpsURL := fmt.Sprintf("https://github.com/%s/%s.git", version.RepoOwner, version.RepoName)
+	progress("Pulling latest changes (git pull --ff-only, HTTPS)...")
+	if err := runInStream(ctx, dir, gitEnv(), progress, git, "pull", "--ff-only", httpsURL, branch); err != nil {
 		return nil, fmt.Errorf("git pull failed: %w", err)
 	}
 
 	name, args := rebuildCmd(target)
 	progress(fmt.Sprintf("Rebuilding %s via %s (this can take a minute)...", target, name))
-	if err := runInStream(ctx, dir, progress, name, args...); err != nil {
+	if err := runInStream(ctx, dir, nil, progress, name, args...); err != nil {
 		return nil, fmt.Errorf("rebuild failed: %w", err)
 	}
 	return &Result{
@@ -242,13 +252,17 @@ func sha256File(path string) (string, error) {
 
 // runInStream runs a command in dir, streaming each output line to progress as
 // it appears (so a caller/log sees live output and can tell where a slow or
-// hung rebuild is). A long timeout is allowed because GUI rebuilds are slow. On
-// failure the error carries the last lines of output.
-func runInStream(ctx context.Context, dir string, progress func(string), name string, args ...string) error {
+// hung rebuild is). env, when non-nil, replaces the child environment (nil
+// inherits the parent's). A long timeout is allowed because GUI rebuilds are
+// slow. On failure the error carries the last lines of output.
+func runInStream(ctx context.Context, dir string, env []string, progress func(string), name string, args ...string) error {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
 	cmd := sysproc.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
+	if env != nil {
+		cmd.Env = env
+	}
 	w := &progressWriter{progress: progress}
 	cmd.Stdout = w
 	cmd.Stderr = w

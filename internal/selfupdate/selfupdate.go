@@ -247,8 +247,21 @@ func gitOut(ctx context.Context, git, dir string, args ...string) (string, error
 	ctx, cancel := context.WithTimeout(ctx, gitTimeout)
 	defer cancel()
 	cmd := sysproc.CommandContext(ctx, git, append([]string{"-C", dir}, args...)...)
+	cmd.Env = gitEnv()
 	out, err := cmd.Output()
 	return strings.TrimSpace(string(out)), err
+}
+
+// gitEnv hardens git subprocesses so an unattended fetch/pull never blocks on an
+// interactive prompt (host-key, credential, or SSH passphrase) -- there is no
+// terminal to answer it in the detached update worker. It fails fast instead,
+// which the worker can report, rather than hanging until the timeout. Keychain-
+// or agent-provided keys still authenticate (that is non-interactive).
+func gitEnv() []string {
+	return append(os.Environ(),
+		"GIT_TERMINAL_PROMPT=0",
+		"GIT_SSH_COMMAND=ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15",
+	)
 }
 
 // Compare compares two dotted numeric version strings (e.g. "1.2.0" vs

@@ -81,7 +81,11 @@ built on a single shared Go core.
   binary if `open` cannot relaunch it from the detached process. The relaunched
   app runs with the worker control vars stripped from its environment, so it
   never restarts as another worker (which previously caused a relaunch loop
-  spawning many app instances).
+  spawning many app instances). The worker pulls over the public HTTPS URL (not
+  the configured SSH remote) and runs git non-interactively
+  (`GIT_TERMINAL_PROMPT=0`, `ssh -o BatchMode=yes`), so it never hangs on an
+  SSH key/host-key prompt it cannot answer -- the previous symptom where the app
+  closed and never reopened.
 
 ### Packaging & tooling
 - Cross-platform install scripts: `scripts/install.sh` (macOS/Linux) and
