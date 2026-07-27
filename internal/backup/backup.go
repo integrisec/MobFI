@@ -151,6 +151,9 @@ func (o Options) Run(ctx context.Context) (*extract.Result, error) {
 	// own output is captured (for error context) but not shown, to avoid the
 	// per-file bar competing with the overall figure.
 	cmd := sysproc.CommandContext(ctx, o.bin(), "-u", o.UDID, "backup", rawParent)
+	// On cancel, idevicebackup2 is killed; WaitDelay bounds how long Run then
+	// waits for its I/O to drain so Cancel returns promptly instead of hanging.
+	cmd.WaitDelay = 5 * time.Second
 	pw := &progressLines{} // capture-only (progress nil): used for error tail
 	cmd.Stdout = pw
 	cmd.Stderr = pw
@@ -166,6 +169,11 @@ func (o Options) Run(ctx context.Context) (*extract.Result, error) {
 			for {
 				select {
 				case <-stop:
+					return
+				case <-ctx.Done():
+					// Cancelled: stop reporting "backing up..." immediately so
+					// the UI reflects the cancel without waiting for the kill.
+					o.Progress(extract.Progress{Path: "cancelling backup and cleaning up..."})
 					return
 				case <-t.C:
 					sz := dirSize(rawParent)

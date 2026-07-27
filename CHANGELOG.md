@@ -40,6 +40,9 @@ built on a single shared Go core.
   backup progress ("X GB of ~Y GB (Z%)") by polling the staging directory
   against the estimate, since `idevicebackup2` only prints per-file progress;
   the file/byte header is hidden until reconstruction actually produces files.
+  Cancel is responsive: the click shows "Cancelling…" immediately, the progress
+  poller stops the moment the context is cancelled, and the kill wait is bounded
+  so it doesn't appear frozen before the clean-up prompt.
 - Live progress with cancellation; destination path-traversal guards and
   Windows-safe filename handling.
 

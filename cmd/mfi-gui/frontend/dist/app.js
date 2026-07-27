@@ -724,9 +724,13 @@ $("#btn-extract").addEventListener("click", async () => {
 
   cancelling.extract = false;
   btn.disabled = true;
+  cancelBtn.disabled = false; // re-enable (a prior cancel click disabled it)
   cancelBtn.classList.remove("hidden");
   out.textContent = "Extracting… (starting)";
   const off = window.runtime.EventsOn("extract:progress", (p) => {
+    // Once Cancel is clicked, stop overwriting the "Cancelling…" message with
+    // late progress events so the click has immediate, visible effect.
+    if (cancelling.extract) return;
     // Show the file/byte count only once it is meaningful. iOS backup has a
     // long phase (the full-device backup) before any files are reconstructed,
     // where p.files/p.bytes are 0 and p.path carries the overall status.
@@ -786,13 +790,22 @@ const SCAN_COLUMNS = ["rule_id", "path", "line", "match", null];
 // resulting rejection is treated as a cancel, not an error) and asks the
 // backend to cancel the op's context.
 const cancelling = { scan: false, diff: false, extract: false };
-function bindCancel(btnId, op) {
+function bindCancel(btnId, op, statusId) {
   const b = document.getElementById(btnId);
-  if (b) b.addEventListener("click", () => { cancelling[op] = true; gui().CancelOp(op); });
+  if (!b) return;
+  b.addEventListener("click", () => {
+    cancelling[op] = true;
+    b.disabled = true; // prevent double-clicks; re-enabled when the op restarts
+    if (statusId) {
+      const s = document.getElementById(statusId);
+      if (s) s.textContent = "Cancelling… (stopping and cleaning up)";
+    }
+    gui().CancelOp(op);
+  });
 }
 bindCancel("btn-scan-cancel", "scan");
 bindCancel("btn-diff-cancel", "diff");
-bindCancel("btn-extract-cancel", "extract");
+bindCancel("btn-extract-cancel", "extract", "extract-out");
 function isCancelError(e) {
   return String((e && e.message) || e).toLowerCase().includes("cancel");
 }
