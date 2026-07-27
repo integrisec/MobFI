@@ -51,13 +51,31 @@ func (g *GUI) PairTCP(addr, code string) (string, error) {
 	out, err := cmd.CombinedOutput()
 	msg := strings.TrimSpace(string(out))
 	low := strings.ToLower(msg)
-	for _, bad := range []string{"fail", "cannot", "unable", "refused", "wrong"} {
+
+	// A non-zero exit, or any error-ish output, means pairing failed. adb pair
+	// reports failures as "error: ..." / "... fault" (not the words `adb connect`
+	// uses), so match on those too rather than only fail/cannot/refused.
+	failed := err != nil
+	for _, bad := range []string{"fail", "fault", "error", "cannot", "unable", "refused", "wrong", "timeout", "timed out"} {
 		if strings.Contains(low, bad) {
-			return "", errors.New(msg)
+			failed = true
+			break
 		}
 	}
-	if err != nil && msg == "" {
-		return "", err
+	if failed {
+		if msg == "" {
+			if err != nil {
+				return "", err
+			}
+			msg = "pairing failed"
+		}
+		// The pairing host:port and code from "Pair device with pairing code"
+		// are short-lived and change every time the dialog is opened; a
+		// protocol/handshake fault almost always means they went stale.
+		if strings.Contains(low, "fault") || strings.Contains(low, "protocol") || strings.Contains(low, "timeout") || strings.Contains(low, "timed out") {
+			msg += "\n(reopen \"Pair device with pairing code\" and use the fresh host:port + code it shows -- they expire quickly. Cloud devices like Corellium do not pair: use Connect with the adb-over-TCP address instead.)"
+		}
+		return "", errors.New(msg)
 	}
 	if msg == "" {
 		msg = "paired with " + addr

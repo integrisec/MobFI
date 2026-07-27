@@ -58,6 +58,10 @@ built on a single shared Go core.
   diff, and a global Dependencies panel. Device detection is resilient -- one
   failing detector never blanks the list.
 - `mfi doctor` reports the presence of the runtime device tools.
+- Android wireless-debugging pairing reports failures correctly (a non-zero
+  exit or `error:`/`fault` output is now surfaced as an error, not a green
+  success toast) with a hint that the pairing host:port/code expire quickly and
+  that cloud devices (e.g. Corellium) connect via adb-over-TCP rather than pair.
 - Launch update check with in-place update: detects a newer GitHub release
   (works for prebuilt binaries) and, in a git checkout, how many commits behind
   upstream. The GUI shows a dismissable banner and the CLI prints a notice /
