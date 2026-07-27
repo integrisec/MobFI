@@ -727,7 +727,14 @@ $("#btn-extract").addEventListener("click", async () => {
   cancelBtn.classList.remove("hidden");
   out.textContent = "Extracting… (starting)";
   const off = window.runtime.EventsOn("extract:progress", (p) => {
-    out.textContent = `Extracting… ${p.files} file(s), ${p.bytes.toLocaleString()} byte(s)\n${p.path}`;
+    // Show the file/byte count only once it is meaningful. iOS backup has a
+    // long phase (the full-device backup) before any files are reconstructed,
+    // where p.files/p.bytes are 0 and p.path carries the overall status.
+    if (p.files > 0 || p.bytes > 0) {
+      out.textContent = `Extracting… ${p.files} file(s), ${p.bytes.toLocaleString()} byte(s)\n${p.path}`;
+    } else {
+      out.textContent = `Extracting…\n${p.path}`;
+    }
   });
 
   try {

@@ -36,8 +36,10 @@ built on a single shared Go core.
   device). The `backup` scope runs a space pre-flight -- it estimates the
   backup size from the device's used data (`ideviceinfo com.apple.disk_usage`)
   and checks the destination's free space, failing fast with a clear message
-  instead of dying partway through a multi-GB backup -- and streams
-  `idevicebackup2`'s progress live instead of buffering it to the end.
+  instead of dying partway through a multi-GB backup. It reports **overall**
+  backup progress ("X GB of ~Y GB (Z%)") by polling the staging directory
+  against the estimate, since `idevicebackup2` only prints per-file progress;
+  the file/byte header is hidden until reconstruction actually produces files.
 - Live progress with cancellation; destination path-traversal guards and
   Windows-safe filename handling.
 

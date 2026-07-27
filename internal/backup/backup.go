@@ -12,11 +12,13 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	_ "modernc.org/sqlite" // sql driver "sqlite" (cgo-free)
 
@@ -144,14 +146,48 @@ func (o Options) Run(ctx context.Context) (*extract.Result, error) {
 	}
 
 	// idevicebackup2 -u <UDID> backup <parent>  ->  <parent>/<UDID>/
-	// Stream its output live (it prints per-file / percentage progress) rather
-	// than buffering to the end, so a long multi-GB backup shows movement.
+	// idevicebackup2 only prints per-file progress, so report OVERALL progress
+	// by polling how much the staging dir has grown against the estimate. Its
+	// own output is captured (for error context) but not shown, to avoid the
+	// per-file bar competing with the overall figure.
 	cmd := sysproc.CommandContext(ctx, o.bin(), "-u", o.UDID, "backup", rawParent)
-	pw := &progressLines{progress: o.Progress}
+	pw := &progressLines{} // capture-only (progress nil): used for error tail
 	cmd.Stdout = pw
 	cmd.Stderr = pw
-	if err := cmd.Run(); err != nil {
-		pw.flush()
+
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	if o.Progress != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			t := time.NewTicker(3 * time.Second)
+			defer t.Stop()
+			for {
+				select {
+				case <-stop:
+					return
+				case <-t.C:
+					sz := dirSize(rawParent)
+					if est > 0 {
+						pct := float64(sz) / float64(est) * 100
+						if pct > 99 {
+							pct = 99 // reserve 100% for completion
+						}
+						o.Progress(extract.Progress{Path: fmt.Sprintf("backing up the device: %.1f GB of ~%.1f GB (%.0f%%)", gb(sz), gb(est), pct)})
+					} else {
+						o.Progress(extract.Progress{Path: fmt.Sprintf("backing up the device: %.1f GB so far...", gb(sz))})
+					}
+				}
+			}
+		}()
+	}
+
+	err := cmd.Run()
+	close(stop)
+	wg.Wait()
+	pw.flush()
+	if err != nil {
 		low := strings.ToLower(pw.tailStr())
 		if strings.Contains(low, "mberrordomain/105") || strings.Contains(low, "insufficient free disk space") {
 			return nil, fmt.Errorf("backup needs room for a full device backup (tens of GB) and the destination drive does not have enough free space. " +
@@ -159,7 +195,6 @@ func (o Options) Run(ctx context.Context) (*extract.Result, error) {
 		}
 		return nil, fmt.Errorf("idevicebackup2 backup failed: %w: %s", err, errLine([]byte(pw.tailStr())))
 	}
-	pw.flush()
 
 	backupDir := filepath.Join(rawParent, o.UDID)
 	if fi, err := os.Stat(backupDir); err != nil || !fi.IsDir() {
@@ -275,6 +310,22 @@ func copyFile(src, dst string) (int64, error) {
 // gb converts a byte count to gigabytes (decimal, matching how iOS storage is
 // reported) for display.
 func gb(b int64) float64 { return float64(b) / 1e9 }
+
+// dirSize sums the sizes of all regular files under root (best effort; unreadable
+// entries are skipped). Used to gauge overall backup progress.
+func dirSize(root string) int64 {
+	var total int64
+	_ = filepath.WalkDir(root, func(_ string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if info, e := d.Info(); e == nil {
+			total += info.Size()
+		}
+		return nil
+	})
+	return total
+}
 
 // progressLines forwards a subprocess's output to a progress callback line by
 // line as it arrives, so a long-running command shows movement instead of
