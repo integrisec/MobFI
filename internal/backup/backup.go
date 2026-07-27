@@ -7,6 +7,7 @@
 package backup
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	_ "modernc.org/sqlite" // sql driver "sqlite" (cgo-free)
 
@@ -142,15 +144,22 @@ func (o Options) Run(ctx context.Context) (*extract.Result, error) {
 	}
 
 	// idevicebackup2 -u <UDID> backup <parent>  ->  <parent>/<UDID>/
+	// Stream its output live (it prints per-file / percentage progress) rather
+	// than buffering to the end, so a long multi-GB backup shows movement.
 	cmd := sysproc.CommandContext(ctx, o.bin(), "-u", o.UDID, "backup", rawParent)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		low := strings.ToLower(string(out))
+	pw := &progressLines{progress: o.Progress}
+	cmd.Stdout = pw
+	cmd.Stderr = pw
+	if err := cmd.Run(); err != nil {
+		pw.flush()
+		low := strings.ToLower(pw.tailStr())
 		if strings.Contains(low, "mberrordomain/105") || strings.Contains(low, "insufficient free disk space") {
 			return nil, fmt.Errorf("backup needs room for a full device backup (tens of GB) and the destination drive does not have enough free space. " +
 				"Free space, or set the destination to a drive with room for the whole device. iOS backs up the entire device even to extract one app")
 		}
-		return nil, fmt.Errorf("idevicebackup2 backup failed: %w: %s", err, errLine(out))
+		return nil, fmt.Errorf("idevicebackup2 backup failed: %w: %s", err, errLine([]byte(pw.tailStr())))
 	}
+	pw.flush()
 
 	backupDir := filepath.Join(rawParent, o.UDID)
 	if fi, err := os.Stat(backupDir); err != nil || !fi.IsDir() {
@@ -266,6 +275,61 @@ func copyFile(src, dst string) (int64, error) {
 // gb converts a byte count to gigabytes (decimal, matching how iOS storage is
 // reported) for display.
 func gb(b int64) float64 { return float64(b) / 1e9 }
+
+// progressLines forwards a subprocess's output to a progress callback line by
+// line as it arrives, so a long-running command shows movement instead of
+// freezing. It splits on both '\n' and '\r' so idevicebackup2's carriage-return
+// percentage bar updates come through, and keeps the last lines for error
+// context. Safe for concurrent stdout+stderr writes.
+type progressLines struct {
+	progress func(extract.Progress)
+	mu       sync.Mutex
+	buf      []byte
+	tail     []string
+}
+
+func (w *progressLines) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.buf = append(w.buf, p...)
+	for {
+		i := bytes.IndexAny(w.buf, "\r\n")
+		if i < 0 {
+			break
+		}
+		w.emit(strings.TrimSpace(string(w.buf[:i])))
+		w.buf = w.buf[i+1:]
+	}
+	return len(p), nil
+}
+
+func (w *progressLines) emit(line string) {
+	if line == "" {
+		return
+	}
+	if w.progress != nil {
+		w.progress(extract.Progress{Path: line})
+	}
+	w.tail = append(w.tail, line)
+	if len(w.tail) > 40 {
+		w.tail = w.tail[len(w.tail)-40:]
+	}
+}
+
+func (w *progressLines) flush() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if len(w.buf) > 0 {
+		w.emit(strings.TrimSpace(string(w.buf)))
+		w.buf = nil
+	}
+}
+
+func (w *progressLines) tailStr() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return strings.Join(w.tail, "\n")
+}
 
 // errLine picks the most informative line from a tool's output: the last line
 // mentioning an error, else the last non-empty line (the summary/failure is
