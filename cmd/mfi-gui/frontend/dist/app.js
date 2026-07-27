@@ -800,8 +800,13 @@ function wireExport(btnId, scopeSelId, fmtSelId, rawId) {
     const scope = document.getElementById(scopeSelId).value;
     const fmt = document.getElementById(fmtSelId).value;
     const raw = !!(rawId && document.getElementById(rawId) && document.getElementById(rawId).checked);
-    if (raw && !confirm("Export UNREDACTED secrets?\n\nThe report will contain raw secret values in plain text. Only do this for authorized local analysis, and do not share the file.")) {
-      return;
+    if (raw) {
+      // Native dialog binding -- WKWebView does not implement window.confirm().
+      let ok = false;
+      try {
+        ok = await gui().Confirm("Unredacted export", "Export UNREDACTED secrets?\n\nThe report will contain raw secret values in plain text. Only do this for authorized local analysis, and do not share the file.");
+      } catch (e) { ok = false; }
+      if (!ok) return;
     }
     btn.disabled = true;
     try {
@@ -1764,9 +1769,13 @@ showView("devices");
     if (!info.canApply) { applyBtn.classList.add("hidden"); return; }
     applyBtn.classList.remove("hidden");
     applyBtn.onclick = async () => {
-      if (!confirm("Update MobFI now?\n\nMobFI will close, update, and reopen automatically. This can take a minute.")) {
-        return;
-      }
+      // Use the native dialog binding, not window.confirm() -- the Wails
+      // webview (WKWebView on macOS) does not implement JS confirm/alert.
+      let ok = false;
+      try {
+        ok = await gui().Confirm("Update MobFI", "Update MobFI now?\n\nMobFI will close, update, and reopen automatically. This can take a minute.");
+      } catch (e) { ok = false; }
+      if (!ok) return;
       applyBtn.disabled = true;
       viewBtn.disabled = true;
       dismissBtn.disabled = true;

@@ -72,7 +72,10 @@ built on a single shared Go core.
   updates and rebuilds, then relaunches the app automatically and toasts the
   result. The installer records the source-checkout path so this works even
   when the app runs from `/Applications` or a shortcut.
-  `MFI_NO_UPDATE_CHECK=1` silences the launch check.
+  `MFI_NO_UPDATE_CHECK=1` silences the launch check. GUI confirmations (Update
+  now, unredacted export) use the native dialog, since the Wails webview
+  (WKWebView) does not implement `window.confirm()` -- previously "Update now"
+  appeared to do nothing.
 
 ### Packaging & tooling
 - Cross-platform install scripts: `scripts/install.sh` (macOS/Linux) and

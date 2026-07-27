@@ -73,7 +73,7 @@ func (g *GUI) PairTCP(addr, code string) (string, error) {
 		// are short-lived and change every time the dialog is opened; a
 		// protocol/handshake fault almost always means they went stale.
 		if strings.Contains(low, "fault") || strings.Contains(low, "protocol") || strings.Contains(low, "timeout") || strings.Contains(low, "timed out") {
-			msg += "\n(reopen \"Pair device with pairing code\" and use the fresh host:port + code it shows -- they expire quickly. Cloud devices like Corellium do not pair: use Connect with the adb-over-TCP address instead.)"
+			msg += "\n(the pairing host:port and code expire fast and change each time the dialog is reopened -- reopen \"Pair device with pairing code\" and enter the fresh values promptly. Make sure this computer and the phone are on the same Wi-Fi with no client/AP isolation. Cloud devices (e.g. Corellium) connect via adb-over-TCP instead of pairing.)"
 		}
 		return "", errors.New(msg)
 	}
