@@ -41,10 +41,10 @@ func main() {
 		return
 	}
 
-	// A GUI launched from a Start Menu / Desktop shortcut inherits Explorer's
-	// login-time PATH, which can predate tools installed since (adb via winget,
-	// the libimobiledevice bundle). Refresh it from the registry so the bound
-	// core finds those tools without requiring a logoff. No-op off Windows.
+	// A GUI launched from a shortcut/Finder inherits a minimal, login-time PATH
+	// that can predate tools installed since (adb, the libimobiledevice bundle).
+	// Refresh it (registry on Windows, login-shell + standard dirs on macOS) so
+	// the bound core finds those tools without requiring a re-login.
 	refreshPath()
 
 	gui := NewGUI()
