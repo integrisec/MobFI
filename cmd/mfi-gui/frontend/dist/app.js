@@ -920,13 +920,16 @@ function scanRow(f) {
   if (f.verified && f.verified !== "unsupported") {
     statusCell.append(el("span", { className: "v-" + f.verified, textContent: f.verified }));
   }
+  // Space the action buttons like the Devices tab (append with " " spacers).
+  const actions = el("td", { className: "col-actions" }, renderBtn);
+  actions.append(" ", copyBtn);
   return el("tr", {},
     el("td", { textContent: f.rule_id }),
     el("td", { textContent: f.path }),
     el("td", { textContent: f.line }),
     matchCell,
     statusCell,
-    el("td", { className: "col-actions" }, renderBtn, copyBtn)
+    actions
   );
 }
 
