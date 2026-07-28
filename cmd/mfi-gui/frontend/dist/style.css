@@ -441,17 +441,12 @@ ul.perms li { break-inside: avoid; }
 /* Tables live in a horizontally-scrollable container so wide content scrolls
    within the table instead of shifting the whole page (which clips the title).
    The enclosing border matches the Apps/Database tables (which use .scroll), so
-   every data table looks the same. The action column stays pinned to the right
-   so its buttons are always reachable. */
+   every data table looks the same. A wide table scrolls inside this box (the
+   action buttons scroll into view with it) rather than pushing the page. */
 .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
 /* Hide the wrapper when its table is toggled off (e.g. Devices before a device
    is detected), so it doesn't leave an empty bordered box. */
 .table-scroll:has(> table.hidden) { display: none; }
-.grid td.col-actions, .grid thead th.col-actions {
-  position: sticky;
-  right: 0;
-  background: var(--bg);
-}
 
 /* Draggable horizontal splitter between the app list and details panel */
 .v-resizer {
