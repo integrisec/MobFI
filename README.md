@@ -29,10 +29,16 @@ capability is available from both.
   that reconstructs a production app's data from a full device backup.
   Unreadable files are recorded, not silently dropped, and a path-escape guard
   prevents hostile device paths from writing outside the destination.
-- **Secrets scanning** — Trufflehog-style built-in detectors (AWS keys, GitHub
-  tokens, Google API keys, Slack tokens, Stripe keys, private keys, JWTs, and a
-  generic key/secret assignment) plus a user-supplied list of known secrets.
-  Findings carry only a **redacted fingerprint**, never the raw secret.
+- **Secrets scanning** — a broad set of Trufflehog-style built-in detectors
+  (~45 rules): cloud/CI keys (AWS, GCP, DigitalOcean, Databricks, Terraform),
+  version-control & package tokens (GitHub, GitLab, npm, PyPI), AI providers
+  (OpenAI, Anthropic, Hugging Face), payments (Stripe, Square, Braintree),
+  communication/email (Slack, Discord, Telegram, Twilio, SendGrid, Mailgun,
+  Mailchimp), SaaS APIs (Shopify, Notion, Linear, Airtable, New Relic, Grafana),
+  JWTs, PEM private keys, and connection strings / URLs with embedded
+  credentials (MongoDB, SQL, Redis, HTTP basic-auth) — plus a user-supplied list
+  of known secrets. Findings carry only a **redacted fingerprint**, never the
+  raw secret.
 - **Native diffing** — compare two extracted captures (e.g. logged-in vs
   logged-out). Beyond add/remove/modify at the file level, structural differs
   report **SQLite** row-level changes, and **JSON** and **property list** (binary

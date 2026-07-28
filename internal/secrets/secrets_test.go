@@ -54,6 +54,78 @@ func TestScanTreeFindsAndRedacts(t *testing.T) {
 	}
 }
 
+// TestBuiltinDetectors checks every built-in rule matches a format-valid sample
+// and that none fire on benign text (a basic precision/regression guard).
+func TestBuiltinDetectors(t *testing.T) {
+	r := strings.Repeat
+	samples := map[string]string{
+		"aws-access-key-id":         "AKIA" + r("A", 16),
+		"gcp-api-key":               "AIza" + r("a", 35),
+		"gcp-oauth-client-secret":   "GOCSPX-" + r("a", 28),
+		"gcp-service-account-key":   `"private_key_id": "` + r("a", 40) + `"`,
+		"digitalocean-token":        "dop_v1_" + r("a", 64),
+		"databricks-token":          "dapi" + r("a", 32),
+		"doppler-token":             "dp.pt." + r("a", 42),
+		"terraform-cloud-token":     r("A", 14) + ".atlasv1." + r("a", 65),
+		"github-token":              "ghp_" + r("a", 36),
+		"github-fine-grained-pat":   "github_pat_" + r("a", 82),
+		"gitlab-pat":                "glpat-" + r("a", 20),
+		"npm-token":                 "npm_" + r("a", 36),
+		"pypi-token":                "pypi-AgEI" + r("a", 55),
+		"postman-api-key":           "PMAK-" + r("a", 24) + "-" + r("a", 34),
+		"openai-api-key":            "sk-" + r("a", 20) + "T3BlbkFJ" + r("a", 20),
+		"anthropic-api-key":         "sk-ant-api03-" + r("a", 90),
+		"huggingface-token":         "hf_" + r("a", 34),
+		"stripe-secret-key":         "sk_live_" + r("a", 24),
+		"square-access-token":       "EAAA" + r("a", 60),
+		"braintree-access-token":    "access_token$production$" + r("a", 16) + "$" + r("a", 32),
+		"slack-token":               "xoxb-" + r("1", 30),
+		"slack-app-token":           "xapp-1-ABC123-1234567890-" + r("a", 12),
+		"slack-webhook":             "https://hooks.slack.com/services/T00000000/B00000000/" + r("X", 24),
+		"discord-bot-token":         "M" + r("a", 23) + "." + r("a", 6) + "." + r("a", 30),
+		"discord-webhook":           "https://discord.com/api/webhooks/12345678901234567/" + r("a", 64),
+		"telegram-bot-token":        "1234567890:" + r("a", 35),
+		"twilio-api-key":            "SK" + r("a", 32),
+		"sendgrid-api-key":          "SG." + r("a", 22) + "." + r("a", 43),
+		"mailgun-api-key":           "key-" + r("a", 32),
+		"mailchimp-api-key":         r("a", 32) + "-us1",
+		"shopify-token":             "shpat_" + r("a", 32),
+		"notion-token":              "secret_" + r("a", 43),
+		"linear-api-key":            "lin_api_" + r("a", 40),
+		"airtable-token":            "pat" + r("a", 14) + "." + r("a", 64),
+		"newrelic-api-key":          "NRAK-" + r("A", 27),
+		"grafana-token":             "glsa_" + r("a", 40),
+		"jwt":                       "eyJ" + r("a", 12) + "." + r("a", 12) + "." + r("a", 12),
+		"private-key":               "-----BEGIN RSA PRIVATE KEY-----",
+		"mongodb-uri":               "mongodb+srv://user:pass@cluster.example.net",
+		"sql-uri":                   "postgres://user:pass@host:5432/db",
+		"redis-uri":                 "redis://:pass@host:6379",
+		"basic-auth-url":            "https://user:pass@example.com/x",
+		"generic-secret-assignment": `api_key = "abcdef12345678"`,
+		"bearer-token":              "Authorization: Bearer abcdefghij1234567890XYZ",
+	}
+
+	for _, rule := range DefaultRules() {
+		s, ok := samples[rule.ID]
+		if !ok {
+			t.Errorf("no positive sample for rule %q (add one when adding a rule)", rule.ID)
+			continue
+		}
+		if !rule.Pattern.MatchString(s) {
+			t.Errorf("rule %q did not match its sample %q", rule.ID, s)
+		}
+	}
+
+	benign := "the quick brown fox jumps over the lazy dog 12345\n" +
+		"https://example.com/docs?page=2\n" +
+		"let total = compute(a, b, c); version = 1.2.3\n"
+	for _, rule := range DefaultRules() {
+		if loc := rule.Pattern.FindString(benign); loc != "" {
+			t.Errorf("rule %q false-positived on benign text: %q", rule.ID, loc)
+		}
+	}
+}
+
 func TestScanSkipsBinary(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "blob.bin", "\x00\x01"+ghToken)

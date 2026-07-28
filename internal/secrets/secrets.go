@@ -195,14 +195,69 @@ func mustRule(id, pattern string) Rule {
 }
 
 // builtinRules is a curated, high-signal set of Trufflehog-style detectors.
+// Each is anchored on a service's distinctive prefix/format (RE2-compatible: no
+// look-around or back-references) to keep precision high. Ported from the
+// patterns in github.com/trufflesecurity/trufflehog/tree/main/pkg/detectors.
 var builtinRules = []Rule{
+	// --- Cloud & infrastructure ---
 	mustRule("aws-access-key-id", `\b(?:A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}\b`),
+	mustRule("gcp-api-key", `\bAIza[0-9A-Za-z_\-]{35}\b`),
+	mustRule("gcp-oauth-client-secret", `\bGOCSPX-[0-9A-Za-z_\-]{28}\b`),
+	mustRule("gcp-service-account-key", `"private_key_id"\s*:\s*"[0-9a-f]{40}"`),
+	mustRule("digitalocean-token", `\b(?:dop|doo|dor)_v1_[0-9a-f]{64}\b`),
+	mustRule("databricks-token", `\bdapi[0-9a-f]{32}\b`),
+	mustRule("doppler-token", `\bdp\.(?:pt|st|ct|sa)\.[0-9A-Za-z]{40,44}\b`),
+	mustRule("terraform-cloud-token", `\b[0-9A-Za-z]{14}\.atlasv1\.[0-9A-Za-z_\-]{60,70}\b`),
+
+	// --- Version control, packages & CI ---
 	mustRule("github-token", `\b(?:ghp|gho|ghu|ghs|ghr)_[0-9A-Za-z]{36}\b`),
 	mustRule("github-fine-grained-pat", `\bgithub_pat_[0-9A-Za-z_]{82}\b`),
-	mustRule("google-api-key", `\bAIza[0-9A-Za-z\-_]{35}\b`),
-	mustRule("slack-token", `xox[baprs]-[0-9A-Za-z-]{10,48}`),
-	mustRule("stripe-secret-key", `\b(?:sk|rk)_live_[0-9a-zA-Z]{24,}\b`),
-	mustRule("private-key", `-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----`),
-	mustRule("jwt", `eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}`),
-	mustRule("generic-secret-assignment", `(?i)(?:api[_-]?key|secret|token|passwd|password)["']?\s*[:=]\s*["'][^"'\s]{8,}["']`),
+	mustRule("gitlab-pat", `\bglpat-[0-9A-Za-z_\-]{20}\b`),
+	mustRule("npm-token", `\bnpm_[0-9A-Za-z]{36}\b`),
+	mustRule("pypi-token", `\bpypi-AgEI[0-9A-Za-z_\-]{50,}\b`),
+	mustRule("postman-api-key", `\bPMAK-[0-9a-f]{24}-[0-9a-f]{34}\b`),
+
+	// --- AI providers ---
+	mustRule("openai-api-key", `\bsk-[0-9A-Za-z_\-]{10,}T3BlbkFJ[0-9A-Za-z_\-]{20,}\b`),
+	mustRule("anthropic-api-key", `\bsk-ant-[0-9A-Za-z_\-]{20,}\b`),
+	mustRule("huggingface-token", `\bhf_[0-9A-Za-z]{34,}\b`),
+
+	// --- Payments ---
+	mustRule("stripe-secret-key", `\b(?:sk|rk)_(?:live|test)_[0-9A-Za-z]{24,}\b`),
+	mustRule("square-access-token", `\b(?:EAAA[0-9A-Za-z_\-]{60}|sq0(?:atp|csp|idp)-[0-9A-Za-z_\-]{22,43})\b`),
+	mustRule("braintree-access-token", `\baccess_token\$production\$[0-9a-z]{16}\$[0-9a-f]{32}\b`),
+
+	// --- Communication & email ---
+	mustRule("slack-token", `\bxox[baprs]-[0-9A-Za-z-]{10,72}\b`),
+	mustRule("slack-app-token", `\bxapp-[0-9]-[A-Z0-9]+-[0-9]+-[0-9a-f]+\b`),
+	mustRule("slack-webhook", `https://hooks\.slack\.com/services/T[0-9A-Za-z_]+/B[0-9A-Za-z_]+/[0-9A-Za-z_]+`),
+	mustRule("discord-bot-token", `\b[MNO][A-Za-z0-9_\-]{23}\.[\w-]{6}\.[\w-]{27,38}\b`),
+	mustRule("discord-webhook", `https://(?:ptb\.|canary\.)?discord(?:app)?\.com/api/webhooks/[0-9]{17,20}/[0-9A-Za-z_\-]{60,68}`),
+	mustRule("telegram-bot-token", `\b[0-9]{8,10}:[A-Za-z0-9_-]{35}\b`),
+	mustRule("twilio-api-key", `\bSK[0-9a-fA-F]{32}\b`),
+	mustRule("sendgrid-api-key", `\bSG\.[0-9A-Za-z_\-]{22}\.[0-9A-Za-z_\-]{43}\b`),
+	mustRule("mailgun-api-key", `\bkey-[0-9a-f]{32}\b`),
+	mustRule("mailchimp-api-key", `\b[0-9a-f]{32}-us[0-9]{1,2}\b`),
+
+	// --- SaaS / APIs ---
+	mustRule("shopify-token", `\bshp(?:at|ca|pa|ss)_[0-9a-fA-F]{32}\b`),
+	mustRule("notion-token", `\b(?:secret_|ntn_)[0-9A-Za-z]{43}\b`),
+	mustRule("linear-api-key", `\blin_api_[0-9A-Za-z]{40,}\b`),
+	mustRule("airtable-token", `\bpat[0-9A-Za-z]{14}\.[0-9a-f]{64}\b`),
+	mustRule("newrelic-api-key", `\bNRAK-[A-Z0-9]{27}\b`),
+	mustRule("grafana-token", `\bgl(?:sa|c)_[0-9A-Za-z_\-]{32,}\b`),
+
+	// --- Auth & crypto ---
+	mustRule("jwt", `\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b`),
+	mustRule("private-key", `-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY-----`),
+
+	// --- Connection strings / URLs with embedded credentials ---
+	mustRule("mongodb-uri", `\bmongodb(?:\+srv)?://[^\s:@/]+:[^\s:@/]+@[^\s/]+`),
+	mustRule("sql-uri", `\b(?:postgres(?:ql)?|mysql|mariadb)://[^\s:@/]+:[^\s:@/]+@[^\s/]+`),
+	mustRule("redis-uri", `\brediss?://[^\s:@/]*:[^\s:@/]+@[^\s/]+`),
+	mustRule("basic-auth-url", `\bhttps?://[^\s:@/]+:[^\s:@/]+@[^\s/]+`),
+
+	// --- Generic keyword-anchored secrets ---
+	mustRule("generic-secret-assignment", `(?i)(?:api[_-]?key|secret|token|passwd|password|access[_-]?token|client[_-]?secret|private[_-]?key|auth[_-]?token)["']?\s*[:=]\s*["'][^"'\s]{8,}["']`),
+	mustRule("bearer-token", `(?i)\bbearer\s+[A-Za-z0-9._\-]{20,}`),
 }

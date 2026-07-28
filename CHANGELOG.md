@@ -9,6 +9,19 @@ heading to the version and date and start a fresh `Unreleased` section.
 
 ## [Unreleased]
 
+### Added
+- Expanded the built-in secret detectors from 9 to ~45 Trufflehog-style rules,
+  each anchored on a service's distinctive prefix/format for precision: cloud/CI
+  (AWS, GCP incl. OAuth client secret + service-account key, DigitalOcean,
+  Databricks, Terraform, Doppler), version control / packages (GitHub, GitLab,
+  npm, PyPI, Postman), AI providers (OpenAI, Anthropic, Hugging Face), payments
+  (Stripe, Square, Braintree), communication/email (Slack incl. app tokens &
+  webhooks, Discord bot tokens & webhooks, Telegram, Twilio, SendGrid, Mailgun,
+  Mailchimp), SaaS APIs (Shopify, Notion, Linear, Airtable, New Relic, Grafana),
+  JWTs, PEM private keys, and connection strings / URLs with embedded
+  credentials (MongoDB, SQL, Redis, HTTP basic-auth), plus broader keyword and
+  bearer-token generics. Each rule is covered by a positive-sample test.
+
 ## [1.0.0] - 2026-07-25
 
 First official release. MobFI is a cross-platform (macOS, Windows, Linux)
