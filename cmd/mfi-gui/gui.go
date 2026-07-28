@@ -89,7 +89,8 @@ func (g *GUI) StartUpdate() error {
 }
 
 // inProcessUpdate runs the update in this process, streaming progress to the
-// window, then relaunches a fresh instance and quits. Only on macOS/Linux.
+// window (the update overlay), then relaunches a fresh instance and quits.
+// macOS/Linux only -- see StartUpdate for the Windows path.
 func (g *GUI) inProcessUpdate() {
 	emit := func(msg string) { wailsruntime.EventsEmit(g.ctx, "update:progress", msg) }
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
