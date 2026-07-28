@@ -208,6 +208,14 @@ func (a *App) ScanSecrets(ctx context.Context, root string, progress func(secret
 	return a.Scanner.ScanTree(ctx, root, progress)
 }
 
+// VerifyFindings performs opt-in LIVE verification of secret findings: it makes
+// authenticated network calls to each service to confirm whether a matched
+// credential is active. It mutates and returns the findings with Verified set.
+// Strictly opt-in -- the caller (CLI flag / GUI checkbox) must request it.
+func (a *App) VerifyFindings(ctx context.Context, findings []secrets.Finding) []secrets.Finding {
+	return secrets.Verify(ctx, findings)
+}
+
 // AddKnownSecrets loads a user-supplied list of literal secrets and adds
 // them to the scanner's rule set.
 func (a *App) AddKnownSecrets(path string) error {

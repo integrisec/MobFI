@@ -38,7 +38,8 @@ capability is available from both.
   JWTs, PEM private keys, and connection strings / URLs with embedded
   credentials (MongoDB, SQL, Redis, HTTP basic-auth) — plus a user-supplied list
   of known secrets. Findings carry only a **redacted fingerprint**, never the
-  raw secret.
+  raw secret. Optional **live verification** (opt-in) calls each service's API
+  to confirm whether a found key is still active.
 - **Native diffing** — compare two extracted captures (e.g. logged-in vs
   logged-out). Beyond add/remove/modify at the file level, structural differs
   report **SQLite** row-level changes, and **JSON** and **property list** (binary
@@ -275,7 +276,16 @@ device can't be read (that's an OS restriction, not a MobFI limitation).
 ```sh
 mfi scan -root ./capture
 mfi scan -root ./capture -known ./known-secrets.txt   # also match literal secrets
+mfi scan -root ./capture -verify                      # live-verify findings (see below)
 ```
+
+**Live verification** (`-verify`, also `mfi report -verify` and the GUI's
+**Verify live** checkbox) confirms whether a matched key is still active by
+calling the service's read-only "whoami" endpoint (GitHub, GitLab, npm, OpenAI,
+Anthropic, Hugging Face, SendGrid, DigitalOcean, Stripe, Slack, Postman, Notion,
+Airtable), reporting each as **active** / **inactive** / **unknown**. It is
+**off by default**: it makes authenticated network calls that send the matched
+secret to its service, so use it only for authorized testing.
 
 ### Diff two captures
 

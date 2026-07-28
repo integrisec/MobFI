@@ -10,6 +10,15 @@ heading to the version and date and start a fresh `Unreleased` section.
 ## [Unreleased]
 
 ### Added
+- Opt-in **live verification** of secret findings: for supported services
+  (GitHub, GitLab, npm, OpenAI, Anthropic, Hugging Face, SendGrid, DigitalOcean,
+  Stripe, Slack, Postman, Notion, Airtable) MobFI calls a read-only "whoami"
+  endpoint with the matched secret to confirm whether it is still **active**,
+  **inactive**, or **unknown**. Enabled with `mfi scan -verify` /
+  `mfi report -verify` on the CLI and a **Verify live** checkbox (behind a
+  confirmation) on the GUI Scan tab; the status shows in the table and reports.
+  Off by default -- it makes authenticated network calls that send the secret to
+  its service. Identical secrets are checked once, concurrently and time-boxed.
 - Expanded the built-in secret detectors from 9 to ~45 Trufflehog-style rules,
   each anchored on a service's distinctive prefix/format for precision: cloud/CI
   (AWS, GCP incl. OAuth client secret + service-account key, DigitalOcean,

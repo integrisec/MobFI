@@ -249,6 +249,26 @@ func (g *GUI) ScanSecrets(root string) ([]secrets.Finding, error) {
 	return findings, err
 }
 
+// VerifyFindings LIVE-verifies the last scan's findings by calling each
+// service's API, returning them with Verified set. It makes network calls that
+// send matched secrets to their services, so the frontend guards it behind an
+// explicit opt-in + confirmation. Cancellable via the "scan" op.
+func (g *GUI) VerifyFindings() ([]secrets.Finding, error) {
+	g.reportMu.Lock()
+	findings := g.lastFindings
+	g.reportMu.Unlock()
+	if len(findings) == 0 {
+		return findings, nil
+	}
+	ctx, done := g.opContext("scan")
+	defer done()
+	verified := g.app.VerifyFindings(ctx, findings)
+	g.reportMu.Lock()
+	g.lastFindings = verified
+	g.reportMu.Unlock()
+	return verified, nil
+}
+
 // AddKnownSecrets adds a user-supplied known-secrets file to the scanner.
 func (g *GUI) AddKnownSecrets(path string) error {
 	return g.app.AddKnownSecrets(path)

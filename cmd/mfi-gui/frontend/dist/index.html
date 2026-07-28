@@ -119,23 +119,27 @@
         <button class="browse" id="sc-known-browse" type="button">Browse…</button>
         <button class="primary" id="btn-scan">Scan</button>
         <button id="btn-scan-cancel" class="hidden">Cancel</button>
+        <label class="inline" title="After scanning, call each service's API to confirm whether a found key is still active. This sends the matched secret to its service -- authorized testing only."><input type="checkbox" id="sc-verify" /> Verify live</label>
         <label class="inline"><input type="checkbox" id="sc-wrap" /> Wrap</label>
-        <select id="scan-export-scope" class="export-fmt" title="Report scope">
-          <option value="scan">Scan</option>
-          <option value="combined">Combined</option>
-        </select>
-        <select id="scan-export-fmt" class="export-fmt" title="Report format">
-          <option value="html">HTML</option>
-          <option value="json">JSON</option>
-          <option value="text">Text</option>
-        </select>
-        <label class="inline" title="Include raw, unredacted secrets in the exported report. For authorized local analysis only -- do not share the file."><input type="checkbox" id="scan-export-raw" /> Unredacted</label>
-        <button id="btn-scan-export" title="Export the scan results (or a combined scan+diff report)">Export</button>
+        <span class="export-group">
+          <span class="export-label">Report</span>
+          <select id="scan-export-scope" class="export-fmt" title="Report scope">
+            <option value="scan">Scan</option>
+            <option value="combined">Combined</option>
+          </select>
+          <select id="scan-export-fmt" class="export-fmt" title="Report format">
+            <option value="html">HTML</option>
+            <option value="json">JSON</option>
+            <option value="text">Text</option>
+          </select>
+          <label class="inline" title="Include raw, unredacted secrets in the exported report. For authorized local analysis only -- do not share the file."><input type="checkbox" id="scan-export-raw" /> Unredacted</label>
+          <button id="btn-scan-export" title="Export the scan results (or a combined scan+diff report)">Export</button>
+        </span>
         <span class="mime" id="scan-status"></span>
       </div>
       <p class="hint">Matches are redacted — click a match to reveal the raw secret, or use Copy.</p>
       <table class="grid" id="scan-table">
-        <thead><tr><th>Rule</th><th>Path</th><th>Line</th><th>Match</th><th class="no-resize col-actions"></th></tr></thead>
+        <thead><tr><th>Rule</th><th>Path</th><th>Line</th><th>Match</th><th class="no-resize">Status</th><th class="no-resize col-actions"></th></tr></thead>
         <tbody></tbody>
       </table>
     </section>
@@ -151,17 +155,20 @@
         <button class="primary" id="btn-diff">Diff</button>
         <button id="btn-diff-cancel" class="hidden">Cancel</button>
         <label class="inline"><input type="checkbox" id="df-wrap" /> Wrap</label>
-        <select id="diff-export-scope" class="export-fmt" title="Report scope">
-          <option value="diff">Diff</option>
-          <option value="combined">Combined</option>
-        </select>
-        <select id="diff-export-fmt" class="export-fmt" title="Report format">
-          <option value="html">HTML</option>
-          <option value="json">JSON</option>
-          <option value="text">Text</option>
-        </select>
-        <label class="inline" title="Include raw, unredacted secrets in the exported report. For authorized local analysis only -- do not share the file."><input type="checkbox" id="diff-export-raw" /> Unredacted</label>
-        <button id="btn-diff-export" title="Export the diff results (or a combined scan+diff report)">Export</button>
+        <span class="export-group">
+          <span class="export-label">Report</span>
+          <select id="diff-export-scope" class="export-fmt" title="Report scope">
+            <option value="diff">Diff</option>
+            <option value="combined">Combined</option>
+          </select>
+          <select id="diff-export-fmt" class="export-fmt" title="Report format">
+            <option value="html">HTML</option>
+            <option value="json">JSON</option>
+            <option value="text">Text</option>
+          </select>
+          <label class="inline" title="Include raw, unredacted secrets in the exported report. For authorized local analysis only -- do not share the file."><input type="checkbox" id="diff-export-raw" /> Unredacted</label>
+          <button id="btn-diff-export" title="Export the diff results (or a combined scan+diff report)">Export</button>
+        </span>
         <span class="mime" id="diff-status"></span>
       </div>
       <table class="grid" id="diff-table">

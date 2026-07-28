@@ -300,6 +300,7 @@ func runScan(ctx context.Context, core *app.App, args []string) error {
 	fs := flag.NewFlagSet("scan", flag.ContinueOnError)
 	root := fs.String("root", "", "extracted file tree to scan")
 	known := fs.String("known", "", "file of known secrets to also search for (one per line)")
+	verify := fs.Bool("verify", false, "LIVE-verify findings by calling each service's API (sends the secret to its service; network + opt-in)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -315,9 +316,17 @@ func runScan(ctx context.Context, core *app.App, args []string) error {
 	if err != nil {
 		return err
 	}
+	if *verify {
+		fmt.Fprintln(os.Stderr, "verifying findings against their services...")
+		findings = core.VerifyFindings(ctx, findings)
+	}
 	fmt.Printf("%d finding(s)\n", len(findings))
 	for _, f := range findings {
-		fmt.Printf("  [%s] %s:%d  %s\n", f.RuleID, f.Path, f.Line, f.Match)
+		status := ""
+		if *verify && f.Verified != "" && f.Verified != "unsupported" {
+			status = "  [" + string(f.Verified) + "]"
+		}
+		fmt.Printf("  [%s] %s:%d  %s%s\n", f.RuleID, f.Path, f.Line, f.Match, status)
 	}
 	return nil
 }
@@ -352,12 +361,13 @@ func runDiff(ctx context.Context, core *app.App, args []string) error {
 func runReport(ctx context.Context, core *app.App, args []string) error {
 	fs := flag.NewFlagSet("report", flag.ContinueOnError)
 	var (
-		root  = fs.String("root", "", "extracted tree to scan for secrets")
-		known = fs.String("known", "", "known-secrets file to add to the scan")
-		a     = fs.String("a", "", "first root to diff")
-		b     = fs.String("b", "", "second root to diff")
-		out   = fs.String("out", "", "also write the report to this file (format by extension: .html, .txt, else JSON)")
-		show  = fs.Bool("show-secrets", false, "include raw, UNREDACTED secrets in the report (authorized local analysis only; do not share the output)")
+		root   = fs.String("root", "", "extracted tree to scan for secrets")
+		known  = fs.String("known", "", "known-secrets file to add to the scan")
+		a      = fs.String("a", "", "first root to diff")
+		b      = fs.String("b", "", "second root to diff")
+		out    = fs.String("out", "", "also write the report to this file (format by extension: .html, .txt, else JSON)")
+		show   = fs.Bool("show-secrets", false, "include raw, UNREDACTED secrets in the report (authorized local analysis only; do not share the output)")
+		verify = fs.Bool("verify", false, "LIVE-verify findings by calling each service's API (sends the secret to its service; network + opt-in)")
 	)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -376,6 +386,10 @@ func runReport(ctx context.Context, core *app.App, args []string) error {
 		var err error
 		if findings, err = core.ScanSecrets(ctx, *root, nil); err != nil {
 			return err
+		}
+		if *verify {
+			fmt.Fprintln(os.Stderr, "verifying findings against their services...")
+			findings = core.VerifyFindings(ctx, findings)
 		}
 	}
 

@@ -97,7 +97,11 @@ func (r *Report) WriteText(w io.Writer) error {
 		fmt.Fprintf(w, "  %-28s %d\n", rule, s.FindingsByRule[rule])
 	}
 	for _, f := range r.Findings {
-		fmt.Fprintf(w, "  - [%s] %s:%d  %s\n", f.RuleID, f.Path, f.Line, r.value(f))
+		status := ""
+		if f.Verified != "" && f.Verified != secrets.VerifyUnsupported {
+			status = "  [" + string(f.Verified) + "]"
+		}
+		fmt.Fprintf(w, "  - [%s] %s:%d  %s%s\n", f.RuleID, f.Path, f.Line, r.value(f), status)
 	}
 
 	if r.Diff != nil {
@@ -126,6 +130,7 @@ type htmlModel struct {
 	GeneratedAt   string
 	TotalFindings int
 	Unredacted    bool
+	Verified      bool // any finding carries a live-verification status
 	RuleRows      []ruleCount
 	Findings      []findingRow
 	HasDiff       bool
@@ -144,10 +149,11 @@ type ruleCount struct {
 // findingRow is one secret finding as shown in the report, with Value already
 // resolved to the raw or redacted form per the report's redaction state.
 type findingRow struct {
-	RuleID string
-	Path   string
-	Line   int
-	Value  string
+	RuleID   string
+	Path     string
+	Line     int
+	Value    string
+	Verified string // live-verification status ("active"/"inactive"/... or "")
 }
 
 // WriteHTML renders the report as a self-contained HTML document (inline CSS,
@@ -161,7 +167,14 @@ func (r *Report) WriteHTML(w io.Writer) error {
 		Unredacted:    r.Unredacted,
 	}
 	for _, f := range r.Findings {
-		m.Findings = append(m.Findings, findingRow{RuleID: f.RuleID, Path: f.Path, Line: f.Line, Value: r.value(f)})
+		vs := ""
+		if f.Verified != secrets.VerifyUnsupported {
+			vs = string(f.Verified)
+		}
+		if vs != "" {
+			m.Verified = true
+		}
+		m.Findings = append(m.Findings, findingRow{RuleID: f.RuleID, Path: f.Path, Line: f.Line, Value: r.value(f), Verified: vs})
 	}
 	for _, rule := range sortedKeys(s.FindingsByRule) {
 		m.RuleRows = append(m.RuleRows, ruleCount{Rule: rule, Count: s.FindingsByRule[rule]})
@@ -205,6 +218,9 @@ const htmlTemplate = `<!DOCTYPE html>
   .k-removed { color:var(--danger); border-color:var(--danger); }
   .k-modified { color:var(--warn); border-color:var(--warn); }
   .empty { color:var(--muted); font-style:italic; }
+  .v-active { color:var(--danger); font-weight:700; }
+  .v-inactive { color:var(--muted); }
+  .v-unknown { color:var(--warn); }
   .warnbar { margin:12px 0; padding:10px 14px; border-radius:8px; background:rgba(255,107,107,.12); border:1px solid var(--danger); color:var(--danger); font-size:13px; }
   footer { margin-top:32px; color:var(--muted); font-size:11px; }
 </style>
@@ -221,9 +237,9 @@ const htmlTemplate = `<!DOCTYPE html>
   </div>
   {{if .Findings}}
   <table>
-    <thead><tr><th>Rule</th><th>Path</th><th>Line</th><th>Match</th></tr></thead>
+    <thead><tr><th>Rule</th><th>Path</th><th>Line</th><th>Match</th>{{if .Verified}}<th>Status</th>{{end}}</tr></thead>
     <tbody>
-    {{range .Findings}}<tr><td><code>{{.RuleID}}</code></td><td class="path">{{.Path}}</td><td>{{.Line}}</td><td class="match">{{.Value}}</td></tr>{{end}}
+    {{range .Findings}}<tr><td><code>{{.RuleID}}</code></td><td class="path">{{.Path}}</td><td>{{.Line}}</td><td class="match">{{.Value}}</td>{{if $.Verified}}<td>{{if .Verified}}<span class="v-{{.Verified}}">{{.Verified}}</span>{{end}}</td>{{end}}</tr>{{end}}
     </tbody>
   </table>
   {{else}}<p class="empty">No secrets found.</p>{{end}}

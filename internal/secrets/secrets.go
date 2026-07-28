@@ -40,6 +40,9 @@ type Finding struct {
 	// operator can reveal/copy it. report.Build strips it so exported
 	// reports never carry raw secrets.
 	Secret string `json:"secret,omitempty"`
+	// Verified is the result of an opt-in live verification (see Verify): e.g.
+	// "active", "inactive", "unsupported". Empty when verification was not run.
+	Verified VerifyStatus `json:"verified,omitempty"`
 }
 
 // Scanner applies a set of rules across a file tree.

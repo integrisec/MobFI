@@ -784,7 +784,7 @@ $("#btn-extract").addEventListener("click", async () => {
 let currentFindings = null;
 let scanSortField = null;
 let scanSortDir = 1;
-const SCAN_COLUMNS = ["rule_id", "path", "line", "match", null];
+const SCAN_COLUMNS = ["rule_id", "path", "line", "match", null, null]; // ...Status, actions (not sortable)
 
 // Cancel wiring for long operations. Clicking Cancel sets a flag (so the
 // resulting rejection is treated as a cancel, not an error) and asks the
@@ -865,6 +865,28 @@ $("#btn-scan").addEventListener("click", async () => {
     renderScan();
     status.classList.remove("busy");
     status.textContent = `${(currentFindings || []).length} finding(s)`;
+    // Opt-in live verification: sends each matched secret to its service, so
+    // confirm first.
+    if ($("#sc-verify").checked && (currentFindings || []).length) {
+      let ok = false;
+      try {
+        ok = await gui().Confirm("Live-verify secrets?", "This calls each service's API to check whether a found key is still active, which sends the matched secret to that service. Only do this for authorized testing.");
+      } catch (e) { ok = false; }
+      if (ok) {
+        status.classList.add("busy");
+        status.textContent = "Verifying findings against their services…";
+        try {
+          currentFindings = await gui().VerifyFindings();
+          renderScan();
+          const active = (currentFindings || []).filter((f) => f.verified === "active").length;
+          status.textContent = `${currentFindings.length} finding(s) — ${active} active`;
+        } catch (e) {
+          if (!(cancelling.scan || isCancelError(e))) fail(e);
+        } finally {
+          status.classList.remove("busy");
+        }
+      }
+    }
   } catch (e) {
     status.classList.remove("busy");
     if (cancelling.scan || isCancelError(e)) status.textContent = "cancelled";
@@ -892,11 +914,16 @@ function scanRow(f) {
       fail(e);
     }
   });
+  const statusCell = el("td", {});
+  if (f.verified && f.verified !== "unsupported") {
+    statusCell.append(el("span", { className: "v-" + f.verified, textContent: f.verified }));
+  }
   return el("tr", {},
     el("td", { textContent: f.rule_id }),
     el("td", { textContent: f.path }),
     el("td", { textContent: f.line }),
     matchCell,
+    statusCell,
     el("td", { className: "col-actions" }, copyBtn)
   );
 }
@@ -905,7 +932,7 @@ function renderScan() {
   clearRows("#scan-table tbody");
   if (!currentFindings) return;
   if (currentFindings.length === 0) {
-    emptyRow("#scan-table tbody", 5, "no secrets found");
+    emptyRow("#scan-table tbody", 6, "no secrets found");
     return;
   }
   updateScanSortIndicators();
