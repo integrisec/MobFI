@@ -914,6 +914,8 @@ function scanRow(f) {
       fail(e);
     }
   });
+  const renderBtn = el("button", { textContent: "Render", title: "Open this file in Render with the secret highlighted" });
+  renderBtn.addEventListener("click", () => sendToRender(f.path, f.secret));
   const statusCell = el("td", {});
   if (f.verified && f.verified !== "unsupported") {
     statusCell.append(el("span", { className: "v-" + f.verified, textContent: f.verified }));
@@ -924,7 +926,7 @@ function scanRow(f) {
     el("td", { textContent: f.line }),
     matchCell,
     statusCell,
-    el("td", { className: "col-actions" }, copyBtn)
+    el("td", { className: "col-actions" }, renderBtn, copyBtn)
   );
 }
 
@@ -983,11 +985,41 @@ function joinPath(root, rel) {
 }
 
 // Send a file to the Render tab (single-file mode).
-function sendToRender(path) {
+function sendToRender(path, highlight) {
   $("#render-tree").classList.add("hidden");
   $("#render-hsplit").classList.add("hidden");
   showView("render");
-  renderInPane(path);
+  renderInPane(path, highlight);
+}
+
+// highlightSecretInPane wraps every occurrence of `secret` in the rendered file
+// in a <mark> and scrolls the first into view. It walks text nodes (safe: uses
+// textContent, no HTML injection), so it works for both plain-text and
+// syntax-highlighted (Chroma) output as long as the secret sits in one token.
+function highlightSecretInPane(secret) {
+  if (!secret) return;
+  const root = document.querySelector("#render-pane .code-view, #render-pane .render-text");
+  if (!root) return;
+  const nodes = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  let first = null;
+  for (const node of nodes) {
+    const text = node.nodeValue;
+    if (text.indexOf(secret) < 0) continue;
+    const frag = document.createDocumentFragment();
+    let pos = 0;
+    for (let idx = text.indexOf(secret); idx >= 0; idx = text.indexOf(secret, pos)) {
+      if (idx > pos) frag.append(document.createTextNode(text.slice(pos, idx)));
+      const mark = el("mark", { className: "secret-hit", textContent: secret });
+      if (!first) first = mark;
+      frag.append(mark);
+      pos = idx + secret.length;
+    }
+    if (pos < text.length) frag.append(document.createTextNode(text.slice(pos)));
+    node.parentNode.replaceChild(frag, node);
+  }
+  if (first) first.scrollIntoView({ block: "center" });
 }
 
 let currentDiff = null;
@@ -1332,13 +1364,14 @@ async function showRenderDetails(res) {
   panel.classList.remove("hidden");
 }
 
-async function renderInPane(path) {
+async function renderInPane(path, highlight) {
   currentRenderPath = path;
   $("#btn-render-external").disabled = false;
   const pane = $("#render-pane");
   pane.replaceChildren(el("div", { className: "render-empty", textContent: "Rendering…" }));
   try {
     displayRender(await gui().RenderPath(path, renderMode(), $("#rn-pretty").checked));
+    if (highlight) highlightSecretInPane(highlight);
   } catch (e) {
     pane.replaceChildren();
     clearRenderDetails();
@@ -1519,6 +1552,17 @@ function wireWrapToggle(checkboxId, tableSel, storeKey) {
 }
 wireWrapToggle("sc-wrap", "#scan-table", "mobfi.scan.wrap");
 wireWrapToggle("df-wrap", "#diff-table", "mobfi.diff.wrap");
+
+// Persist a simple checkbox setting across sessions.
+function wirePersistentToggle(checkboxId, storeKey) {
+  const cb = document.getElementById(checkboxId);
+  if (!cb) return;
+  cb.checked = localStorage.getItem(storeKey) === "1";
+  cb.addEventListener("change", () => {
+    localStorage.setItem(storeKey, cb.checked ? "1" : "0");
+  });
+}
+wirePersistentToggle("sc-verify", "mobfi.scan.verify");
 
 // --- Console (adb shell / SSH via a PTY, rendered with xterm.js) ---
 let consoleDevices = [];
