@@ -272,7 +272,15 @@ function Ensure-AppleMobileDeviceSupport {
 function Build-Cli {
   Step "Building the CLI -> bin\mfi.exe"
   Push-Location $Root
-  try { & go build -o bin\mfi.exe .\cmd\mfi; Ok "bin\mfi.exe" }
+  try {
+    & go build -o bin\mfi.exe .\cmd\mfi
+    Ok "bin\mfi.exe"
+    # Put `mfi` on PATH by adding the repo's bin dir (so rebuilds/updates are
+    # reflected automatically). Applies to new terminals and this session.
+    Add-ToUserPath (Join-Path $Root 'bin')
+    Ok "'mfi' is on your PATH"
+    $script:CliOnPath = $true
+  }
   finally { Pop-Location }
 }
 
@@ -350,7 +358,10 @@ Set-Content -Path (Join-Path $cfgDir 'source-repo.txt') -Value $Root -Encoding a
 
 Write-Host ""
 Step "Done"
-if ($buildCli) { Write-Host "  CLI:  $Root\bin\mfi.exe   (try: .\bin\mfi.exe detect)" }
+if ($buildCli) {
+  if ($script:CliOnPath) { Write-Host "  CLI:  just type 'mfi' in a NEW terminal   (e.g. mfi detect)" }
+  else { Write-Host "  CLI:  $Root\bin\mfi.exe   (try: .\bin\mfi.exe detect)" }
+}
 if ($buildGui) {
   if ($script:GuiExe) { Write-Host "  GUI:  $script:GuiExe   (also on the Start Menu / Desktop)" }
   else { Write-Host "  GUI:  build produced no .exe - run 'wails doctor', then re-run this script" }

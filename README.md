@@ -126,7 +126,9 @@ toolchains) — build it with the install scripts below.
 
 One command resolves **everything** — the Go toolchain, the Wails CLI and its
 native GUI toolchain, and the device tools (`adb`, `libimobiledevice`) — then
-builds the CLI and GUI. Safe to re-run; anything already present is skipped.
+builds the CLI and GUI. Safe to re-run; anything already present is skipped. The
+CLI is put on your **PATH**, so afterward you can just type **`mfi`** from any
+terminal (open a new one on Windows).
 
 ```sh
 git clone https://github.com/integrisec/MobFI.git

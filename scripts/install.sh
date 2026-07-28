@@ -212,6 +212,37 @@ build_cli() {
   step "Building the CLI -> bin/mfi"
   ( cd "$ROOT" && go build -o bin/mfi ./cmd/mfi )
   ok "bin/mfi"
+  link_cli
+}
+
+# link_cli puts `mfi` on PATH so the user can just type `mfi`. It symlinks the
+# built binary (so a later `git pull` + rebuild / `mfi update` is reflected
+# automatically), preferring /usr/local/bin and falling back to ~/.local/bin.
+CLI_ON_PATH=""
+link_cli() {
+  local src="$ROOT/bin/mfi"
+  [ -x "$src" ] || return 0
+  # /usr/local/bin is on PATH almost everywhere; use sudo only if it needs it.
+  if [ -d /usr/local/bin ] || mkdir -p /usr/local/bin 2>/dev/null; then
+    if ln -sf "$src" /usr/local/bin/mfi 2>/dev/null ||
+       { [ -n "$SUDO" ] && $SUDO ln -sf "$src" /usr/local/bin/mfi 2>/dev/null; }; then
+      CLI_ON_PATH="/usr/local/bin/mfi"
+      ok "'mfi' is on your PATH (/usr/local/bin/mfi)"
+      return 0
+    fi
+  fi
+  local userbin="$HOME/.local/bin"
+  mkdir -p "$userbin" 2>/dev/null || true
+  if ln -sf "$src" "$userbin/mfi" 2>/dev/null; then
+    CLI_ON_PATH="$userbin/mfi"
+    ok "linked $userbin/mfi -> bin/mfi"
+    case ":$PATH:" in
+      *":$userbin:"*) ;;
+      *) warn "add $userbin to your PATH to run 'mfi' anywhere:  export PATH=\"$userbin:\$PATH\"" ;;
+    esac
+    return 0
+  fi
+  warn "could not put 'mfi' on PATH; run it as $src"
 }
 
 # wails_tags echoes any extra `-tags` args Wails needs on this system.
@@ -395,7 +426,13 @@ main() {
 
   echo
   step "Done"
-  [ "$BUILD_CLI" -eq 1 ] && echo "  CLI:  ${ROOT}/bin/mfi        (try: ./bin/mfi detect)"
+  if [ "$BUILD_CLI" -eq 1 ]; then
+    if [ -n "$CLI_ON_PATH" ]; then
+      echo "  CLI:  just type 'mfi'   (e.g. mfi detect)"
+    else
+      echo "  CLI:  ${ROOT}/bin/mfi        (try: ./bin/mfi detect)"
+    fi
+  fi
   case "$OS" in
     Darwin) [ "$BUILD_GUI" -eq 1 ] && echo "  GUI:  open ${MACOS_APP_DST:-/Applications/MobFI.app}" ;;
     *)      [ "$BUILD_GUI" -eq 1 ] && echo "  GUI:  ${ROOT}/cmd/mfi-gui/build/bin/" ;;
