@@ -186,6 +186,8 @@ input {
 }
 input:focus { outline: none; border-color: var(--accent); }
 input[type="number"] { min-width: 90px; }
+/* Wide enough to show a full iOS UDID (25 chars) without cropping. */
+#ex-device { min-width: 27ch; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
 
 button {
   background: var(--panel-2);

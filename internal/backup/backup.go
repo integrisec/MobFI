@@ -126,17 +126,19 @@ func (o Options) Run(ctx context.Context) (*extract.Result, error) {
 	est, _ := EstimateBackupSize(ctx, o.UDID, o.infoBin())
 	free, ferr := freeSpace(o.Dest)
 	if est > 0 && o.Progress != nil {
-		msg := fmt.Sprintf("estimated backup size ~%.1f GB (full device)", gb(est))
+		msg := fmt.Sprintf("device reports ~%.1f GB used (a full backup can be larger)", gb(est))
 		if ferr == nil {
-			msg = fmt.Sprintf("estimated backup size ~%.1f GB; destination free ~%.1f GB", gb(est), gb(int64(free)))
+			msg = fmt.Sprintf("device reports ~%.1f GB used (a full backup can be larger); destination free ~%.1f GB", gb(est), gb(int64(free)))
 		}
 		o.Progress(extract.Progress{Path: msg})
 	}
 	if est > 0 && ferr == nil {
-		need := est + est/10 // require the estimate plus a ~10% margin
-		if int64(free) < need {
-			return nil, fmt.Errorf("not enough free space at %s: ~%.1f GB free, but a full-device backup needs ~%.1f GB (the device's used data). "+
-				"Free space or choose a destination with room -- iOS backs up the whole device even to extract one app", o.Dest, gb(int64(free)), gb(need))
+		// The estimate (device used data) understates the real backup size, so
+		// only hard-fail when the destination has less than even the estimate --
+		// a clearly-doomed run; larger shortfalls surface as MBErrorDomain/105.
+		if int64(free) < est {
+			return nil, fmt.Errorf("not enough free space at %s: ~%.1f GB free, but the device already reports ~%.1f GB used and a full backup is usually larger. "+
+				"Free space or choose a destination with room -- iOS backs up the whole device even to extract one app", o.Dest, gb(int64(free)), gb(est))
 		}
 	}
 
@@ -178,20 +180,16 @@ func (o Options) Run(ctx context.Context) (*extract.Result, error) {
 					return
 				case <-t.C:
 					sz := dirSize(rawParent)
-					switch p := pw.percent(); {
-					case p >= 0:
-						// Accurate: idevicebackup2's own device-reported overall
-						// percentage, with the real bytes written for context.
+					if p := pw.percent(); p >= 0 {
+						// Some idevicebackup2 versions do report a real overall
+						// percentage; use it when present.
 						o.Progress(extract.Progress{Path: fmt.Sprintf("backing up the device: %d%% (%.1f GB backed up)", p, gb(sz))})
-					case est > 0 && sz < est:
-						// Fallback estimate (device used data) -- a rough guide.
-						o.Progress(extract.Progress{Path: fmt.Sprintf("backing up the device: %.1f GB of ~%.1f GB (%.0f%%)", gb(sz), gb(est), float64(sz)/float64(est)*100)})
-					case est > 0:
-						// Past the estimate (backups can exceed used data due to
-						// on-device compression/clones): show the real amount.
-						o.Progress(extract.Progress{Path: fmt.Sprintf("backing up the device: %.1f GB transferred (est. ~%.1f GB; finishing)", gb(sz), gb(est))})
-					default:
-						o.Progress(extract.Progress{Path: fmt.Sprintf("backing up the device: %.1f GB so far...", gb(sz))})
+					} else {
+						// Most versions report only per-file progress, and the
+						// device's used-data figure understates the true backup
+						// size -- so show the real bytes written, not a misleading
+						// total or percentage.
+						o.Progress(extract.Progress{Path: fmt.Sprintf("backing up the device: %.1f GB backed up so far (full device backup)", gb(sz))})
 					}
 				}
 			}

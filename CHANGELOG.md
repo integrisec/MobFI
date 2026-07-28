@@ -37,15 +37,18 @@ built on a single shared Go core.
   backup size from the device's used data (`ideviceinfo com.apple.disk_usage`)
   and checks the destination's free space, failing fast with a clear message
   instead of dying partway through a multi-GB backup. It reports **overall**
-  backup progress from `idevicebackup2`'s own device-reported overall
-  percentage (parsed from its progress bar), falling back to a staging-vs-
-  estimate figure if no overall percentage is seen; the file/byte header is
-  hidden until reconstruction actually produces files. Reconstruction lists the
+  backup progress as the actual bytes written to disk. `idevicebackup2` reports
+  only per-file progress (no reliable whole-backup percentage), and the device's
+  used-data figure understates the true backup size, so MobFI shows "X.X GB
+  backed up so far" rather than a misleading total/percentage (it will still use
+  a real overall percentage on the rare versions that print one). The file/byte
+  header is hidden until reconstruction produces files. Reconstruction lists the
   backup domains it extracts (app container plus app groups / extensions), and
   reports skipped entries clearly (e.g. "symlink (not extracted)"). Cancel is
   responsive: the click shows "Cancelling…" immediately, the progress poller
   stops the moment the context is cancelled, and the kill wait is bounded so it
-  doesn't appear frozen before the clean-up prompt.
+  doesn't appear frozen before the clean-up prompt. The Extract Device ID field
+  is wide enough to show a full iOS UDID without visually cropping it.
 - Live progress with cancellation; destination path-traversal guards and
   Windows-safe filename handling.
 
