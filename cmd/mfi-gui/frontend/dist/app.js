@@ -23,12 +23,14 @@ function lockColumns(table) {
   table.classList.add("cols-fixed");
 }
 
-// wrapScroll puts a table inside a horizontally-scrollable container so wide
-// content scrolls within the table area instead of shifting the whole page
-// (which would clip the section title). The action column is kept visible via
-// sticky positioning (see .grid .col-actions in the CSS).
+// wrapScroll puts a table inside a bordered, horizontally-scrollable container
+// so wide content scrolls within the table area instead of shifting the whole
+// page (which would clip the section title), and every data table gets the same
+// enclosing border. The action column is kept visible via sticky positioning
+// (see .grid .col-actions in the CSS). Tables already inside a bordered scroll
+// wrapper (.scroll -- e.g. Apps, Database) are left alone to avoid a double box.
 function wrapScroll(table) {
-  if (!table || (table.parentElement && table.parentElement.classList.contains("table-scroll"))) return;
+  if (!table || table.closest(".scroll, .table-scroll")) return;
   const wrap = el("div", { className: "table-scroll" });
   table.parentNode.insertBefore(wrap, table);
   wrap.appendChild(table);
