@@ -41,6 +41,14 @@ heading to the version and date and start a fresh `Unreleased` section.
   credentials (MongoDB, SQL, Redis, HTTP basic-auth), plus broader keyword and
   bearer-token generics. Each rule is covered by a positive-sample test.
 
+### Fixed
+- GUI tables (Scan/Diff/Apps/Devices) no longer overflow the window: each grid
+  now lives in a horizontally-scrollable frame, so a wide row scrolls within the
+  table instead of shifting the whole page (which had clipped the tab title and
+  pushed the row's **Copy** button against the window edge). The action column
+  (Render/Copy) is pinned to the right so its buttons stay reachable while the
+  row scrolls, and with **Wrap** on, long paths reflow to fit.
+
 ## [1.0.0] - 2026-07-25
 
 First official release. MobFI is a cross-platform (macOS, Windows, Linux)

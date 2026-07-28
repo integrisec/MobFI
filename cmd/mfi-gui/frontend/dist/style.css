@@ -309,7 +309,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 /* Fixed-purpose columns: icon (far left) and the action buttons (right) */
 .grid .col-icon { width: 44px; text-align: center; }
 .grid .col-icon .avatar { margin: 0; }
-.grid .col-actions { width: 1%; white-space: nowrap; }
+.grid .col-actions { width: 1%; white-space: nowrap; padding-right: 16px; }
 .grid.cols-fixed td.col-actions, .grid.cols-fixed td.col-icon { overflow: visible; }
 .app-img {
   width: 26px;
@@ -431,6 +431,22 @@ ul.perms li { break-inside: avoid; }
   word-break: break-word;
   overflow: visible;
   text-overflow: clip;
+}
+/* In wrap mode, reflow to fit the container: use auto layout and release any
+   locked (resized/fixed) widths on the wrappable columns, so long paths wrap
+   instead of forcing the table -- and the action column -- past the window. */
+.grid.wrap { table-layout: auto; }
+.grid.wrap thead th:not(.no-resize) { width: auto !important; }
+
+/* Tables live in a horizontally-scrollable container so wide content scrolls
+   within the table instead of shifting the whole page (which clips the title).
+   The action column stays pinned to the right so its buttons are always
+   reachable. */
+.table-scroll { overflow-x: auto; }
+.grid td.col-actions, .grid thead th.col-actions {
+  position: sticky;
+  right: 0;
+  background: var(--bg);
 }
 
 /* Draggable horizontal splitter between the app list and details panel */
