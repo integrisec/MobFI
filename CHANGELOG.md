@@ -44,6 +44,10 @@ heading to the version and date and start a fresh `Unreleased` section.
   bearer-token generics. Each rule is covered by a positive-sample test.
 
 ### Fixed
+- The GUI update overlay now renders the rebuild output's ANSI colour codes as
+  actual colours (git/`wails`/pterm output), instead of showing raw escape
+  sequences. Non-colour terminal control codes (cursor moves, spinner redraws)
+  are stripped so they no longer appear as gibberish.
 - GUI tables (Scan/Diff/Apps/Devices) no longer overflow the window: each grid
   now lives in a horizontally-scrollable frame, so a wide row scrolls within the
   table instead of shifting the whole page (which had clipped the tab title and

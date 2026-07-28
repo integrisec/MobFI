@@ -1867,10 +1867,85 @@ function showUpdateOverlay() {
   if (fin) { fin.textContent = ""; fin.className = "update-final"; }
   ov.classList.remove("hidden");
 }
+// --- ANSI terminal colouring for the update log -----------------------------
+// Rebuild tools (wails/pterm, git) emit ANSI escape codes. Render the colour
+// codes as styled spans and strip the rest (cursor moves, spinner redraws) so
+// they don't show up as raw escape gibberish in the overlay.
+const ANSI_16 = [
+  "#2e3436", "#c0392b", "#27ae60", "#d4a017", "#3465a4", "#8e44ad", "#16a085", "#c7c7c7",
+  "#7f8c8d", "#e74c3c", "#2ecc71", "#f1c40f", "#5da8ff", "#9b59b6", "#1abc9c", "#ffffff",
+];
+function ansi256(n) {
+  n = n | 0;
+  if (n < 16) return ANSI_16[n];
+  if (n < 232) {
+    n -= 16;
+    const c = (v) => (v ? 55 + v * 40 : 0);
+    return `rgb(${c(Math.floor(n / 36))},${c(Math.floor((n % 36) / 6))},${c(n % 6)})`;
+  }
+  const v = 8 + (n - 232) * 10;
+  return `rgb(${v},${v},${v})`;
+}
+function escHtml(s) {
+  return s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+}
+function applyAnsiCodes(st, codes) {
+  for (let i = 0; i < codes.length; i++) {
+    const c = codes[i];
+    if (c === 0) { st.fg = null; st.bg = null; st.bold = false; st.italic = false; st.underline = false; }
+    else if (c === 1) st.bold = true;
+    else if (c === 22) st.bold = false;
+    else if (c === 3) st.italic = true;
+    else if (c === 23) st.italic = false;
+    else if (c === 4) st.underline = true;
+    else if (c === 24) st.underline = false;
+    else if (c >= 30 && c <= 37) st.fg = ANSI_16[c - 30];
+    else if (c >= 90 && c <= 97) st.fg = ANSI_16[c - 90 + 8];
+    else if (c === 39) st.fg = null;
+    else if (c >= 40 && c <= 47) st.bg = ANSI_16[c - 40];
+    else if (c >= 100 && c <= 107) st.bg = ANSI_16[c - 100 + 8];
+    else if (c === 49) st.bg = null;
+    else if (c === 38 || c === 48) {
+      const which = c === 38 ? "fg" : "bg";
+      if (codes[i + 1] === 5) { st[which] = ansi256(codes[i + 2]); i += 2; }
+      else if (codes[i + 1] === 2) { st[which] = `rgb(${codes[i + 2] | 0},${codes[i + 3] | 0},${codes[i + 4] | 0})`; i += 4; }
+    }
+  }
+}
+function ansiStyle(st) {
+  const s = [];
+  if (st.fg) s.push("color:" + st.fg);
+  if (st.bg) s.push("background:" + st.bg);
+  if (st.bold) s.push("font-weight:600");
+  if (st.italic) s.push("font-style:italic");
+  if (st.underline) s.push("text-decoration:underline");
+  return s.join(";");
+}
+function ansiToHtml(line) {
+  // Drop OSC sequences (e.g. window-title) and any CSI that isn't an SGR (final
+  // byte 'm', 0x6d) -- cursor moves, line erases, spinner redraws.
+  line = line.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "");
+  line = line.replace(/\x1b\[[0-9;?]*[\x40-\x6c\x6e-\x7e]/g, "");
+  const st = { fg: null, bg: null, bold: false, italic: false, underline: false };
+  const parts = line.split(/\x1b\[([0-9;]*)m/); // [text, codes, text, codes, ...]
+  let html = "";
+  for (let i = 0; i < parts.length; i++) {
+    if (i % 2 === 1) {
+      const codes = parts[i] === "" ? [0] : parts[i].split(";").map((x) => parseInt(x, 10) || 0);
+      applyAnsiCodes(st, codes);
+    } else if (parts[i]) {
+      const style = ansiStyle(st);
+      html += style ? `<span style="${style}">${escHtml(parts[i])}</span>` : escHtml(parts[i]);
+    }
+  }
+  return html;
+}
 function appendUpdateLog(line) {
   const log = document.getElementById("update-log");
   if (!log) return;
-  log.textContent += (log.textContent ? "\n" : "") + line;
+  const div = document.createElement("div");
+  div.innerHTML = ansiToHtml(line);
+  log.appendChild(div);
   log.scrollTop = log.scrollHeight;
 }
 function finishUpdateOverlay(st) {
