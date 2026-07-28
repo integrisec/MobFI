@@ -63,9 +63,6 @@ Two thin frontends drive it:
 - `cmd/mfi-gui` — the [Wails](https://wails.io) desktop app (Go backend + a
   dependency-free HTML/JS/CSS UI)
 
-See [`CLAUDE.md`](./CLAUDE.md) for the architecture rationale and
-[`intial_claude_prompt.md`](./intial_claude_prompt.md) for the original spec.
-
 ---
 
 ## Prerequisites
