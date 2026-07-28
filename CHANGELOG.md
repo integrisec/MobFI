@@ -11,10 +11,12 @@ heading to the version and date and start a fresh `Unreleased` section.
 
 ### Added
 - The installers put the CLI on `PATH` so you can just type **`mfi`** from
-  anywhere: `install.sh` symlinks the built binary into `/usr/local/bin` (or
-  `~/.local/bin`), and `install.ps1` adds the repo's `bin` to the user `PATH`.
-  Both point at the built binary, so a later `git pull` + rebuild or `mfi
-  update` is reflected automatically.
+  anywhere: `install.sh` symlinks the built binary into `~/.local/bin` (falling
+  back to a user-writable `/usr/local/bin` when it is already on `PATH`) and
+  `install.ps1` adds the repo's `bin` to the user `PATH`. Both avoid elevation
+  entirely -- the install no longer prompts for a password to link the CLI. Both
+  point at the built binary, so a later `git pull` + rebuild or `mfi update` is
+  reflected automatically.
 - Scan findings gained a **Render** action that opens the file in the Render
   tab with the matched secret **highlighted** and scrolled into view (works for
   token-style matches and plain-text files; a multi-token generic match in a

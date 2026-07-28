@@ -183,11 +183,14 @@ Windows-only: `-NoShortcuts` skips creating the Start Menu / Desktop shortcuts.
 make build            # compiles the CLI to ./bin/mfi
 ```
 
-Optionally put it on your PATH:
+Optionally put it on your PATH (no sudo needed):
 
 ```sh
-cp bin/mfi /usr/local/bin/     # or add ./bin to $PATH
+mkdir -p ~/.local/bin && ln -sf "$PWD/bin/mfi" ~/.local/bin/mfi   # or add ./bin to $PATH
 ```
+
+Symlinking (rather than copying) means a later `git pull` + rebuild or
+`mfi update` is picked up automatically. `scripts/install.sh` does this for you.
 
 ---
 
