@@ -1843,6 +1843,41 @@ showView("devices");
   run(0);
 })();
 
+// --- Update progress overlay (shown while an update runs in-process) ---
+function showUpdateOverlay() {
+  const ov = document.getElementById("update-overlay");
+  const log = document.getElementById("update-log");
+  const fin = document.getElementById("update-final");
+  if (!ov) return;
+  if (log) log.textContent = "";
+  if (fin) { fin.textContent = ""; fin.className = "update-final"; }
+  ov.classList.remove("hidden");
+}
+function appendUpdateLog(line) {
+  const log = document.getElementById("update-log");
+  if (!log) return;
+  log.textContent += (log.textContent ? "\n" : "") + line;
+  log.scrollTop = log.scrollHeight;
+}
+function finishUpdateOverlay(st) {
+  const fin = document.getElementById("update-final");
+  if (!fin) return;
+  fin.className = "update-final " + (st && st.ok ? "ok" : "err");
+  fin.textContent = (st && st.message) || (st && st.ok ? "Update complete." : "Update failed.");
+  if (!st || !st.ok) {
+    // On failure the app stays open; let the user dismiss the overlay.
+    const close = el("button", { textContent: "Close" });
+    close.addEventListener("click", () => document.getElementById("update-overlay").classList.add("hidden"));
+    fin.append(close);
+  } else {
+    fin.append(" ", el("span", { className: "update-note", textContent: "Reopening…" }));
+  }
+}
+if (window.runtime && window.runtime.EventsOn) {
+  window.runtime.EventsOn("update:progress", (line) => appendUpdateLog(String(line)));
+  window.runtime.EventsOn("update:done", (st) => finishUpdateOverlay(st));
+}
+
 // Check for a newer release (or a git checkout behind upstream) once at launch
 // and show a dismissable banner. Purely advisory -- it opens the release page
 // but never changes anything on disk. Fails silently when offline.
@@ -1870,20 +1905,11 @@ showView("devices");
         ok = await gui().Confirm("Update MobFI", "Update MobFI now?\n\nMobFI will close, update, and reopen automatically. This can take a minute.");
       } catch (e) { ok = false; }
       if (!ok) return;
-      applyBtn.disabled = true;
-      viewBtn.disabled = true;
-      dismissBtn.disabled = true;
+      showUpdateOverlay();
       try {
         await gui().StartUpdate();
-        msg.innerHTML = "<strong>Updating...</strong> MobFI will close and reopen automatically.";
-        applyBtn.classList.add("hidden");
-        viewBtn.classList.add("hidden");
-        dismissBtn.classList.add("hidden");
       } catch (e) {
-        fail(e);
-        applyBtn.disabled = false;
-        viewBtn.disabled = false;
-        dismissBtn.disabled = false;
+        finishUpdateOverlay({ ok: false, message: String((e && e.message) || e) });
       }
     };
   }

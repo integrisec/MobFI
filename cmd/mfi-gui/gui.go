@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 
@@ -60,29 +62,69 @@ func (g *GUI) OpenURL(url string) {
 	wailsruntime.BrowserOpenURL(g.ctx, url)
 }
 
-// StartUpdate launches a detached worker that waits for this GUI to exit,
-// performs the update (git pull + rebuild, or binary swap), and relaunches the
-// app -- then quits the GUI so its files can be replaced while it is closed.
-// The result is shown as a toast when the app reopens (see TakeUpdateResult).
+// StartUpdate performs the update, reachable only after the user clicked Update
+// now and confirmed (the point of approval). On macOS/Linux it runs in-process
+// so the window can show LIVE progress (streamed as "update:progress" events,
+// finishing with "update:done"), then relaunches -- overwriting the running
+// binary is fine there. On Windows the running .exe cannot be overwritten, so
+// it delegates to a detached worker that updates after this GUI exits and
+// relaunches (the frontend shows a "closing to update" message).
 func (g *GUI) StartUpdate() error {
-	// Mint a one-time approval token: this method is only reachable after the
-	// user clicked Update now and confirmed, so it is the point of approval. The
-	// worker refuses to run without a matching token, so no leaked env or stray
-	// process can ever trigger an update without the user's explicit go-ahead.
-	token, err := approveUpdate()
-	if err != nil {
-		return err
+	if runtime.GOOS == "windows" {
+		token, err := approveUpdate()
+		if err != nil {
+			return err
+		}
+		if err := startUpdateWorker("gui", token); err != nil {
+			return err
+		}
+		go func() {
+			time.Sleep(500 * time.Millisecond)
+			wailsruntime.Quit(g.ctx)
+		}()
+		return nil
 	}
-	if err := startUpdateWorker("gui", token); err != nil {
-		return err
-	}
-	// Let the frontend paint its "closing to update" message, then quit so the
-	// worker (which is waiting on our exit) can proceed.
-	go func() {
-		time.Sleep(500 * time.Millisecond)
-		wailsruntime.Quit(g.ctx)
-	}()
+	go g.inProcessUpdate()
 	return nil
+}
+
+// inProcessUpdate runs the update in this process, streaming progress to the
+// window, then relaunches a fresh instance and quits. Only on macOS/Linux.
+func (g *GUI) inProcessUpdate() {
+	emit := func(msg string) { wailsruntime.EventsEmit(g.ctx, "update:progress", msg) }
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
+	defer cancel()
+
+	emit("Starting update...")
+	res, err := g.app.ApplyUpdate(ctx, "gui", emit)
+
+	done := updateStatus{OK: true, Message: "Update complete."}
+	switch {
+	case err != nil:
+		done = updateStatus{OK: false, Message: "Update failed: " + err.Error()}
+	case res != nil:
+		done = updateStatus{OK: true, Message: res.Message}
+	}
+	wailsruntime.EventsEmit(g.ctx, "update:done", done)
+	if !done.OK {
+		return // leave the window open so the user can read the error and retry
+	}
+
+	// Relaunch a fresh instance -- reliable from this in-session process -- then
+	// quit. relaunchEnv (in launchApp) strips any worker vars.
+	relaunch := ""
+	if exe, e := os.Executable(); e == nil {
+		if r, e2 := filepath.EvalSymlinks(exe); e2 == nil {
+			exe = r
+		}
+		relaunch = relaunchTarget(exe)
+	}
+	time.Sleep(1600 * time.Millisecond) // let the user read "complete"
+	if relaunch != "" {
+		_ = launchApp(relaunch)
+	}
+	time.Sleep(400 * time.Millisecond)
+	wailsruntime.Quit(g.ctx)
 }
 
 // TakeUpdateResult returns (and clears) the outcome of an update performed by

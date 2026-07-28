@@ -213,6 +213,46 @@ input[type="number"] { min-width: 90px; }
 .v-inactive { color: var(--muted); }
 .v-unknown { color: #e2b93b; }
 
+/* Full-screen update overlay with live progress. */
+.update-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(15, 20, 25, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.update-card {
+  width: min(640px, 92vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 22px 24px;
+}
+.update-card h3 { margin: 0 0 6px; font-size: 17px; display: flex; align-items: center; gap: 10px; }
+.update-note { color: var(--muted); font-size: 12px; margin: 0 0 14px; }
+.update-spin {
+  width: 15px; height: 15px; flex: none;
+  border: 2px solid var(--line); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 0.7s linear infinite;
+}
+#update-log {
+  flex: 1; overflow: auto; margin: 0;
+  padding: 12px; min-height: 120px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px;
+  color: var(--muted); white-space: pre-wrap; word-break: break-all;
+}
+.update-final { margin-top: 14px; font-size: 13px; }
+.update-final.ok { color: var(--ok); }
+.update-final.err { color: var(--danger); }
+.update-final button { margin-left: 12px; }
+
 /* A secret highlighted in the Render view (sent from the Scan tab). */
 mark.secret-hit {
   background: #ffd54a;

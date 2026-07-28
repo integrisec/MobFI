@@ -110,9 +110,11 @@ built on a single shared Go core.
   `mfi update`. Updating in place is a click (**Update now**) or
   `mfi update -apply`: a source checkout runs `git pull` + rebuild, a prebuilt
   binary downloads the release asset, verifies its SHA-256, and swaps itself.
-  The GUI update is done out-of-process -- MobFI closes, a detached worker
-  updates and rebuilds, then relaunches the app automatically and toasts the
-  result. The installer records the source-checkout path so this works even
+  The GUI **Update now** shows a live progress overlay: on macOS/Linux the
+  update runs in-process (streaming the git pull + rebuild output) with the
+  window open, then relaunches; on Windows -- where a running `.exe` can't be
+  overwritten -- it delegates to a detached worker after a "closing to update"
+  message. The installer records the source-checkout path so this works even
   when the app runs from `/Applications` or a shortcut.
   `MFI_NO_UPDATE_CHECK=1` silences the launch check. GUI confirmations (Update
   now, unredacted export) use the native dialog, since the Wails webview

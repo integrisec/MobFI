@@ -37,6 +37,16 @@
   </div>
   <div class="details hidden" id="deps-panel"></div>
 
+  <!-- Full-screen overlay shown while an update runs, with live progress. -->
+  <div id="update-overlay" class="update-overlay hidden">
+    <div class="update-card">
+      <h3><span class="update-spin"></span> Updating MobFI…</h3>
+      <p class="update-note">Please wait — MobFI will reopen automatically when it's done. Don't relaunch it manually.</p>
+      <pre id="update-log"></pre>
+      <div id="update-final" class="update-final"></div>
+    </div>
+  </div>
+
   <main>
     <!-- Devices -->
     <section class="view" id="view-devices">
