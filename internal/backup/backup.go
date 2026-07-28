@@ -15,6 +15,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -154,7 +155,7 @@ func (o Options) Run(ctx context.Context) (*extract.Result, error) {
 	// On cancel, idevicebackup2 is killed; WaitDelay bounds how long Run then
 	// waits for its I/O to drain so Cancel returns promptly instead of hanging.
 	cmd.WaitDelay = 5 * time.Second
-	pw := &progressLines{} // capture-only (progress nil): used for error tail
+	pw := &progressLines{pct: -1} // capture-only: error tail + overall percent
 	cmd.Stdout = pw
 	cmd.Stderr = pw
 
@@ -177,13 +178,19 @@ func (o Options) Run(ctx context.Context) (*extract.Result, error) {
 					return
 				case <-t.C:
 					sz := dirSize(rawParent)
-					if est > 0 {
-						pct := float64(sz) / float64(est) * 100
-						if pct > 99 {
-							pct = 99 // reserve 100% for completion
-						}
-						o.Progress(extract.Progress{Path: fmt.Sprintf("backing up the device: %.1f GB of ~%.1f GB (%.0f%%)", gb(sz), gb(est), pct)})
-					} else {
+					switch p := pw.percent(); {
+					case p >= 0:
+						// Accurate: idevicebackup2's own device-reported overall
+						// percentage, with the real bytes written for context.
+						o.Progress(extract.Progress{Path: fmt.Sprintf("backing up the device: %d%% (%.1f GB backed up)", p, gb(sz))})
+					case est > 0 && sz < est:
+						// Fallback estimate (device used data) -- a rough guide.
+						o.Progress(extract.Progress{Path: fmt.Sprintf("backing up the device: %.1f GB of ~%.1f GB (%.0f%%)", gb(sz), gb(est), float64(sz)/float64(est)*100)})
+					case est > 0:
+						// Past the estimate (backups can exceed used data due to
+						// on-device compression/clones): show the real amount.
+						o.Progress(extract.Progress{Path: fmt.Sprintf("backing up the device: %.1f GB transferred (est. ~%.1f GB; finishing)", gb(sz), gb(est))})
+					default:
 						o.Progress(extract.Progress{Path: fmt.Sprintf("backing up the device: %.1f GB so far...", gb(sz))})
 					}
 				}
@@ -245,6 +252,15 @@ func reconstruct(ctx context.Context, backupDir string, o Options) (*extract.Res
 	// Match the app's own domain plus any related domain that references the
 	// bundle id (app groups, extensions/plugins, keychain-shared containers).
 	like := "%" + o.BundleID + "%"
+
+	// List the domains being extracted so the user sees coverage beyond the
+	// app's main container (app groups, extensions, plugins, ...).
+	if o.Progress != nil {
+		if domains := distinctDomains(ctx, db, "AppDomain-"+o.BundleID, like); len(domains) > 0 {
+			o.Progress(extract.Progress{Path: fmt.Sprintf("extracting %d domain(s): %s", len(domains), strings.Join(domains, ", "))})
+		}
+	}
+
 	rows, err := db.QueryContext(ctx,
 		`SELECT fileID, domain, relativePath, flags FROM Files
 		 WHERE (domain = ? OR domain LIKE ?) AND relativePath IS NOT NULL AND relativePath != ''`,
@@ -287,11 +303,36 @@ func reconstruct(ctx context.Context, backupDir string, o Options) (*extract.Res
 			if o.Progress != nil {
 				o.Progress(extract.Progress{Files: res.FileCount, Bytes: res.ByteCount, Path: domain + "/" + relPath})
 			}
+		case 4:
+			// A symlink in the backup points at an on-device path that does not
+			// exist locally, so it is not reconstructed (nothing is lost).
+			res.Skipped = append(res.Skipped, extract.SkippedFile{Path: domain + "/" + relPath, Reason: "symlink (not extracted)"})
 		default:
-			res.Skipped = append(res.Skipped, extract.SkippedFile{Path: domain + "/" + relPath, Reason: "unsupported backup entry"})
+			res.Skipped = append(res.Skipped, extract.SkippedFile{Path: domain + "/" + relPath, Reason: fmt.Sprintf("unsupported entry (flags=%d)", flags)})
 		}
 	}
 	return res, rows.Err()
+}
+
+// distinctDomains returns the distinct backup domains that match the app (its
+// own AppDomain plus any domain referencing the bundle id), for reporting which
+// containers are being extracted.
+func distinctDomains(ctx context.Context, db *sql.DB, appDomain, like string) []string {
+	rows, err := db.QueryContext(ctx,
+		`SELECT DISTINCT domain FROM Files WHERE domain = ? OR domain LIKE ? ORDER BY domain`,
+		appDomain, like)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var d string
+		if rows.Scan(&d) == nil && d != "" {
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 // copyFile copies src to dst (creating parents), returning bytes written.
@@ -335,16 +376,22 @@ func dirSize(root string) int64 {
 	return total
 }
 
+// overallPctRe matches idevicebackup2's OVERALL progress bar -- "[====] NN%"
+// with nothing after the percent. Its per-file bar appends " (current/total)"
+// byte counts, so the end-anchor deliberately excludes those.
+var overallPctRe = regexp.MustCompile(`]\s*(\d{1,3})%\s*$`)
+
 // progressLines forwards a subprocess's output to a progress callback line by
 // line as it arrives, so a long-running command shows movement instead of
 // freezing. It splits on both '\n' and '\r' so idevicebackup2's carriage-return
-// percentage bar updates come through, and keeps the last lines for error
-// context. Safe for concurrent stdout+stderr writes.
+// percentage bar updates come through, keeps the last lines for error context,
+// and extracts the latest overall percentage. Safe for concurrent writes.
 type progressLines struct {
 	progress func(extract.Progress)
 	mu       sync.Mutex
 	buf      []byte
 	tail     []string
+	pct      int // latest overall percent parsed (-1 = none seen yet)
 }
 
 func (w *progressLines) Write(p []byte) (int, error) {
@@ -366,6 +413,11 @@ func (w *progressLines) emit(line string) {
 	if line == "" {
 		return
 	}
+	if m := overallPctRe.FindStringSubmatch(line); m != nil {
+		if n, err := strconv.Atoi(m[1]); err == nil && n >= 0 && n <= 100 {
+			w.pct = n
+		}
+	}
 	if w.progress != nil {
 		w.progress(extract.Progress{Path: line})
 	}
@@ -373,6 +425,13 @@ func (w *progressLines) emit(line string) {
 	if len(w.tail) > 40 {
 		w.tail = w.tail[len(w.tail)-40:]
 	}
+}
+
+// percent returns the latest overall percent parsed, or -1 if none seen.
+func (w *progressLines) percent() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.pct
 }
 
 func (w *progressLines) flush() {

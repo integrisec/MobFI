@@ -37,12 +37,15 @@ built on a single shared Go core.
   backup size from the device's used data (`ideviceinfo com.apple.disk_usage`)
   and checks the destination's free space, failing fast with a clear message
   instead of dying partway through a multi-GB backup. It reports **overall**
-  backup progress ("X GB of ~Y GB (Z%)") by polling the staging directory
-  against the estimate, since `idevicebackup2` only prints per-file progress;
-  the file/byte header is hidden until reconstruction actually produces files.
-  Cancel is responsive: the click shows "Cancelling…" immediately, the progress
-  poller stops the moment the context is cancelled, and the kill wait is bounded
-  so it doesn't appear frozen before the clean-up prompt.
+  backup progress from `idevicebackup2`'s own device-reported overall
+  percentage (parsed from its progress bar), falling back to a staging-vs-
+  estimate figure if no overall percentage is seen; the file/byte header is
+  hidden until reconstruction actually produces files. Reconstruction lists the
+  backup domains it extracts (app container plus app groups / extensions), and
+  reports skipped entries clearly (e.g. "symlink (not extracted)"). Cancel is
+  responsive: the click shows "Cancelling…" immediately, the progress poller
+  stops the moment the context is cancelled, and the kill wait is bounded so it
+  doesn't appear frozen before the clean-up prompt.
 - Live progress with cancellation; destination path-traversal guards and
   Windows-safe filename handling.
 
