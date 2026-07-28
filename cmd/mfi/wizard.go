@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/integrisec/MobFI/internal/app"
 	"github.com/integrisec/MobFI/internal/device"
@@ -26,9 +27,9 @@ func runWizard(ctx context.Context, core *app.App) error {
 	printLogo(os.Stdout)
 	fmt.Println("MobFI guided wizard  —  type `q` (or Ctrl-D) at any prompt to quit.")
 	fmt.Println("Advanced users can run subcommands directly; see `mfi help`.")
-	noticeUpdate(ctx, core, os.Stdout)
 
 	w := &wizardIO{in: bufio.NewReader(os.Stdin), out: os.Stdout}
+	maybeUpdate(ctx, core, w)
 
 	dev, ok, err := w.selectDevice(ctx, core)
 	if err != nil || !ok {
@@ -46,6 +47,78 @@ func runWizard(ctx context.Context, core *app.App) error {
 	}
 
 	return w.scanDiffReport(ctx, core, root)
+}
+
+// maybeUpdate offers to update at wizard launch when an update is available and
+// stdin is an interactive terminal: it prompts, applies the update with live
+// progress, and re-execs the freshly-built binary so the wizard continues on
+// the new version. When stdin is not a terminal (piped) it only prints the
+// one-line notice, like the one-shot subcommands. Skipped when
+// MFI_NO_UPDATE_CHECK is set, or MFI_UPDATED (we just re-execed after updating).
+func maybeUpdate(ctx context.Context, core *app.App, w *wizardIO) {
+	if os.Getenv("MFI_NO_UPDATE_CHECK") != "" || os.Getenv("MFI_UPDATED") != "" {
+		return
+	}
+	cctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	info, err := core.CheckUpdate(cctx)
+	cancel()
+	if err != nil || info == nil {
+		return
+	}
+	available := info.Available && info.Latest != ""
+	behind := info.GitCheckout && info.GitBehind > 0
+	if !available && !behind {
+		return
+	}
+
+	if available {
+		fmt.Fprintf(w.out, "\nUpdate available: MobFI v%s (you have v%s).\n", info.Latest, info.Current)
+	} else {
+		fmt.Fprintf(w.out, "\nYour git checkout is %d commit(s) behind upstream.\n", info.GitBehind)
+	}
+	if !stdinIsTTY() {
+		fmt.Fprintln(w.out, "Run `mfi update -apply` to update.")
+		return
+	}
+
+	ans, ok := w.ask("  Update now? [y/N]: ")
+	if !ok || !isYes(ans) {
+		fmt.Fprintln(w.out, "  Continuing without updating (run `mfi update -apply` any time).")
+		return
+	}
+
+	fmt.Fprintln(w.out, "\nUpdating -- this can take a minute:")
+	res, err := core.ApplyUpdate(context.Background(), "cli", func(msg string) {
+		fmt.Fprintln(w.out, "  "+msg)
+	})
+	if err != nil {
+		fmt.Fprintf(w.out, "\nUpdate failed: %v\nContinuing on the current version.\n", err)
+		return
+	}
+	fmt.Fprintf(w.out, "\n%s\n", res.Message)
+
+	// Re-exec the (now-updated) binary so the wizard restarts on the new build.
+	exe, e := os.Executable()
+	if e != nil {
+		os.Exit(0)
+	}
+	fmt.Fprintln(w.out, "Relaunching mfi on the new version...")
+	if err := execReplace(exe); err != nil {
+		fmt.Fprintf(w.out, "(could not relaunch automatically: %v -- re-run mfi)\n", err)
+	}
+	os.Exit(0) // execReplace does not return on success
+}
+
+// stdinIsTTY reports whether standard input is an interactive terminal (so a
+// blocking prompt is appropriate). False when piped or redirected.
+func stdinIsTTY() bool {
+	fi, err := os.Stdin.Stat()
+	return err == nil && (fi.Mode()&os.ModeCharDevice) != 0
+}
+
+func isYes(s string) bool {
+	s = strings.ToLower(strings.TrimSpace(s))
+	return s == "y" || s == "yes"
 }
 
 // wizardIO wraps buffered stdin + an output writer with small prompt helpers.

@@ -23,10 +23,22 @@ func run(args []string) error {
 	core := app.New()
 
 	if len(args) == 0 {
-		// The default entry point is the guided wizard.
+		// The default entry point is the guided wizard (it does its own
+		// interactive update check).
 		return runWizard(ctx, core)
 	}
 
+	// One-shot subcommands print a non-blocking one-line notice afterward if an
+	// update is available (to stderr, so piped stdout is unaffected). The
+	// interactive "update now?" prompt is reserved for the wizard.
+	err := dispatch(ctx, core, args)
+	if wantsUpdateNotice(args[0]) {
+		noticeUpdate(ctx, core, os.Stderr)
+	}
+	return err
+}
+
+func dispatch(ctx context.Context, core *app.App, args []string) error {
 	switch args[0] {
 	case "wizard":
 		return runWizard(ctx, core)
@@ -61,4 +73,15 @@ func run(args []string) error {
 		usage(os.Stderr)
 		return fmt.Errorf("unknown command %q", args[0])
 	}
+}
+
+// wantsUpdateNotice reports whether a one-shot subcommand should get the
+// post-run update notice. Excludes the wizard (handled interactively) and the
+// commands where a network check would be noise (update/version/help).
+func wantsUpdateNotice(cmd string) bool {
+	switch cmd {
+	case "wizard", "update", "version", "--version", "-v", "help", "-h", "--help":
+		return false
+	}
+	return true
 }

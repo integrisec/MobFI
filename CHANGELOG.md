@@ -116,6 +116,11 @@ built on a single shared Go core.
   overwritten -- it delegates to a detached worker after a "closing to update"
   message. The installer records the source-checkout path so this works even
   when the app runs from `/Applications` or a shortcut.
+  On the CLI, the guided **wizard** now offers the update interactively when
+  stdin is a terminal: it prompts "Update now? [y/N]", applies it with live
+  progress, and re-execs the freshly-built binary so the wizard continues on the
+  new version. One-shot subcommands stay non-interactive -- they just print a
+  one-line "update available" notice to stderr afterward.
   `MFI_NO_UPDATE_CHECK=1` silences the launch check. GUI confirmations (Update
   now, unredacted export) use the native dialog, since the Wails webview
   (WKWebView) does not implement `window.confirm()` -- previously "Update now"
