@@ -44,6 +44,11 @@ heading to the version and date and start a fresh `Unreleased` section.
   bearer-token generics. Each rule is covered by a positive-sample test.
 
 ### Fixed
+- GUI scrollable panes (the Devices/Scan/Diff/Apps/Database tables and the
+  Render/output panes) now show always-visible scrollbars on both axes. macOS
+  hides overlay scrollbars until you actively scroll, so they had looked absent;
+  the tables also gained a bounded height so they scroll vertically within their
+  own box (matching the Apps/Database tables) instead of the whole page.
 - The GUI update overlay now renders the rebuild output's ANSI colour codes as
   actual colours (git/`wails`/pterm output), instead of showing raw escape
   sequences. Non-colour terminal control codes (cursor moves, spinner redraws)

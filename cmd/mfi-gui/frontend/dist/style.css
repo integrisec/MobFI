@@ -13,6 +13,28 @@
 
 * { box-sizing: border-box; }
 
+/* Always-visible, theme-styled scrollbars. macOS/WebKit hides overlay
+   scrollbars until you actively scroll, so the tables and render/output panes
+   looked as if they had none. Styling ::-webkit-scrollbar switches every
+   scrollable pane to classic, always-visible bars on both axes (vertical and
+   horizontal) -- WKWebView on macOS, WebKitGTK on Linux, and Chromium/WebView2
+   on Windows all honour it. */
+* { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 7px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner { background: transparent; }
+
 .hidden { display: none !important; }
 
 /* Busy spinner (prefixed on a status element while an op runs) */
@@ -443,7 +465,7 @@ ul.perms li { break-inside: avoid; }
    The enclosing border matches the Apps/Database tables (which use .scroll), so
    every data table looks the same. A wide table scrolls inside this box (the
    action buttons scroll into view with it) rather than pushing the page. */
-.table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+.table-scroll { overflow: auto; max-height: 60vh; border: 1px solid var(--line); border-radius: 6px; }
 /* Hide the wrapper when its table is toggled off (e.g. Devices before a device
    is detected), so it doesn't leave an empty bordered box. */
 .table-scroll:has(> table.hidden) { display: none; }
