@@ -284,6 +284,29 @@ mark.secret-hit {
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
 }
 
+/* Find-in-file: every match is tinted; the active one stands out. */
+mark.find-hit {
+  background: rgba(255, 213, 74, 0.28);
+  color: inherit;
+  border-radius: 2px;
+}
+mark.find-current {
+  background: #ff9d3c;
+  color: #111;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+/* Find bar in the Render toolbar. */
+.find-bar { display: inline-flex; align-items: center; gap: 6px; }
+.find-input { width: 180px; }
+.find-count { color: var(--muted); font-size: 12px; min-width: 62px; text-align: right; }
+.find-nav {
+  padding: 4px 8px;
+  font-size: 10px;
+  line-height: 1;
+}
+.find-nav:disabled { opacity: 0.4; cursor: default; }
+
 button {
   background: var(--panel-2);
   color: var(--text);

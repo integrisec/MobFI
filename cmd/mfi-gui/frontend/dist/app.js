@@ -1039,6 +1039,98 @@ function highlightSecretInPane(secret) {
   if (first) first.scrollIntoView({ block: "center" });
 }
 
+// --- Find in rendered file --------------------------------------------------
+// In-pane search for the Render tab: highlights every (case-insensitive) match
+// of the query, reports "current / total", and steps through matches. It walks
+// text nodes, so a match must fall within one node -- always true for the plain
+// text and hex panes, and within a single token for syntax-highlighted code.
+let findMatches = [];
+let findIndex = -1;
+let findQuery = "";
+let findDebounce = null;
+
+function findRoot() {
+  return document.querySelector("#render-pane .code-view, #render-pane .render-text");
+}
+
+// clearFind removes our <mark>s and merges the text back so the next search
+// sees whole strings. It leaves any secret-hit marks (from the Scan tab) alone.
+function clearFind() {
+  const root = findRoot();
+  if (root) {
+    root.querySelectorAll("mark.find-hit").forEach((m) => m.replaceWith(document.createTextNode(m.textContent)));
+    root.normalize();
+  }
+  findMatches = [];
+  findIndex = -1;
+}
+
+function runFind(query) {
+  clearFind();
+  findQuery = query;
+  const root = findRoot();
+  if (root && query) {
+    const q = query.toLowerCase();
+    const nodes = [];
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    for (const node of nodes) {
+      const text = node.nodeValue;
+      const lower = text.toLowerCase();
+      if (lower.indexOf(q) < 0) continue;
+      const frag = document.createDocumentFragment();
+      let pos = 0;
+      for (let idx = lower.indexOf(q); idx >= 0; idx = lower.indexOf(q, pos)) {
+        if (idx > pos) frag.append(document.createTextNode(text.slice(pos, idx)));
+        const mark = el("mark", { className: "find-hit", textContent: text.slice(idx, idx + q.length) });
+        findMatches.push(mark);
+        frag.append(mark);
+        pos = idx + q.length;
+      }
+      if (pos < text.length) frag.append(document.createTextNode(text.slice(pos)));
+      node.parentNode.replaceChild(frag, node);
+    }
+    findIndex = findMatches.length ? 0 : -1;
+    setActiveFind(true);
+  }
+  updateFindCount();
+}
+
+function setActiveFind(scroll) {
+  findMatches.forEach((m, i) => m.classList.toggle("find-current", i === findIndex));
+  const cur = findMatches[findIndex];
+  if (cur && scroll) cur.scrollIntoView({ block: "center", inline: "nearest" });
+}
+
+function stepFind(delta) {
+  if (!findMatches.length) return;
+  findIndex = (findIndex + delta + findMatches.length) % findMatches.length;
+  setActiveFind(true);
+  updateFindCount();
+}
+
+function updateFindCount() {
+  const c = $("#rn-find-count");
+  if (!c) return;
+  if (findMatches.length) c.textContent = `${findIndex + 1} / ${findMatches.length}`;
+  else c.textContent = $("#rn-find-input").value ? "No matches" : "";
+  const none = findMatches.length === 0;
+  $("#rn-find-prev").disabled = none;
+  $("#rn-find-next").disabled = none;
+}
+
+// syncFindBar shows the find controls only when the current render is text-like
+// (text/hex/code) and re-applies the active query after a re-render (e.g. the
+// hex or prettify toggle rebuilds the pane and drops the marks).
+function syncFindBar() {
+  const bar = $("#rn-find");
+  if (!bar) return;
+  const searchable = !!findRoot();
+  bar.classList.toggle("hidden", !searchable);
+  if (searchable) runFind($("#rn-find-input").value);
+  else { findMatches = []; findIndex = -1; findQuery = ""; updateFindCount(); }
+}
+
 let currentDiff = null;
 let diffSortField = null;
 let diffSortDir = 1;
@@ -1337,6 +1429,7 @@ function displayRender(res) {
       pane.append(el("pre", { className: "render-text", textContent: res.text }));
   }
 
+  syncFindBar();
   showRenderDetails(res);
 }
 
@@ -1484,6 +1577,41 @@ $("#rn-wrap").addEventListener("change", () => {
 $("#rn-pretty").addEventListener("change", () => {
   localStorage.setItem("mobfi.render.pretty", $("#rn-pretty").checked ? "1" : "0");
   if (currentRenderPath) renderInPane(currentRenderPath);
+});
+
+// Find-in-file controls. Typing searches (debounced); Enter jumps to the first
+// match of a new query and steps to the next on repeat; Shift+Enter goes back.
+$("#rn-find-input").addEventListener("input", () => {
+  clearTimeout(findDebounce);
+  findDebounce = setTimeout(() => runFind($("#rn-find-input").value), 90);
+});
+$("#rn-find-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    clearTimeout(findDebounce);
+    const v = $("#rn-find-input").value;
+    if (v !== findQuery) runFind(v); // first Enter: land on match 1
+    else stepFind(e.shiftKey ? -1 : 1);
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    $("#rn-find-input").value = "";
+    runFind("");
+  }
+});
+$("#rn-find-prev").addEventListener("click", () => stepFind(-1));
+$("#rn-find-next").addEventListener("click", () => stepFind(1));
+
+// Cmd/Ctrl+F focuses the find box while the Render tab shows a searchable file.
+document.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && (e.key === "f" || e.key === "F")) {
+    const rv = document.getElementById("view-render");
+    if (rv && !rv.classList.contains("hidden") && findRoot()) {
+      e.preventDefault();
+      const inp = $("#rn-find-input");
+      inp.focus();
+      inp.select();
+    }
+  }
 });
 
 $("#btn-render-external").addEventListener("click", async () => {

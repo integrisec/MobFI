@@ -213,6 +213,12 @@
           <label class="inline"><input type="checkbox" id="rn-wrap" /> Wrap</label>
           <label class="inline"><input type="checkbox" id="rn-pretty" /> Prettify</label>
           <label class="inline"><input type="checkbox" id="rn-hex" /> Hex view</label>
+          <span class="find-bar hidden" id="rn-find">
+            <input type="search" id="rn-find-input" class="find-input" placeholder="Find in file" title="Find in file (Enter: next, Shift+Enter: previous, Esc: clear)" />
+            <span class="find-count" id="rn-find-count"></span>
+            <button id="rn-find-prev" class="find-nav" title="Previous match (Shift+Enter)" disabled>&#9650;</button>
+            <button id="rn-find-next" class="find-nav" title="Next match (Enter)" disabled>&#9660;</button>
+          </span>
           <span class="mime" id="rn-mime"></span>
         </div>
       </div>

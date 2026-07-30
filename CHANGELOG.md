@@ -10,6 +10,12 @@ heading to the version and date and start a fresh `Unreleased` section.
 ## [Unreleased]
 
 ### Added
+- **Find in a rendered file**: the Render tab has a search box that highlights
+  every (case-insensitive) match, shows a live "current / total" count, and lets
+  you step through matches (Enter / Shift+Enter or the up/down buttons, Esc to
+  clear; Cmd/Ctrl+F focuses the box). Works on the text, hex, and
+  syntax-highlighted code views; the active match is emphasised and scrolled
+  into view.
 - The installers put the CLI on `PATH` so you can just type **`mfi`** from
   anywhere: `install.sh` symlinks the built binary into `~/.local/bin` (falling
   back to a user-writable `/usr/local/bin` when it is already on `PATH`) and
