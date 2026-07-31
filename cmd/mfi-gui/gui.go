@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -72,6 +73,19 @@ func (g *GUI) OpenURL(url string) {
 // it delegates to a detached worker that updates after this GUI exits and
 // relaunches (the frontend shows a "closing to update" message).
 func (g *GUI) StartUpdate() error {
+	// MFI-UPD-04: gate every OS path on a NATIVE MessageDialog before
+	// starting anything. The webview-side JS Confirm is not a security
+	// boundary -- an XSS in a rendered file preview can invoke StartUpdate
+	// bypassing it. A native modal from the Go layer is the operator's own
+	// yes/no click, not a JS-produced value.
+	ok, err := g.Confirm("Update MobFI", "Install the latest MobFI update?\n\nThis replaces the running binary and relaunches. It can take a minute.")
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errors.New("update cancelled by operator")
+	}
+
 	if runtime.GOOS == "windows" {
 		token, err := approveUpdate()
 		if err != nil {
