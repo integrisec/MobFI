@@ -276,6 +276,12 @@ func replaceExecutable(exe, newFile string) error {
 	return os.Rename(newFile, exe)
 }
 
+// maxBinaryBytes caps the update download size. A MobFI release binary is
+// tens of MB; 512 MB is a generous ceiling that still stops a compromised
+// release host or MITM from streaming multi-GB and filling the install
+// volume (MFI-UPD-07).
+const maxBinaryBytes = 512 << 20
+
 func download(ctx context.Context, url, dst string) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
@@ -292,11 +298,17 @@ func download(ctx context.Context, url, dst string) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("GET %s: %s", url, resp.Status)
 	}
+	if resp.ContentLength > maxBinaryBytes {
+		return fmt.Errorf("GET %s: content-length %d exceeds the %d byte cap", url, resp.ContentLength, maxBinaryBytes)
+	}
 	f, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
-	_, err = io.Copy(f, resp.Body)
+	n, err := io.Copy(f, io.LimitReader(resp.Body, maxBinaryBytes+1))
+	if err == nil && n > maxBinaryBytes {
+		err = fmt.Errorf("GET %s: body exceeds the %d byte cap", url, maxBinaryBytes)
+	}
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}

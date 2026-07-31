@@ -61,7 +61,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-XC-06 | Medium | Open | | |
 | MFI-CMD-06 | Medium | Fixed | pending | ConnectTCP / PairTCP validate addr against host:port regex and code against digit regex; leading-`-` addr can no longer be parsed as an adb option. |
 | MFI-DEP-03 | Medium | Fixed | 9451a60 | Bumped x/text to v0.40.0. Fixes GO-2026-5970 / CVE-2026-56852 norm.Iter infinite-loop. Landed alongside MFI-DEP-02 due to shared go.mod tidy. |
-| MFI-UPD-07 | Low | Open | | |
+| MFI-UPD-07 | Low | Fixed | pending | download() checks Content-Length and wraps resp.Body in io.LimitReader capped at 512 MB. Compromised release host cannot fill the install volume. |
 | MFI-GUI-06 | Low | Open | | |
 | MFI-GUI-07 | Low | Fixed | pending | OpenExternally rejects file extensions whose OS handler would execute (`.exe`, `.bat`, `.lnk`, `.command`, `.sh`, ~30 more) so an extracted `receipt.pdf.exe` cannot be launched by clicking "Open externally". |
 | MFI-GUI-08 | Low | Open | | |
