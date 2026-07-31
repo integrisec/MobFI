@@ -163,7 +163,22 @@ function onViewChange(name) {
   if (name === "devices") startDevicePolling();
   else stopDevicePolling();
   if (name === "console") populateConsoleDevices();
+  requestAnimationFrame(fitTableHeights);
 }
+
+// fitTableHeights sizes the visible data table so it ends at the bottom of the
+// window instead of overflowing past it -- accounting for whatever sits above
+// it (which varies, e.g. the Keys notes/limitations). The fixed 60vh cap can be
+// too tall once that content pushes the table down.
+function fitTableHeights() {
+  document.querySelectorAll(".table-scroll").forEach((box) => {
+    if (box.offsetParent === null) return; // in a hidden view
+    const top = box.getBoundingClientRect().top;
+    const avail = window.innerHeight - top - 18; // small bottom margin
+    box.style.maxHeight = Math.max(180, avail) + "px";
+  });
+}
+window.addEventListener("resize", fitTableHeights);
 
 function clearRows(tbodySel) {
   $(tbodySel).replaceChildren();
@@ -396,6 +411,7 @@ function renderDevices(devices) {
 
     if (!rootCache.has(d.id)) fetchDeviceRoot(d, rootCell);
   }
+  requestAnimationFrame(fitTableHeights); // the table's visibility just changed
 }
 
 // Manual Detect re-checks everything, including root/jailbreak status.
@@ -1911,6 +1927,7 @@ function renderKeys(res) {
 
   currentKeyItems = res.items || [];
   renderKeysTable();
+  requestAnimationFrame(fitTableHeights); // notes above changed the table's top
 }
 
 function renderKeysTable() {
