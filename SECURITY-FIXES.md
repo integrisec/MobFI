@@ -30,7 +30,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-CMD-04 | High | Fixed | pending | deviceUnzipEntry whitelists APK entry names to `[A-Za-z0-9._/-]+`; a hostile APK icon-resource name can no longer smuggle a shell payload to `adb exec-out unzip`. |
 | MFI-CMD-05 | High | Fixed | pending | OpenExternally uses `open -- <path>` on macOS and `./`-prefixes leading-`-` paths on Linux xdg-open, so no path is parsed as a launcher flag. |
 | MFI-PATH-02 | High | Fixed | pending | extract.OpenLocalForWrite opens destination with O_NOFOLLOW on Unix (Lstat-based reject on Windows) and mode 0o600. writeLocal + backup.copyFile both route through it. |
-| MFI-UPD-02 | High | Open | | |
+| MFI-UPD-02 | High | Fixed | pending | copyToTemp uses os.MkdirTemp (0o700) + a fresh file inside; O_EXCL on the create. No more predictable `/tmp/mobfi-update-worker` symlink-race primitive. |
 | MFI-UPD-03 | High | Open | | |
 | MFI-GUI-01 | High | Fixed | pending | Default-deny CSP added to index.html. Every asset is same-origin; blob: retained for PDF iframes and images. |
 | MFI-GUI-02 | High | Fixed | pending | Network SSH now uses ~/.config/MobFI/known_hosts (0700) with StrictHostKeyChecking=accept-new; first connect TOFUs, later connects hard-fail on drift. Loopback (USB iproxy) still uses /dev/null (localhost trust). |

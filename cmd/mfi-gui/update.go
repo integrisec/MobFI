@@ -313,26 +313,43 @@ func relaunchTarget(exe string) string {
 	return exe
 }
 
+// copyToTemp copies src to a fresh randomly-suffixed file in a per-run
+// tempdir (0o700). MFI-UPD-02: a fixed name in os.TempDir() opened without
+// O_EXCL is a classic /tmp symlink-race primitive on any shared Unix host
+// -- a local attacker planting /tmp/mobfi-update-worker as a symlink to
+// e.g. ~/.bashrc would cause the operator's next "Update now" to truncate
+// their rc file and write the MobFI binary bytes over it.
 func copyToTemp(src string) (string, error) {
-	name := "mobfi-update-worker"
-	if runtime.GOOS == "windows" {
-		name += ".exe"
-	}
-	dst := filepath.Join(os.TempDir(), name)
-	in, err := os.Open(src)
+	dir, err := os.MkdirTemp("", "mobfi-update-")
 	if err != nil {
 		return "", err
 	}
-	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755)
+	name := "worker"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	dst := filepath.Join(dir, name)
+	in, err := os.Open(src)
 	if err != nil {
+		os.RemoveAll(dir)
+		return "", err
+	}
+	defer in.Close()
+	// O_EXCL guarantees the file did not exist (impossible inside a
+	// freshly-minted MkdirTemp with 0o700, but retained as defence in depth
+	// against a namespace-collision on future refactors).
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o700)
+	if err != nil {
+		os.RemoveAll(dir)
 		return "", err
 	}
 	if _, err := io.Copy(out, in); err != nil {
 		out.Close()
+		os.RemoveAll(dir)
 		return "", err
 	}
 	if err := out.Close(); err != nil {
+		os.RemoveAll(dir)
 		return "", err
 	}
 	return dst, nil
