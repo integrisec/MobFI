@@ -37,7 +37,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-GUI-03 | High | Open | | |
 | MFI-PAR-01 | High | Fixed | pending | Added maxPlistDepth=128 counter threaded through object/collection/dict; recursion depth beyond that returns an error instead of stack-overflowing. |
 | MFI-PAR-02 | High | Fixed | pending | Added maxPlistDepth counter to DecodeXML / parseXMLArray / parseXMLDict / parseXMLElement; also added an outer recover to keep xml decoder panics from escaping into the Wails runtime. |
-| MFI-PAR-03 | High | Open | | |
+| MFI-PAR-03 | High | Fixed | pending | Cap PBKDF2 `ITER` and `DPIC` at 10^7; reject anything larger with a clear error. |
 | MFI-PAR-04 | High | Fixed | pending | numObjects * offsetIntSize now uses math/bits.Mul64 to reject overflow before allocation; also cap numObjects at len(data). |
 | MFI-SEC-01 | High | Open | | |
 | MFI-XC-01 | High | Fixed | pending | dbview.Open no longer falls back from immutable=1 to mode=ro on the evidence file. On immutable failure it copies the DB + WAL/SHM/journal sidecars to a scratch tempdir and opens the copy; scratch dir is torn down on Close. |
@@ -51,7 +51,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-GUI-05 | Medium | Fixed | pending | Same ConsoleStart rewrite as MFI-CMD-03: `-l user -- host` splits the concatenated argv element into separate fields, both validated to reject leading `-`. |
 | MFI-PAR-05 | Medium | Fixed | pending | count in collection/dict/utf-16 string now capped at len(data) before make([]any/uint16, count); attacker cannot request an 8x memory amplification. |
 | MFI-PAR-06 | Medium | Open | | |
-| MFI-PAR-07 | Medium | Open | | |
+| MFI-PAR-07 | Medium | Fixed | pending | parseKeybag caps each TLV payload at 1 MiB; rejects negative `int(uint32)` casts on 32-bit builds. |
 | MFI-SEC-02 | Medium | Fixed | pending | Verifier client sets CheckRedirect to ErrUseLastResponse; redirect targets never receive vendor auth headers. |
 | MFI-SEC-03 | Medium | Open | | |
 | MFI-SEC-04 | Medium | Open | | |
