@@ -1321,12 +1321,14 @@ function renderDiff() {
     const bPath = joinPath(currentDiff.root_b, c.path);
     const target = c.kind === "removed" ? aPath : bPath; // the surviving side
 
-    const items = [
-      { label: "Render", primary: true, title: "Open in the Render tab", onClick: () => sendToRender(target) },
-    ];
+    // For a modified file, Compare (side-by-side diff) is the primary action and
+    // Render moves to the menu. Added/removed files have no Compare, so Render
+    // stays primary.
+    const items = [];
     if (c.kind === "modified") {
-      items.push({ label: "Compare", onClick: () => openFileDiff(aPath, bPath, c.path) });
+      items.push({ label: "Compare", primary: true, title: "Side-by-side diff of this file", onClick: () => openFileDiff(aPath, bPath, c.path) });
     }
+    items.push({ label: "Render", title: "Open in the Render tab", onClick: () => sendToRender(target) });
 
     $("#diff-table tbody").append(wireRowMenu(el("tr", {},
       el("td", {}, el("span", { className: `pill ${c.kind}`, textContent: c.kind })),
