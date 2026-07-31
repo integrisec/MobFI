@@ -1679,7 +1679,7 @@ $("#rn-hex").addEventListener("change", () => {
 
 // Wrap: pure CSS toggle, no re-render needed. Prettify: needs a re-render.
 $("#rn-wrap").checked = localStorage.getItem("mobfi.render.wrap") === "1";
-$("#rn-pretty").checked = localStorage.getItem("mobfi.render.pretty") === "1";
+$("#rn-pretty").checked = localStorage.getItem("mobfi.render.pretty") !== "0"; // default on
 $("#rn-wrap").addEventListener("change", () => {
   localStorage.setItem("mobfi.render.wrap", $("#rn-wrap").checked ? "1" : "0");
   $("#render-pane").classList.toggle("wrap", $("#rn-wrap").checked);
@@ -1750,34 +1750,61 @@ async function runDecode() {
     fail(e);
     return;
   }
-  box.replaceChildren(...(results || []).map(decodeCard));
+  const pretty = $("#dec-pretty").checked;
+  const cards = [];
+  for (const r of results || []) cards.push(await decodeCard(r, pretty));
+  box.replaceChildren(...cards);
 }
 
-function decodeCard(r) {
+function decodeCopyBtn(value) {
+  const b = el("button", { className: "decode-copy", textContent: "Copy" });
+  b.addEventListener("click", async () => {
+    try {
+      await gui().Copy(value);
+      toast("copied", true);
+    } catch (e) {
+      fail(e);
+    }
+  });
+  return b;
+}
+
+async function decodeCard(r, pretty) {
   const card = el("div", { className: "decode-card" + (r.ok ? "" : " empty") });
   const head = el("div", { className: "decode-head" });
   head.append(el("span", { className: "decode-name", textContent: r.name }));
-  if (r.ok && r.binary) head.append(el("span", { className: "decode-badge", textContent: "binary" }));
-  if (r.ok) {
-    const copy = el("button", { className: "decode-copy", textContent: "Copy" });
-    copy.addEventListener("click", async () => {
-      try {
-        await gui().Copy(r.value);
-        toast("copied", true);
-      } catch (e) {
-        fail(e);
-      }
-    });
-    head.append(copy);
-  }
-  card.append(head);
+
   if (!r.ok) {
-    card.append(el("div", { className: "decode-error", textContent: r.error || "no result" }));
+    card.append(head, el("div", { className: "decode-error", textContent: r.error || "no result" }));
     return card;
   }
-  card.append(el("pre", { className: "decode-value", textContent: r.value }));
-  if (r.binary && r.hex) {
-    card.append(el("pre", { className: "decode-hex", textContent: r.hex }));
+
+  // Binary result: no syntax highlighting; show a best-effort value + hex.
+  if (r.binary) {
+    head.append(el("span", { className: "decode-badge", textContent: "binary" }));
+    head.append(decodeCopyBtn(r.value));
+    card.append(head);
+    card.append(el("pre", { className: "decode-value", textContent: r.value }));
+    if (r.hex) card.append(el("pre", { className: "decode-hex", textContent: r.hex }));
+    return card;
+  }
+
+  // Text result: detect syntax and highlight (prettifying JSON/XML when on).
+  let view = null;
+  try {
+    view = await gui().HighlightValue(r.value, pretty);
+  } catch (e) {
+    view = null;
+  }
+  if (view && view.lang) head.append(el("span", { className: "decode-badge", textContent: view.lang }));
+  head.append(decodeCopyBtn(r.value));
+  card.append(head);
+  if (view && view.html) {
+    const code = el("div", { className: "code-view decode-code" });
+    code.innerHTML = view.html;
+    card.append(code);
+  } else {
+    card.append(el("pre", { className: "decode-value", textContent: r.value }));
   }
   return card;
 }
@@ -1810,6 +1837,12 @@ $("#btn-decode-paste").addEventListener("click", async () => {
   } catch (e) {
     fail(e);
   }
+});
+// Prettify: persisted, defaults on (only an explicit "0" turns it off).
+$("#dec-pretty").checked = localStorage.getItem("mobfi.decode.pretty") !== "0";
+$("#dec-pretty").addEventListener("change", () => {
+  localStorage.setItem("mobfi.decode.pretty", $("#dec-pretty").checked ? "1" : "0");
+  runDecode();
 });
 
 // --- Keys (Keychain / Keystore dump) ----------------------------------------

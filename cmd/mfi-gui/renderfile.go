@@ -296,6 +296,46 @@ func hexResult(path string) RenderResult {
 	return RenderResult{Kind: "hex", MIME: "application/octet-stream", Text: hexDump(b), Name: filepath.Base(path)}
 }
 
+// DecodeView is a syntax-highlighted rendering of a decoded value for the
+// Decode tab.
+type DecodeView struct {
+	HTML string `json:"html"` // highlighted HTML (empty when not recognisably code)
+	Lang string `json:"lang"` // detected language name, e.g. "JSON"
+}
+
+// HighlightValue detects the syntax of a decoded string and returns
+// syntax-highlighted HTML (optionally pretty-printing JSON/XML) for the Decode
+// tab, reusing the same Chroma pipeline as the Render tab. When the content
+// isn't recognisably code, HTML is empty and the caller renders plain text.
+func (g *GUI) HighlightValue(text string, pretty bool) DecodeView {
+	if strings.TrimSpace(text) == "" {
+		return DecodeView{}
+	}
+	// Detect JSON/XML by content so it highlights even when not reformatting;
+	// reindent only when pretty is set.
+	if formatted, lexer, _, ok := tryPrettify([]byte(text)); ok {
+		src := text
+		if pretty {
+			src = formatted
+		}
+		return DecodeView{HTML: highlight(src, lexer), Lang: lexerName(lexer)}
+	}
+	if lexer := pickLexer("", text); lexer != nil {
+		return DecodeView{HTML: highlight(text, lexer), Lang: lexerName(lexer)}
+	}
+	return DecodeView{}
+}
+
+func lexerName(l chroma.Lexer) string {
+	if l == nil {
+		return ""
+	}
+	if c := l.Config(); c != nil {
+		return c.Name
+	}
+	return ""
+}
+
 // pickLexer resolves a Chroma lexer by filename then by content, returning nil
 // for plain (non-code) text so it renders without highlighting.
 func pickLexer(path, content string) chroma.Lexer {

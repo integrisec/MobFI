@@ -37,7 +37,10 @@ heading to the version and date and start a fresh `Unreleased` section.
   percent-encoding. Available as a new GUI **Decode** tab (decodes as you type;
   binary results also show a hex view) and the `mfi decode` CLI command (reads
   from an argument, `-input`, or stdin). Scan findings gained a **Decode** action
-  that sends the value straight to the Decode tab.
+  that sends the value straight to the Decode tab. Decoded output is
+  **syntax-detected and highlighted** (e.g. a decoded JWT/JSON payload), with a
+  **Prettify** toggle to reformat JSON/XML and a larger input box. Prettify now
+  defaults on across the Decode and Render tabs.
 - **Find in a rendered file**: the Render tab has a search box that highlights
   every (case-insensitive) match, shows a live "current / total" count, and lets
   you step through matches (Enter / Shift+Enter or the up/down buttons, Esc to

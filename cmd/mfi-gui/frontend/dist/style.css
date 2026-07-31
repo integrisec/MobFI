@@ -641,7 +641,7 @@ label.inline input { min-width: 0; }
 /* Decode tab: encoded-string decoder. */
 .decode-input {
   width: 100%;
-  min-height: 96px;
+  min-height: 160px;
   resize: vertical;
   background: var(--panel-2);
   border: 1px solid var(--line);
@@ -666,7 +666,14 @@ label.inline input { min-width: 0; }
   padding: 12px 14px;
 }
 .decode-card.empty { opacity: 0.6; }
-.decode-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.decode-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line); /* separator like the Render toolbar */
+}
 .decode-name { font-weight: 600; font-size: 13px; }
 .decode-badge {
   font-size: 10px;
@@ -693,6 +700,15 @@ label.inline input { min-width: 0; }
 }
 .decode-hex { margin-top: 8px; color: var(--muted); font-size: 12px; }
 .decode-error { color: var(--muted); font-size: 12.5px; font-style: italic; }
+/* Syntax-highlighted decoded value (Chroma output, same look as Render). */
+.decode-code {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  max-height: 52vh;
+  overflow: auto;
+}
+.decode-code pre { margin: 0; padding: 10px 12px; font-size: 12.5px; white-space: pre; }
 
 /* Keys tab: method / notes / limitations panel. */
 .keys-notes { margin: 6px 0 2px; }
