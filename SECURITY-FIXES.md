@@ -28,7 +28,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-CMD-02 | High | Fixed | pending | Same wrap() rewrite as MFI-CMD-01: every non-su argv element also flows through quoteArgv, so a metachar in a device filename never surfaces as an extra sh token on device. |
 | MFI-CMD-03 | High | Fixed | pending | ConsoleStart validates user / host / port; uses `-l user -- host` form so no argv element admits a leading `-` as an ssh option (blocks -oProxyCommand class). |
 | MFI-CMD-04 | High | Fixed | pending | deviceUnzipEntry whitelists APK entry names to `[A-Za-z0-9._/-]+`; a hostile APK icon-resource name can no longer smuggle a shell payload to `adb exec-out unzip`. |
-| MFI-CMD-05 | High | Open | | |
+| MFI-CMD-05 | High | Fixed | pending | OpenExternally uses `open -- <path>` on macOS and `./`-prefixes leading-`-` paths on Linux xdg-open, so no path is parsed as a launcher flag. |
 | MFI-PATH-02 | High | Open | | |
 | MFI-UPD-02 | High | Open | | |
 | MFI-UPD-03 | High | Open | | |
@@ -63,7 +63,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-DEP-03 | Medium | Fixed | 9451a60 | Bumped x/text to v0.40.0. Fixes GO-2026-5970 / CVE-2026-56852 norm.Iter infinite-loop. Landed alongside MFI-DEP-02 due to shared go.mod tidy. |
 | MFI-UPD-07 | Low | Open | | |
 | MFI-GUI-06 | Low | Open | | |
-| MFI-GUI-07 | Low | Open | | |
+| MFI-GUI-07 | Low | Fixed | pending | OpenExternally rejects file extensions whose OS handler would execute (`.exe`, `.bat`, `.lnk`, `.command`, `.sh`, ~30 more) so an extracted `receipt.pdf.exe` cannot be launched by clicking "Open externally". |
 | MFI-GUI-08 | Low | Open | | |
 | MFI-PAR-08 | Low | Open | | |
 | MFI-PAR-09 | Low | Open | | |
