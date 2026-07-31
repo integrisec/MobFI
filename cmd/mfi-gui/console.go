@@ -183,7 +183,11 @@ func (g *GUI) ConsoleStart(deviceID, platform, sshUser, sshHost, sshPort, logPat
 		cmd = sysproc.Command("adb", "-s", deviceID, "shell")
 		status = "adb shell " + deviceID
 	}
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+	// MFI-XC-05: curated env for spawned adb / ssh / iproxy so operator
+	// secrets in the shell env (AWS_*, GITHUB_TOKEN, ANTHROPIC_*, HTTPS_PROXY)
+	// do not flow into device-side subprocesses that may dump env on error
+	// or route through a hostile ~/.ssh/config ProxyCommand.
+	cmd.Env = sysproc.CuratedEnv("TERM=xterm-256color")
 
 	p, err := startPTY(cmd)
 	if err != nil {
