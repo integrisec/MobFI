@@ -1,6 +1,6 @@
 module github.com/integrisec/MobFI
 
-go 1.25.0
+go 1.25.12
 
 require (
 	github.com/UserExistsError/conpty v0.1.4

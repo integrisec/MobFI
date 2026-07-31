@@ -42,7 +42,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-SEC-01 | High | Open | | |
 | MFI-XC-01 | High | Open | | |
 | MFI-XC-02 | High | Open | | |
-| MFI-DEP-01 | High | Open | | |
+| MFI-DEP-01 | High | Fixed | pending | Bumped go directive to 1.25.12; picks up CVE-2025-61728, -61726, -61731, -68119, -68121 and later stdlib crypto/tls + net/http client fixes. |
 | MFI-DEP-02 | High | Open | | |
 | MFI-UPD-04 | Medium | Open | | |
 | MFI-UPD-05 | Medium | Open | | |
