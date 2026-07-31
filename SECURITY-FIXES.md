@@ -85,7 +85,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 |---|---|---|---|---|
 | LIC-01 | Medium | Open | | |
 | LIC-02 | Medium | Fixed | pending | secrets.go builtinRules comment reworded from "Ported from Trufflehog" to "Inspired by Trufflehog; regexes re-derived from public token formats". Removes the AGPL derivative-work reading. |
-| LIC-03 | Medium | Open | | |
+| LIC-03 | Medium | Fixed | pending | Added xterm.LICENSE and addon-fit.LICENSE alongside the vendored minified builds; MIT permission-notice requirement is now satisfied for the redistributed .js files. |
 | LIC-04 | Low | Fixed | pending | aeskw.go doc comment now includes an explicit RFC 3394 URL and pins the IV / variable names to the RFC pseudocode. |
 | LIC-05 | Low | Fixed | pending | backup_keychain.go doc comment back-references keybag.go's attribution block (Apple whitepaper / iphone-dataprotection / MVT). |
 
