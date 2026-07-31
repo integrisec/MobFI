@@ -26,14 +26,14 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-PATH-01 | Critical | Fixed | pending | Added extract.Within guard + NUL / leading-separator rejection to backup.reconstruct; regression test TestReconstructRejectsPathEscape. |
 | MFI-CMD-01 | Critical | Fixed | pending | Replaced `su -c 'joined'` with `su 0 <argv>`; every argv element passed to `adb shell`/`exec-out` is single-quoted for exactly one on-device sh parse. Regression test TestADBQuotesShellMetacharsInFilenames. |
 | MFI-CMD-02 | High | Fixed | pending | Same wrap() rewrite as MFI-CMD-01: every non-su argv element also flows through quoteArgv, so a metachar in a device filename never surfaces as an extra sh token on device. |
-| MFI-CMD-03 | High | Open | | |
+| MFI-CMD-03 | High | Fixed | pending | ConsoleStart validates user / host / port; uses `-l user -- host` form so no argv element admits a leading `-` as an ssh option (blocks -oProxyCommand class). |
 | MFI-CMD-04 | High | Open | | |
 | MFI-CMD-05 | High | Open | | |
 | MFI-PATH-02 | High | Open | | |
 | MFI-UPD-02 | High | Open | | |
 | MFI-UPD-03 | High | Open | | |
 | MFI-GUI-01 | High | Fixed | pending | Default-deny CSP added to index.html. Every asset is same-origin; blob: retained for PDF iframes and images. |
-| MFI-GUI-02 | High | Open | | |
+| MFI-GUI-02 | High | Fixed | pending | Network SSH now uses ~/.config/MobFI/known_hosts (0700) with StrictHostKeyChecking=accept-new; first connect TOFUs, later connects hard-fail on drift. Loopback (USB iproxy) still uses /dev/null (localhost trust). |
 | MFI-GUI-03 | High | Open | | |
 | MFI-PAR-01 | High | Open | | |
 | MFI-PAR-02 | High | Open | | |
@@ -48,7 +48,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-UPD-05 | Medium | Open | | |
 | MFI-UPD-06 | Medium | Open | | |
 | MFI-GUI-04 | Medium | Open | | |
-| MFI-GUI-05 | Medium | Open | | |
+| MFI-GUI-05 | Medium | Fixed | pending | Same ConsoleStart rewrite as MFI-CMD-03: `-l user -- host` splits the concatenated argv element into separate fields, both validated to reject leading `-`. |
 | MFI-PAR-05 | Medium | Open | | |
 | MFI-PAR-06 | Medium | Open | | |
 | MFI-PAR-07 | Medium | Open | | |
