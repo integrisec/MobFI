@@ -103,7 +103,7 @@ func (d *IOSDetector) describe(ctx context.Context, udid string, t Transport) De
 		dev.State = "unpaired"
 		return dev
 	}
-	dev.State = "device"
+	dev.State = "ready"
 	if name := strings.TrimSpace(string(out)); name != "" {
 		dev.Name = name
 	}

@@ -80,7 +80,7 @@ func parseADBDevices(out []byte) []Device {
 			Name:      serial,
 			Platform:  Android,
 			Transport: transportForSerial(serial),
-			State:     fields[1],
+			State:     normalizeState(fields[1]),
 		}
 		if dev.Transport == TCP {
 			dev.Address = serial

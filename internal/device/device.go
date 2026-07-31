@@ -34,7 +34,17 @@ type Device struct {
 	Platform  Platform  `json:"platform"`
 	Transport Transport `json:"transport"`
 	Address   string    `json:"address,omitempty"` // host:port for TCP transports
-	State     string    `json:"state"`             // "device", "offline", "unauthorized", ...
+	State     string    `json:"state"`             // "ready", "offline", "unauthorized", ...
+}
+
+// normalizeState maps a tool's "connected & ready" state (adb reports it as the
+// bare "device") to the clearer label "ready", leaving other states (offline,
+// unauthorized, unpaired, ...) as-is.
+func normalizeState(s string) string {
+	if s == "device" {
+		return "ready"
+	}
+	return s
 }
 
 // Detector discovers devices reachable via one mechanism. Implementations

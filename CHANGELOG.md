@@ -82,6 +82,9 @@ heading to the version and date and start a fresh `Unreleased` section.
   bearer-token generics. Each rule is covered by a positive-sample test.
 
 ### Changed
+- The Devices **State** column now shows **`ready`** instead of the bare `device`
+  (adb's term for a connected, authorized device) -- clearer that the device is
+  usable. Other states (offline, unauthorized, unpaired, ...) are unchanged.
 - GUI polish: the Decode tab's empty "no result" cards no longer stretch to the
   height of a decoded value; the Scan/Diff toolbars group each input with its
   Browse button and right-align the report/export controls so they wrap cleanly;

@@ -152,7 +152,7 @@ func parseSimctlDevices(out []byte) ([]Device, error) {
 				Name:      name,
 				Platform:  IOS,
 				Transport: Simulator,
-				State:     "device",
+				State:     "ready",
 			})
 		}
 	}

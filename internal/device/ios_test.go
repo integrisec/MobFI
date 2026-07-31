@@ -37,9 +37,9 @@ func TestIOSDetect(t *testing.T) {
 		t.Fatalf("Detect: %v", err)
 	}
 	want := []Device{
-		{ID: "00008030-AAAA", Name: "Dana's iPhone", Platform: IOS, Transport: USB, State: "device"},
+		{ID: "00008030-AAAA", Name: "Dana's iPhone", Platform: IOS, Transport: USB, State: "ready"},
 		{ID: "00008030-BBBB", Name: "00008030-BBBB", Platform: IOS, Transport: USB, State: "unpaired"},
-		{ID: "00008030-CCCC", Name: "Office iPad", Platform: IOS, Transport: TCP, State: "device"},
+		{ID: "00008030-CCCC", Name: "Office iPad", Platform: IOS, Transport: TCP, State: "ready"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Detect mismatch:\n got %+v\nwant %+v", got, want)

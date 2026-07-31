@@ -41,7 +41,7 @@ func TestParseSimctlDevices(t *testing.T) {
 		t.Fatalf("parseSimctlDevices: %v", err)
 	}
 	want := []Device{
-		{ID: "AAAA-1111", Name: "iPhone 17 (iOS 26.5)", Platform: IOS, Transport: Simulator, State: "device"},
+		{ID: "AAAA-1111", Name: "iPhone 17 (iOS 26.5)", Platform: IOS, Transport: Simulator, State: "ready"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("mismatch:\n got %+v\nwant %+v", got, want)

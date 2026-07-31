@@ -19,9 +19,9 @@ R58NABCDEF             unauthorized transport_id:4
 `
 	got := parseADBDevices([]byte(out))
 	want := []Device{
-		{ID: "emulator-5554", Name: "sdk gphone64 arm64", Platform: Android, Transport: Emulator, State: "device"},
-		{ID: "0123456789ABCDEF", Name: "Pixel 7", Platform: Android, Transport: USB, State: "device"},
-		{ID: "192.168.1.5:5555", Name: "Galaxy S22", Platform: Android, Transport: TCP, Address: "192.168.1.5:5555", State: "device"},
+		{ID: "emulator-5554", Name: "sdk gphone64 arm64", Platform: Android, Transport: Emulator, State: "ready"},
+		{ID: "0123456789ABCDEF", Name: "Pixel 7", Platform: Android, Transport: USB, State: "ready"},
+		{ID: "192.168.1.5:5555", Name: "Galaxy S22", Platform: Android, Transport: TCP, Address: "192.168.1.5:5555", State: "ready"},
 		{ID: "R58NABCDEF", Name: "R58NABCDEF", Platform: Android, Transport: USB, State: "unauthorized"},
 	}
 	if !reflect.DeepEqual(got, want) {

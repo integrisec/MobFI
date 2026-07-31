@@ -779,7 +779,7 @@ label.inline input { min-width: 0; }
 .pill.removed { background: rgba(255,107,107,.15); color: var(--danger); }
 .pill.modified { background: rgba(76,159,254,.15); color: var(--accent); }
 
-.state-device { color: var(--ok); }
+.state-ready { color: var(--ok); }
 .state-unauthorized, .state-unpaired, .state-offline { color: var(--danger); }
 
 .root-cell { color: var(--muted); }
