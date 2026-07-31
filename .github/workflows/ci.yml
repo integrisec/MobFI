@@ -17,6 +17,19 @@ jobs:
       - name: Check .ps1 files are pure ASCII
         run: make check-ascii
 
+  handbook:
+    name: Handbook is in sync with its sources
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # --check compares against the committed docs/handbook.md, and
+          # the generator derives its cover date from the last commit
+          # touching a chapter source, so it needs real history.
+          fetch-depth: 0
+      - name: Check docs/handbook.md matches docs/handbook/*.md
+        run: make handbook-check
+
   go:
     name: Go vet / test (core + CLI)
     runs-on: ubuntu-latest
