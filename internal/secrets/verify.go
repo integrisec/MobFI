@@ -3,6 +3,7 @@ package secrets
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -63,7 +64,20 @@ func Verifiable(ruleID string) bool { _, ok := verifiers[ruleID]; return ok }
 // checked once. Findings whose rule has no verifier are marked
 // VerifyUnsupported; the returned slice is the same one passed in (mutated).
 func Verify(ctx context.Context, findings []Finding) []Finding {
-	client := &http.Client{Timeout: verifyTimeout}
+	// MFI-XC-02: never route verification through the environment's HTTPS
+	// proxy. Every request carries a live client secret; a corporate MITM
+	// proxy on an operator's laptop would otherwise silently receive every
+	// discovered token during a client engagement.
+	transport := &http.Transport{
+		Proxy:                 nil,
+		DialContext:           (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          16,
+		IdleConnTimeout:       30 * time.Second,
+		TLSHandshakeTimeout:   5 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+	client := &http.Client{Timeout: verifyTimeout, Transport: transport}
 
 	type key struct{ rule, secret string }
 	uniq := map[key]VerifyStatus{}
