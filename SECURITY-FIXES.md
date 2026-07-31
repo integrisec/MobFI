@@ -39,7 +39,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-PAR-02 | High | Fixed | pending | Added maxPlistDepth counter to DecodeXML / parseXMLArray / parseXMLDict / parseXMLElement; also added an outer recover to keep xml decoder panics from escaping into the Wails runtime. |
 | MFI-PAR-03 | High | Fixed | pending | Cap PBKDF2 `ITER` and `DPIC` at 10^7; reject anything larger with a clear error. |
 | MFI-PAR-04 | High | Fixed | pending | numObjects * offsetIntSize now uses math/bits.Mul64 to reject overflow before allocation; also cap numObjects at len(data). |
-| MFI-SEC-01 | High | Open | | |
+| MFI-SEC-01 | High | Fixed | pending | GUI.ScanSecrets / VerifyFindings return findings with Secret stripped. New GUI.RevealSecrets binding gates on native Confirm before returning raw secrets. Frontend lazy-fetches via revealedFindings cache; XSS cannot skip the Go-side Confirm. |
 | MFI-XC-01 | High | Fixed | pending | dbview.Open no longer falls back from immutable=1 to mode=ro on the evidence file. On immutable failure it copies the DB + WAL/SHM/journal sidecars to a scratch tempdir and opens the copy; scratch dir is torn down on Close. |
 | MFI-XC-02 | High | Fixed | pending | Verifier client uses an explicit http.Transport with Proxy: nil; HTTPS_PROXY / HTTP_PROXY are no longer honored so discovered secrets never flow through a corporate MITM. |
 | MFI-DEP-01 | High | Fixed | 0b9025e | Bumped go directive to 1.25.12; picks up CVE-2025-61728, -61726, -61731, -68119, -68121 and later stdlib crypto/tls + net/http client fixes. |

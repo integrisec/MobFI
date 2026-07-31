@@ -1015,6 +1015,9 @@ $("#btn-scan").addEventListener("click", async () => {
   status.textContent = "Scanning…";
   // Drop the previous scan's results so a new scan doesn't show stale findings.
   currentFindings = [];
+  // Invalidate cached reveal from any prior scan; the new run resets the
+  // ordering and count, so previously-fetched secrets no longer align.
+  revealedFindings = null;
   clearRows("#scan-table tbody");
   const off = window.runtime.EventsOn("scan:progress", (p) => {
     status.textContent = `Scanning… ${p.files.toLocaleString()} file(s) — ${shortPath(p.path)}`;
@@ -1038,6 +1041,10 @@ $("#btn-scan").addEventListener("click", async () => {
         status.textContent = "Verifying findings against their services…";
         try {
           currentFindings = await gui().VerifyFindings();
+          // Verify may reorder / reshape g.lastFindings on the Go side;
+          // invalidate the cached reveal to force a re-fetch aligned with
+          // the new order the next time the operator clicks reveal.
+          revealedFindings = null;
           renderScan();
           const active = (currentFindings || []).filter((f) => f.verified === "active").length;
           status.textContent = `${currentFindings.length} finding(s) — ${active} active`;
@@ -1059,25 +1066,64 @@ $("#btn-scan").addEventListener("click", async () => {
   }
 });
 
-function scanRow(f) {
+// revealedFindings caches the last successful RevealSecrets() response so
+// per-row reveals / copies do not re-prompt after the operator's initial
+// confirm. Cleared when a new scan starts. MFI-SEC-01: raw secrets are not
+// present in currentFindings; they arrive only via gui().RevealSecrets(),
+// which is gated by a native Confirm dialog on the Go side.
+let revealedFindings = null;
+
+async function ensureRevealed() {
+  if (revealedFindings) return true;
+  try {
+    revealedFindings = await gui().RevealSecrets();
+    return !!revealedFindings;
+  } catch (e) {
+    revealedFindings = null;
+    return false;
+  }
+}
+
+async function secretForIndex(index, fallback) {
+  const ok = await ensureRevealed();
+  if (!ok) return fallback;
+  const r = revealedFindings[index];
+  return (r && r.secret) || fallback;
+}
+
+function scanRow(f, index) {
   const matchCell = el("td", { className: "revealable", textContent: f.match, title: "click to reveal" });
   let revealed = false;
-  matchCell.addEventListener("click", () => {
-    revealed = !revealed;
-    matchCell.textContent = revealed ? f.secret || f.match : f.match;
+  matchCell.addEventListener("click", async () => {
+    if (!revealed) {
+      const secret = await secretForIndex(index, "");
+      if (!secret) return;
+      matchCell.textContent = secret;
+      revealed = true;
+    } else {
+      matchCell.textContent = f.match;
+      revealed = false;
+    }
   });
   const statusCell = el("td", {});
   if (f.verified && f.verified !== "unsupported") {
     statusCell.append(el("span", { className: "v-" + f.verified, textContent: f.verified }));
   }
   const items = [
-    { label: "Render", primary: true, title: "Open this file in Render with the secret highlighted", onClick: () => sendToRender(f.path, f.secret) },
-    { label: "Decode", title: "Send this value to the Decode tab (Base64 / hex / URL)", onClick: () => sendToDecode(f.secret || f.match) },
+    { label: "Render", primary: true, title: "Open this file in Render with the secret highlighted", onClick: async () => {
+        const secret = await secretForIndex(index, f.match);
+        sendToRender(f.path, secret);
+      } },
+    { label: "Decode", title: "Send this value to the Decode tab (Base64 / hex / URL)", onClick: async () => {
+        const secret = await secretForIndex(index, f.match);
+        sendToDecode(secret);
+      } },
     {
       label: "Copy",
       onClick: async () => {
         try {
-          await gui().Copy(f.secret || f.match);
+          const secret = await secretForIndex(index, f.match);
+          await gui().Copy(secret);
           toast("copied secret", true);
         } catch (e) {
           fail(e);
@@ -1103,8 +1149,12 @@ function renderScan() {
     return;
   }
   updateScanSortIndicators();
+  // Tag each finding with its original index so secretForIndex can pair
+  // display rows with entries in the RevealSecrets() array (which stays in
+  // scan order regardless of sorting).
+  currentFindings.forEach((f, i) => { if (f._origIndex == null) f._origIndex = i; });
   for (const f of sortRows(currentFindings, scanSortField, scanSortDir)) {
-    $("#scan-table tbody").append(scanRow(f));
+    $("#scan-table tbody").append(scanRow(f, f._origIndex));
   }
 }
 
