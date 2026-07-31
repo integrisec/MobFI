@@ -3,8 +3,11 @@ package selfupdate
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -109,15 +112,119 @@ func rebuildCmd(target string) (string, []string) {
 	return "bash", []string{filepath.Join("scripts", "install.sh"), only, "--no-runtime-tools"}
 }
 
-// applyBinary downloads the release asset for this platform, verifies it, and
-// atomically replaces the running executable.
+// pubKeyBase64 is the base64-encoded ed25519 public key that signs the
+// SHA256SUMS.txt release asset. Set at build time via ldflags:
+//
+//	go build -ldflags "-X 'github.com/integrisec/MobFI/internal/selfupdate.pubKeyBase64=<base64>'" ./cmd/mfi ./cmd/mfi-gui
+//
+// An empty value causes applyBinary to refuse to install any update. This is
+// the fail-safe default demanded by MFI-UPD-01 -- an updater is a code
+// execution primitive and must never install content whose provenance it
+// cannot verify.
+//
+// Rotation is by re-shipping a build with a new key. Multi-key trust (for
+// staggered rotation) requires code changes here.
+var pubKeyBase64 = ""
+
+// loadPubKey parses pubKeyBase64 or reports why signature verification cannot
+// proceed.
+func loadPubKey() (ed25519.PublicKey, error) {
+	if pubKeyBase64 == "" {
+		return nil, errors.New("release-signing public key is not configured in this build; refusing to install an unsigned update. Rebuild with -ldflags \"-X 'github.com/integrisec/MobFI/internal/selfupdate.pubKeyBase64=<base64>'\"")
+	}
+	raw, err := base64.StdEncoding.DecodeString(pubKeyBase64)
+	if err != nil {
+		return nil, fmt.Errorf("release-signing public key is malformed base64: %w", err)
+	}
+	if len(raw) != ed25519.PublicKeySize {
+		return nil, fmt.Errorf("release-signing public key wrong size (%d, want %d)", len(raw), ed25519.PublicKeySize)
+	}
+	return ed25519.PublicKey(raw), nil
+}
+
+// parseSignature accepts either raw 64-byte ed25519 signature bytes or the
+// base64 encoding thereof (with or without a trailing newline).
+func parseSignature(body []byte) ([]byte, error) {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == ed25519.SignatureSize {
+		return trimmed, nil
+	}
+	dec, err := base64.StdEncoding.DecodeString(string(trimmed))
+	if err == nil && len(dec) == ed25519.SignatureSize {
+		return dec, nil
+	}
+	return nil, fmt.Errorf("release signature is not %d bytes or valid base64", ed25519.SignatureSize)
+}
+
+// verifyChecksums returns nil iff signature is a valid ed25519 signature by
+// pubKey over the exact bytes of checksums.
+func verifyChecksums(checksums, signature []byte, pubKey ed25519.PublicKey) error {
+	if !ed25519.Verify(pubKey, checksums, signature) {
+		return errors.New("SHA256SUMS.txt signature verification failed")
+	}
+	return nil
+}
+
+// checksumFor extracts the hex sha256 for assetName from the raw bytes of a
+// SHA256SUMS.txt file. Lines are "<hex>  <name>".
+func checksumFor(body []byte, assetName string) (string, error) {
+	for _, line := range strings.Split(string(body), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 2 && fields[1] == assetName {
+			return fields[0], nil
+		}
+	}
+	return "", fmt.Errorf("no checksum listed for %s", assetName)
+}
+
+// applyBinary downloads the release asset for this platform, verifies its
+// ed25519-signed SHA-256, and atomically replaces the running executable.
+// Signature verification is unconditional (MFI-UPD-01): the SHA-256 from the
+// release is only trusted after ed25519.Verify accepts it against the
+// build-time public key.
 func applyBinary(ctx context.Context, info *Info, progress func(string)) (*Result, error) {
+	if progress == nil {
+		progress = func(string) {}
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		return nil, err
 	}
 	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = resolved
+	}
+
+	// Verify signature FIRST so a malformed / missing pubKey aborts before we
+	// download hundreds of MB of asset data. loadPubKey enforces MFI-UPD-01's
+	// fail-safe default.
+	progress("Verifying signing key...")
+	pubKey, err := loadPubKey()
+	if err != nil {
+		return nil, fmt.Errorf("aborting update: %w", err)
+	}
+	if info.SignatureURL == "" {
+		return nil, errors.New("aborting update: release does not publish " + signatureAsset + "; nothing to verify against")
+	}
+
+	progress("Fetching signed checksums...")
+	checksumsBody, err := fetchBody(ctx, info.ChecksumsURL, 1<<20)
+	if err != nil {
+		return nil, fmt.Errorf("could not fetch checksums: %w", err)
+	}
+	sigBody, err := fetchBody(ctx, info.SignatureURL, 1<<20)
+	if err != nil {
+		return nil, fmt.Errorf("could not fetch signature: %w", err)
+	}
+	sig, err := parseSignature(sigBody)
+	if err != nil {
+		return nil, fmt.Errorf("aborting update: %w", err)
+	}
+	if err := verifyChecksums(checksumsBody, sig, pubKey); err != nil {
+		return nil, fmt.Errorf("aborting update: %w", err)
+	}
+	want, err := checksumFor(checksumsBody, info.AssetName)
+	if err != nil {
+		return nil, fmt.Errorf("could not verify download: %w", err)
 	}
 
 	progress("Downloading " + info.AssetName + "...")
@@ -128,10 +235,6 @@ func applyBinary(ctx context.Context, info *Info, progress func(string)) (*Resul
 	defer os.Remove(tmp) // no-op once renamed into place
 
 	progress("Verifying checksum...")
-	want, err := fetchChecksum(ctx, info.ChecksumsURL, info.AssetName)
-	if err != nil {
-		return nil, fmt.Errorf("could not verify download: %w", err)
-	}
 	got, err := sha256File(tmp)
 	if err != nil {
 		return nil, err
@@ -203,38 +306,27 @@ func download(ctx context.Context, url, dst string) error {
 	return err
 }
 
-// fetchChecksum downloads the SHA256SUMS file and returns the hex digest listed
-// for assetName (lines are "<hex>  <name>").
-func fetchChecksum(ctx context.Context, url, assetName string) (string, error) {
+// fetchBody GETs url and returns up to limit bytes of the body.
+func fetchBody(ctx context.Context, url string, limit int64) ([]byte, error) {
 	if url == "" {
-		return "", fmt.Errorf("no checksums file published")
+		return nil, fmt.Errorf("empty URL")
 	}
 	ctx, cancel := context.WithTimeout(ctx, httpTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	req.Header.Set("User-Agent", userAgent)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("GET %s: %s", url, resp.Status)
+		return nil, fmt.Errorf("GET %s: %s", url, resp.Status)
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return "", err
-	}
-	for _, line := range strings.Split(string(body), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) == 2 && fields[1] == assetName {
-			return fields[0], nil
-		}
-	}
-	return "", fmt.Errorf("no checksum listed for %s", assetName)
+	return io.ReadAll(io.LimitReader(resp.Body, limit))
 }
 
 func sha256File(path string) (string, error) {

@@ -22,7 +22,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 
 | ID | Severity | Status | Fix | Notes |
 |---|---|---|---|---|
-| MFI-UPD-01 | Critical | Open | | Requires operator to set up signing infrastructure; code enforces verification. |
+| MFI-UPD-01 | Critical | Fixed | pending | ed25519 signature verification over SHA256SUMS.txt. Build-time pubKey via ldflags; empty pubKey fails closed. Release workflow must publish SHA256SUMS.sig. Regression tests cover empty/malformed/wrong-size key, wrong signature, tampered content, and missing SignatureURL. |
 | MFI-PATH-01 | Critical | Fixed | pending | Added extract.Within guard + NUL / leading-separator rejection to backup.reconstruct; regression test TestReconstructRejectsPathEscape. |
 | MFI-CMD-01 | Critical | Fixed | pending | Replaced `su -c 'joined'` with `su 0 <argv>`; every argv element passed to `adb shell`/`exec-out` is single-quoted for exactly one on-device sh parse. Regression test TestADBQuotesShellMetacharsInFilenames. |
 | MFI-CMD-02 | High | Fixed | pending | Same wrap() rewrite as MFI-CMD-01: every non-su argv element also flows through quoteArgv, so a metachar in a device filename never surfaces as an extra sh token on device. |
