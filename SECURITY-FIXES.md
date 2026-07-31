@@ -55,10 +55,10 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-SEC-02 | Medium | Fixed | pending | Verifier client sets CheckRedirect to ErrUseLastResponse; redirect targets never receive vendor auth headers. |
 | MFI-SEC-03 | Medium | Fixed | pending | fingerprintFor routes known-secret matches through `sha256(m)[:6]` hex tag instead of the 4-char-prefix + exact-length redact; downstream readers cannot dictionary-narrow the operator's literal secrets. Trufflehog rules unchanged (their 4-char prefixes are the public vendor prefix). |
 | MFI-SEC-04 | Medium | Fixed | pending | Verify now paces requests per vendor host at 250ms and caps total per host at 50; excess -> VerifyUnknown. |
-| MFI-XC-03 | Medium | Open | | |
+| MFI-XC-03 | Medium | Fixed | pending | CLI main wraps top-level context with signal.NotifyContext(SIGINT, SIGTERM); Ctrl-C now cancels in-flight adb / ideviceinstaller / idevicebackup2 subprocesses and lets scoped `defer os.RemoveAll` calls run. |
 | MFI-XC-04 | Medium | Open | | |
 | MFI-XC-05 | Medium | Open | | |
-| MFI-XC-06 | Medium | Open | | |
+| MFI-XC-06 | Medium | Fixed | pending | adbConn.Walk surfaces transport-partial-listing errors through the walk callback rather than silently accepting a truncated listing as authoritative. |
 | MFI-CMD-06 | Medium | Fixed | pending | ConnectTCP / PairTCP validate addr against host:port regex and code against digit regex; leading-`-` addr can no longer be parsed as an adb option. |
 | MFI-DEP-03 | Medium | Fixed | 9451a60 | Bumped x/text to v0.40.0. Fixes GO-2026-5970 / CVE-2026-56852 norm.Iter infinite-loop. Landed alongside MFI-DEP-02 due to shared go.mod tidy. |
 | MFI-UPD-07 | Low | Fixed | pending | download() checks Content-Length and wraps resp.Body in io.LimitReader capped at 512 MB. Compromised release host cannot fill the install volume. |

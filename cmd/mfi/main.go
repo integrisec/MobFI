@@ -6,6 +6,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/integrisec/MobFI/internal/app"
 	"github.com/integrisec/MobFI/internal/version"
@@ -19,7 +21,13 @@ func main() {
 }
 
 func run(args []string) error {
-	ctx := context.Background()
+	// MFI-XC-03: wire SIGINT / SIGTERM into the root context so a
+	// mid-extraction Ctrl-C cancels in-flight subprocesses and lets
+	// scoped `defer os.RemoveAll` calls run rather than orphaning
+	// sensitive tempdirs (decrypted Manifest.db, Android keystore2 DB,
+	// update worker files).
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	core := app.New()
 
 	if len(args) == 0 {

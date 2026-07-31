@@ -173,11 +173,23 @@ func (a *adbConn) Open(ctx context.Context, path string) (io.ReadCloser, error) 
 // Walk visits every entry under root on the device. It enumerates paths
 // with `find` (a second `find -type d` distinguishes directories) and
 // honours fs.SkipDir / fs.SkipAll. Permission errors from find are
-// tolerated: whatever paths were listed are still walked.
+// tolerated: whatever paths were listed are still walked. A hard transport
+// failure (adb died, device unplugged mid-walk) is surfaced as a callback
+// with err set on the root so extract.Run records a "partial" outcome
+// rather than silently missing half the tree. See MFI-XC-06.
 func (a *adbConn) Walk(ctx context.Context, root string, fn fs.WalkDirFunc) error {
 	all, err := a.find(ctx, root)
 	if len(all) == 0 && err != nil {
-		return fn(root, nil, err)
+		return fn(root, nil, fmt.Errorf("transport find failed at root: %w", err))
+	}
+	// If find returned SOMETHING but also an error, the underlying transport
+	// may have died partway. Report the error via the callback so callers
+	// see a non-nil err (rather than silently accepting the partial listing
+	// as authoritative).
+	if err != nil {
+		if werr := fn(root, nil, fmt.Errorf("transport find returned partial results: %w", err)); werr != nil {
+			return werr
+		}
 	}
 	isDir := toBoolSet(a.mustFind(ctx, root, "-type", "d"))
 	isFile := toBoolSet(a.mustFind(ctx, root, "-type", "f"))
@@ -251,7 +263,11 @@ func (a *adbConn) find(ctx context.Context, root string, extra ...string) ([]str
 }
 
 // mustFind runs find and returns whatever paths it listed, ignoring errors
-// (a partial listing due to permission denials is still useful).
+// (a partial listing due to permission denials is still useful). Callers
+// that need to distinguish transport-gone (empty + error) from partial-
+// permission (some paths + error) should call find directly. See
+// MFI-XC-06: Walk uses find (not mustFind) for the primary listing so a
+// transport failure surfaces as an error rather than a silent partial.
 func (a *adbConn) mustFind(ctx context.Context, root string, extra ...string) []string {
 	paths, _ := a.find(ctx, root, extra...)
 	return paths
