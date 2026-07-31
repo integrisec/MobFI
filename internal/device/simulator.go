@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -46,18 +48,50 @@ func (d *SimctlDetector) Detect(ctx context.Context) ([]Device, error) {
 	if runtime.GOOS != "darwin" {
 		return nil, nil
 	}
-	// List all devices and filter to Booted in code (parseSimctlDevices). This
-	// avoids relying on the "booted" positional filter, which some simctl
-	// versions handle inconsistently, and lets a partial/odd JSON still yield the
-	// booted entries.
+	// List all simulators and filter to Booted in code (parseSimctlDevices) --
+	// avoids relying on simctl's "booted" positional filter, which some versions
+	// handle inconsistently.
 	out, err := d.exec(ctx, "xcrun", "simctl", "list", "devices", "--json")
 	if err != nil {
-		if simctlUnavailable(err) {
-			return nil, nil
+		if !simctlUnavailable(err) {
+			return nil, fmt.Errorf("xcrun simctl failed: %w", err)
 		}
-		return nil, fmt.Errorf("xcrun simctl failed (is a full Xcode selected via xcode-select?): %w", err)
+		// `xcrun` couldn't find simctl -- almost always because xcode-select
+		// points at the Command Line Tools rather than a full Xcode. If Xcode is
+		// nonetheless installed, run its simctl binary directly.
+		bin := d.findSimctl(ctx)
+		if bin == "" {
+			return nil, nil // no full Xcode: genuinely no simulators to report
+		}
+		if out, err = d.exec(ctx, bin, "list", "devices", "--json"); err != nil {
+			return nil, fmt.Errorf("simctl (%s) failed: %w", bin, err)
+		}
 	}
 	return parseSimctlDevices(out)
+}
+
+// findSimctl locates a simctl binary inside a full Xcode install, used when
+// `xcrun simctl` fails because xcode-select points at the Command Line Tools.
+// Returns "" when no Xcode (and thus no simulators) is present.
+func (d *SimctlDetector) findSimctl(ctx context.Context) string {
+	candidates := []string{
+		"/Applications/Xcode.app/Contents/Developer/usr/bin/simctl",
+		"/Applications/Xcode-beta.app/Contents/Developer/usr/bin/simctl",
+	}
+	// Spotlight covers Xcode installed in a non-standard location.
+	if out, err := d.exec(ctx, "mdfind", "kMDItemCFBundleIdentifier == 'com.apple.dt.Xcode'"); err == nil {
+		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			if line = strings.TrimSpace(line); line != "" {
+				candidates = append(candidates, filepath.Join(line, "Contents/Developer/usr/bin/simctl"))
+			}
+		}
+	}
+	for _, p := range candidates {
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
+			return p
+		}
+	}
+	return ""
 }
 
 // simctlUnavailable reports whether the error means simctl simply is not

@@ -99,11 +99,14 @@ heading to the version and date and start a fresh `Unreleased` section.
   Dismissing the banner stays quiet until a newer version appears.
 
 ### Fixed
-- iOS Simulator detection is more robust and no longer fails silently. The
-  detector now lists all simulators and filters to Booted in code (instead of
-  relying on simctl's `booted` positional filter), and when a detector fails the
-  GUI shows a notice in the Devices view with the reason (e.g. `xcrun simctl`
-  erroring) rather than just omitting the device with no explanation.
+- iOS Simulator detection is more robust and no longer fails silently. It now
+  works when `xcode-select` points at the Command Line Tools rather than a full
+  Xcode -- previously `xcrun simctl` failed with "unable to find utility simctl"
+  and the simulator was silently dropped; MobFI now locates and runs Xcode's
+  `simctl` binary directly in that case. It also lists all simulators and filters
+  to Booted in code (instead of simctl's `booted` positional filter), and when a
+  detector fails the GUI shows a notice in the Devices view with the reason
+  rather than just omitting the device.
 - The GUI logo no longer intermittently fails to appear at launch. The bundled
   logo PNGs were oversized (~860 KB, 1448x1086) for their on-screen size, so they
   sometimes hadn't decoded by first paint; they're now downscaled (logo to
