@@ -87,6 +87,19 @@ func applyGit(ctx context.Context, target string, progress func(string)) (*Resul
 		return nil, fmt.Errorf("git pull failed: %w", err)
 	}
 
+	// MFI-UPD-03: verify the pulled HEAD carries a valid maintainer
+	// signature before running install.sh / install.ps1. Without this,
+	// anyone who subverted the HTTPS path to github.com (rogue enterprise CA,
+	// state-issued sub-CA, GitHub-side compromise) delivers attacker commits
+	// and MobFI executes them under the operator's account via bash /
+	// powershell. `git verify-commit HEAD` succeeds only when HEAD is signed
+	// by a key in the operator's gpg / ssh trust set -- so the operator
+	// controls the trust anchor, not the transport.
+	progress("Verifying pulled HEAD is a signed commit...")
+	if out, err := gitOut(ctx, git, dir, "verify-commit", "HEAD"); err != nil {
+		return nil, fmt.Errorf("refusing to build: git verify-commit HEAD failed (%s): %w. Configure gpg / ssh trust for the release-signing key before running the git-update path", strings.TrimSpace(out), err)
+	}
+
 	name, args := rebuildCmd(target)
 	progress(fmt.Sprintf("Rebuilding %s via %s (this can take a minute)...", target, name))
 	if err := runInStream(ctx, dir, nil, progress, name, args...); err != nil {
