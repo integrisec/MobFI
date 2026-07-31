@@ -8,7 +8,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"unicode/utf8"
 
@@ -34,37 +36,91 @@ type DB interface {
 
 // Open opens the database at path read-only. The format is detected from
 // the file header; only SQLite is supported so far.
+//
+// The evidence directory is never touched. mode=ro + immutable=1 is the
+// preferred DSN because it never opens for write and never touches WAL
+// sidecars. When the DB has a hot WAL that requires reading -journal / -wal /
+// -shm to see committed rows, the immutable open fails; the fallback is to
+// copy the DB and its sidecars into an OS temp dir and open the copy, so any
+// sidecar mutation lands in the scratch dir, not next to evidence. See
+// MFI-XC-01 in SECURITY-AUDIT.md.
 func Open(ctx context.Context, path string) (DB, error) {
 	if err := checkSQLite(path); err != nil {
 		return nil, err
 	}
-	// Prefer mode=ro + immutable=1: never write, and assume no other writer, so
-	// the (already-copied) evidence file is left byte-for-byte untouched. Some
-	// real databases won't open that way -- e.g. one carrying a hot WAL that
-	// must be read to see committed rows -- so fall back to plain read-only,
-	// which still never writes the main database.
-	var firstErr error
-	for _, dsn := range []string{
-		"file:" + path + "?mode=ro&immutable=1",
-		"file:" + path + "?mode=ro",
-	} {
-		db, err := sql.Open("sqlite", dsn)
-		if err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
-			continue
+
+	// First try: immutable open on the original file. This never writes.
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro&immutable=1")
+	if err == nil {
+		if pingErr := db.PingContext(ctx); pingErr == nil {
+			return &sqliteDB{db: db}, nil
 		}
-		if err := db.PingContext(ctx); err != nil {
-			db.Close()
-			if firstErr == nil {
-				firstErr = err
-			}
-			continue
-		}
-		return &sqliteDB{db: db}, nil
+		db.Close()
 	}
-	return nil, firstErr
+
+	// Fallback: copy into a scratch dir (with sidecars) and open there. Any
+	// -journal / -wal / -shm materialisation happens under scratch, so the
+	// evidence directory is left byte-for-byte untouched.
+	scratch, cleanup, copyErr := copyWithSidecars(path)
+	if copyErr != nil {
+		return nil, fmt.Errorf("dbview: could not open %s immutable and copy-fallback failed: %w", path, copyErr)
+	}
+	db, err = sql.Open("sqlite", "file:"+scratch+"?mode=ro")
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
+	if pingErr := db.PingContext(ctx); pingErr != nil {
+		db.Close()
+		cleanup()
+		return nil, pingErr
+	}
+	return &sqliteDB{db: db, cleanup: cleanup}, nil
+}
+
+// copyWithSidecars copies src plus any -journal / -wal / -shm siblings into
+// a fresh temp dir with 0700 perms. Returns the copied main-DB path, a
+// cleanup func that removes the temp dir, and any copy error.
+func copyWithSidecars(src string) (string, func(), error) {
+	dir, err := os.MkdirTemp("", "mfi-dbview-*")
+	if err != nil {
+		return "", func() {}, err
+	}
+	cleanup := func() { _ = os.RemoveAll(dir) }
+	base := filepath.Base(src)
+	dst := filepath.Join(dir, base)
+	if err := copyFile(src, dst); err != nil {
+		cleanup()
+		return "", func() {}, err
+	}
+	for _, suffix := range []string{"-journal", "-wal", "-shm"} {
+		s := src + suffix
+		if _, err := os.Stat(s); err != nil {
+			continue
+		}
+		if err := copyFile(s, dst+suffix); err != nil {
+			cleanup()
+			return "", func() {}, err
+		}
+	}
+	return dst, cleanup, nil
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 func checkSQLite(path string) error {
@@ -84,10 +140,17 @@ func checkSQLite(path string) error {
 }
 
 type sqliteDB struct {
-	db *sql.DB
+	db      *sql.DB
+	cleanup func() // removes the scratch-copy dir if Open used the copy fallback
 }
 
-func (s *sqliteDB) Close() error { return s.db.Close() }
+func (s *sqliteDB) Close() error {
+	err := s.db.Close()
+	if s.cleanup != nil {
+		s.cleanup()
+	}
+	return err
+}
 
 // Tables lists user tables (sqlite_* internal tables are omitted).
 func (s *sqliteDB) Tables(ctx context.Context) ([]string, error) {

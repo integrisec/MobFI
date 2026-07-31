@@ -40,7 +40,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-PAR-03 | High | Open | | |
 | MFI-PAR-04 | High | Open | | |
 | MFI-SEC-01 | High | Open | | |
-| MFI-XC-01 | High | Open | | |
+| MFI-XC-01 | High | Fixed | pending | dbview.Open no longer falls back from immutable=1 to mode=ro on the evidence file. On immutable failure it copies the DB + WAL/SHM/journal sidecars to a scratch tempdir and opens the copy; scratch dir is torn down on Close. |
 | MFI-XC-02 | High | Open | | |
 | MFI-DEP-01 | High | Fixed | 0b9025e | Bumped go directive to 1.25.12; picks up CVE-2025-61728, -61726, -61731, -68119, -68121 and later stdlib crypto/tls + net/http client fixes. |
 | MFI-DEP-02 | High | Fixed | 9451a60 | Bumped x/net to v0.57.0. Fixes GO-2026-5942 / CVE-2026-46600 dnsmessage panic. |
