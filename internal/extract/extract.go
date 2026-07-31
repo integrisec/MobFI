@@ -172,20 +172,10 @@ func RunTar(ctx context.Context, r io.Reader, req Request) (*Result, error) {
 }
 
 // writeLocal creates local (and any parent directories) and copies r into
-// it, returning the number of bytes written.
+// it, returning the number of bytes written. Delegates to a per-platform
+// openLocalForWrite that refuses to follow a symlink at local (MFI-PATH-02).
 func writeLocal(local string, r io.Reader) (int64, error) {
-	if err := os.MkdirAll(filepath.Dir(local), 0o755); err != nil {
-		return 0, err
-	}
-	f, err := os.Create(local)
-	if err != nil {
-		return 0, err
-	}
-	n, err := io.Copy(f, r)
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	return n, err
+	return writeLocalCopy(local, r)
 }
 
 // relDevicePath returns p relative to root using '/' (device) semantics.

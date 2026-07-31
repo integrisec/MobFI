@@ -29,7 +29,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-CMD-03 | High | Fixed | pending | ConsoleStart validates user / host / port; uses `-l user -- host` form so no argv element admits a leading `-` as an ssh option (blocks -oProxyCommand class). |
 | MFI-CMD-04 | High | Fixed | pending | deviceUnzipEntry whitelists APK entry names to `[A-Za-z0-9._/-]+`; a hostile APK icon-resource name can no longer smuggle a shell payload to `adb exec-out unzip`. |
 | MFI-CMD-05 | High | Fixed | pending | OpenExternally uses `open -- <path>` on macOS and `./`-prefixes leading-`-` paths on Linux xdg-open, so no path is parsed as a launcher flag. |
-| MFI-PATH-02 | High | Open | | |
+| MFI-PATH-02 | High | Fixed | pending | extract.OpenLocalForWrite opens destination with O_NOFOLLOW on Unix (Lstat-based reject on Windows) and mode 0o600. writeLocal + backup.copyFile both route through it. |
 | MFI-UPD-02 | High | Open | | |
 | MFI-UPD-03 | High | Open | | |
 | MFI-GUI-01 | High | Fixed | pending | Default-deny CSP added to index.html. Every asset is same-origin; blob: retained for PDF iframes and images. |

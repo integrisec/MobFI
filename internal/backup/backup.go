@@ -349,6 +349,9 @@ func distinctDomains(ctx context.Context, db *sql.DB, appDomain, like string) []
 }
 
 // copyFile copies src to dst (creating parents), returning bytes written.
+// Delegates the destination open to extract.OpenLocalForWrite so a pre-
+// planted symlink at dst does not redirect the write to a target outside
+// the reconstruction tree (MFI-PATH-02).
 func copyFile(src, dst string) (int64, error) {
 	in, err := os.Open(src)
 	if err != nil {
@@ -358,7 +361,7 @@ func copyFile(src, dst string) (int64, error) {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return 0, err
 	}
-	out, err := os.Create(dst)
+	out, err := extract.OpenLocalForWrite(dst)
 	if err != nil {
 		return 0, err
 	}
