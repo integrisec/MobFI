@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MobFI</title>
   <link rel="icon" type="image/png" href="mobfi-logo-small-transparent.png" />
+  <!-- Fetch the logo before first paint so it never intermittently misses the
+       initial render (it appears in the header, splash, and Devices hero). -->
+  <link rel="preload" as="image" href="mobfi-logo-full-transparent.png" />
   <link rel="stylesheet" href="vendor/xterm.css" />
   <link rel="stylesheet" href="style.css" />
 </head>

@@ -99,6 +99,11 @@ heading to the version and date and start a fresh `Unreleased` section.
   Dismissing the banner stays quiet until a newer version appears.
 
 ### Fixed
+- The GUI logo no longer intermittently fails to appear at launch. The bundled
+  logo PNGs were oversized (~860 KB, 1448x1086) for their on-screen size, so they
+  sometimes hadn't decoded by first paint; they're now downscaled (logo to
+  800px/~130 KB, favicon to 64px/~4 KB) and preloaded, so the header/splash/hero
+  logo shows reliably.
 - Windows in-place update now **shows its progress**. Because a running `.exe`
   can't be overwritten, MobFI closes and a detached worker performs the update;
   previously that worker was silent (the update modal flashed for a moment, the
