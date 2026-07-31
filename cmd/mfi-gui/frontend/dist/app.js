@@ -1939,6 +1939,7 @@ function wirePersistentToggle(checkboxId, storeKey) {
   });
 }
 wirePersistentToggle("sc-verify", "mobfi.scan.verify");
+wirePersistentToggle("ky-reveal", "mobfi.keys.reveal");
 
 // --- Console (adb shell / SSH via a PTY, rendered with xterm.js) ---
 let consoleDevices = [];

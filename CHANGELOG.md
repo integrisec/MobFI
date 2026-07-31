@@ -49,7 +49,8 @@ heading to the version and date and start a fresh `Unreleased` section.
   tab with the matched secret **highlighted** and scrolled into view (works for
   token-style matches and plain-text files; a multi-token generic match in a
   syntax-highlighted file still opens the file at that location).
-- The Scan tab's **Verify live** checkbox now persists across sessions.
+- The Scan tab's **Verify live** and the Keys tab's **Reveal secrets** checkboxes
+  now persist across sessions.
 - Opt-in **live verification** of secret findings: for supported services
   (GitHub, GitLab, npm, OpenAI, Anthropic, Hugging Face, SendGrid, DigitalOcean,
   Stripe, Slack, Postman, Notion, Airtable) MobFI calls a read-only "whoami"
