@@ -72,7 +72,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-XC-08 | Low | Fixed | pending | Console session IDs are now 16-byte crypto/rand hex; a future XSS pivot cannot enumerate active sessions by wall-clock. |
 | MFI-PATH-03 | Low | Fixed | pending | All SQLite `file:` URIs now built via net/url + filepath.ToSlash; paths with `?` / `#` / `%` / Windows separators no longer confuse the driver. |
 | MFI-PATH-04 | Low | Fixed | pending | safePath() escapes control bytes to `\xNN` in the plain-text report output; ANSI escape sequences in a device-supplied path can no longer forge terminal lines. JSON output preserves raw bytes for forensics. |
-| MFI-CMD-07 | Low | Open | | |
+| MFI-CMD-07 | Low | Fixed | pending | afcConn.afc normalises leading-`-` device paths to `./-` before passing to afcclient; no path element can be reparsed as an afcclient option. |
 | MFI-UPD-08 | Info | Open | | |
 | MFI-UPD-09 | Info | Open | | |
 | MFI-CMD-08 | Info | Open | | |
