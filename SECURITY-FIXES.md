@@ -45,8 +45,8 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-DEP-01 | High | Fixed | 0b9025e | Bumped go directive to 1.25.12; picks up CVE-2025-61728, -61726, -61731, -68119, -68121 and later stdlib crypto/tls + net/http client fixes. |
 | MFI-DEP-02 | High | Fixed | 9451a60 | Bumped x/net to v0.57.0. Fixes GO-2026-5942 / CVE-2026-46600 dnsmessage panic. |
 | MFI-UPD-04 | Medium | Open | | |
-| MFI-UPD-05 | Medium | Open | | |
-| MFI-UPD-06 | Medium | Open | | |
+| MFI-UPD-05 | Medium | Fixed | pending | Persisted version floor at $UserConfigDir/MobFI/version-floor.txt; refuse to install version <= floor. Written after each successful install. |
+| MFI-UPD-06 | Medium | Fixed | pending | Dedicated updateClient with TLS 1.2 floor, explicit Transport (Proxy nil), and CheckRedirect that rejects redirects to hosts outside the GitHub release-serving allowlist. |
 | MFI-GUI-04 | Medium | Open | | |
 | MFI-GUI-05 | Medium | Fixed | pending | Same ConsoleStart rewrite as MFI-CMD-03: `-l user -- host` splits the concatenated argv element into separate fields, both validated to reject leading `-`. |
 | MFI-PAR-05 | Medium | Open | | |

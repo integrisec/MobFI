@@ -5,11 +5,13 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -112,6 +114,83 @@ func rebuildCmd(target string) (string, []string) {
 	return "bash", []string{filepath.Join("scripts", "install.sh"), only, "--no-runtime-tools"}
 }
 
+// updateClient is the shared http.Client for every fetch the updater makes
+// (checksums, signature, binary asset). It sets a TLS floor of 1.2, ignores
+// HTTP(S)_PROXY env (see MFI-UPD-06), and refuses redirects to hosts outside
+// the GitHub release-serving set (MFI-UPD-06 CheckRedirect).
+var updateClient = func() *http.Client {
+	allowed := map[string]bool{
+		"api.github.com":                    true,
+		"objects.githubusercontent.com":     true,
+		"github-releases.githubusercontent.com": true,
+		"release-assets.githubusercontent.com":  true,
+		"codeload.github.com":               true,
+	}
+	transport := &http.Transport{
+		Proxy:                 nil,
+		DialContext:           (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		TLSClientConfig:       &tls.Config{MinVersion: tls.VersionTLS12},
+		ForceAttemptHTTP2:     true,
+		IdleConnTimeout:       30 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+	return &http.Client{
+		Transport: transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if !allowed[req.URL.Host] {
+				return fmt.Errorf("update: refused redirect to unallowed host %s", req.URL.Host)
+			}
+			if len(via) >= 5 {
+				return fmt.Errorf("update: too many redirects")
+			}
+			return nil
+		},
+	}
+}()
+
+// versionFloorPath returns the path to the persisted "highest version ever
+// installed" marker for MFI-UPD-05 downgrade defence. Empty on any error;
+// the floor check treats that as "no floor known".
+func versionFloorPath() string {
+	dir, err := os.UserConfigDir()
+	if err != nil || dir == "" {
+		return ""
+	}
+	return filepath.Join(dir, "MobFI", "version-floor.txt")
+}
+
+// readVersionFloor returns the highest version ever installed by this app,
+// or "" if unknown / unreadable.
+func readVersionFloor() string {
+	p := versionFloorPath()
+	if p == "" {
+		return ""
+	}
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
+// writeVersionFloor persists v as the new floor if it is > any existing
+// floor. Failures are silent -- the check is defence in depth, not a
+// primary security control.
+func writeVersionFloor(v string) {
+	p := versionFloorPath()
+	if p == "" || v == "" {
+		return
+	}
+	if cur := readVersionFloor(); cur != "" && Compare(v, cur) <= 0 {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		return
+	}
+	_ = os.WriteFile(p, []byte(v+"\n"), 0o600)
+}
+
 // pubKeyBase64 is the base64-encoded ed25519 public key that signs the
 // SHA256SUMS.txt release asset. Set at build time via ldflags:
 //
@@ -194,6 +273,15 @@ func applyBinary(ctx context.Context, info *Info, progress func(string)) (*Resul
 		exe = resolved
 	}
 
+	// MFI-UPD-05: refuse to install a version that is not strictly greater
+	// than the highest version ever installed on this machine. Rolls back
+	// the "GitHub /releases/latest was briefly manipulated" attack that
+	// would otherwise silently downgrade a client into a known-vulnerable
+	// tag.
+	if floor := readVersionFloor(); floor != "" && Compare(info.Latest, floor) <= 0 {
+		return nil, fmt.Errorf("refusing downgrade: latest advertised %q is not newer than installed floor %q", info.Latest, floor)
+	}
+
 	// Verify signature FIRST so a malformed / missing pubKey aborts before we
 	// download hundreds of MB of asset data. loadPubKey enforces MFI-UPD-01's
 	// fail-safe default.
@@ -250,6 +338,9 @@ func applyBinary(ctx context.Context, info *Info, progress func(string)) (*Resul
 	if err := replaceExecutable(exe, tmp); err != nil {
 		return nil, fmt.Errorf("could not replace the running binary (%s): %w", exe, err)
 	}
+	// Persist the new floor after a successful swap so subsequent downgrade
+	// attempts see the higher watermark.
+	writeVersionFloor(info.Latest)
 	return &Result{
 		Method:          "binary",
 		Message:         fmt.Sprintf("Updated to v%s.", info.Latest),
@@ -290,7 +381,7 @@ func download(ctx context.Context, url, dst string) error {
 		return err
 	}
 	req.Header.Set("User-Agent", userAgent)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := updateClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -330,7 +421,7 @@ func fetchBody(ctx context.Context, url string, limit int64) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", userAgent)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := updateClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

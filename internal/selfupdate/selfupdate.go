@@ -154,7 +154,7 @@ func latestRelease(ctx context.Context) (*ghRelease, error) {
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := updateClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
