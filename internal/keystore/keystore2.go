@@ -181,12 +181,17 @@ func adbUIDMap(ctx context.Context, serial string) map[string]string {
 
 // adbCatRoot streams a root-owned file off the device as raw bytes. exec-out
 // avoids the PTY line-ending translation that would corrupt binary data.
+// path is single-quoted for the outer device shell before being spliced into
+// the argv, so a future edit that lets path be device- or user-supplied does
+// not gain shell injection through string concatenation. Only the su 0 form
+// is used; `su -c 'cat <path>'` would put path through a second sh -c and
+// re-open the same class of injection that MFI-CMD-01 closed in adbConn.wrap.
 func adbCatRoot(ctx context.Context, serial, path string) ([]byte, error) {
-	for _, suForm := range []string{"su -c 'cat " + path + "'", "su 0 cat " + path} {
-		out, err := sysproc.CommandContext(ctx, "adb", adbArgs(serial, "exec-out", suForm)...).Output()
-		if err == nil && len(out) > 0 {
-			return out, nil
-		}
+	quoted := "'" + strings.ReplaceAll(path, "'", `'\''`) + "'"
+	suForm := "su 0 cat " + quoted
+	out, err := sysproc.CommandContext(ctx, "adb", adbArgs(serial, "exec-out", suForm)...).Output()
+	if err == nil && len(out) > 0 {
+		return out, nil
 	}
 	return nil, fmt.Errorf("adb exec-out su cat %s failed (device rooted and authorized?)", path)
 }

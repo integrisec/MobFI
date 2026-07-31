@@ -77,7 +77,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-UPD-09 | Info | Open | | |
 | MFI-CMD-08 | Info | Open | | |
 | MFI-CMD-09 | Info | Open | | |
-| MFI-CMD-10 | Info | Open | | |
+| MFI-CMD-10 | Info | Fixed | pending | adbCatRoot now single-quotes path for outer device shell and uses only `su 0 <argv>`; drops the vulnerable `su -c 'cat <path>'` fallback. |
 
 ## License findings
 
