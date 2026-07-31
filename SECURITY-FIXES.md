@@ -32,7 +32,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-PATH-02 | High | Open | | |
 | MFI-UPD-02 | High | Open | | |
 | MFI-UPD-03 | High | Open | | |
-| MFI-GUI-01 | High | Open | | |
+| MFI-GUI-01 | High | Fixed | pending | Default-deny CSP added to index.html. Every asset is same-origin; blob: retained for PDF iframes and images. |
 | MFI-GUI-02 | High | Open | | |
 | MFI-GUI-03 | High | Open | | |
 | MFI-PAR-01 | High | Open | | |
