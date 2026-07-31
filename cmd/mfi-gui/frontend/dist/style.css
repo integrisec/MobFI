@@ -352,7 +352,16 @@ button.kebab { padding: 8px 12px; font-weight: 700; letter-spacing: 1px; line-he
   white-space: nowrap;
 }
 .grid th { color: var(--muted); font-weight: 600; position: relative; }
-.grid thead th { border-right: 1px solid var(--line); }
+/* Freeze the header row: it stays at the top while the body scrolls. The solid
+   background covers rows sliding underneath; sticky still establishes the
+   containing block the resize handles (.col-resizer) position against. */
+.grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--bg);
+  border-right: 1px solid var(--line);
+}
 .grid thead th:last-child { border-right: none; }
 .grid th.sortable { cursor: pointer; user-select: none; }
 .grid th.sortable:hover { color: var(--text); }
