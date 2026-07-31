@@ -1,18 +1,72 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/integrisec/MobFI/internal/sysproc"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+// newSessionID returns a 16-byte-random-hex identifier for a console session.
+// crypto/rand rather than time.Now().UnixNano() so a future XSS pivot cannot
+// enumerate active session IDs by wall-clock. See MFI-XC-08.
+func newSessionID() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		// crypto/rand failure is exceptionally rare; fall back to the
+		// prior time-based scheme rather than blocking a console session.
+		return fmt.Sprintf("con-%d", time.Now().UnixNano())
+	}
+	return "con-" + hex.EncodeToString(b)
+}
+
+// safeSSHField rejects values that would slot into the ssh argv as an option
+// (leading `-`), carry ssh-conf syntax that can inject a ProxyCommand (`=` in
+// the middle of the field), or contain whitespace / control bytes that would
+// smuggle into a shell-parsed context downstream. Applied to user and host
+// before either is concatenated into a positional argv element.
+func safeSSHField(kind, s string) error {
+	if s == "" {
+		return fmt.Errorf("ssh %s must not be empty", kind)
+	}
+	if strings.HasPrefix(s, "-") {
+		return fmt.Errorf("ssh %s must not start with '-' (%q would be parsed as an option)", kind, s)
+	}
+	for _, r := range s {
+		if r == ' ' || r == '\t' || r == '\n' || r == '\r' || r == '\x00' {
+			return fmt.Errorf("ssh %s must not contain whitespace or control bytes", kind)
+		}
+	}
+	return nil
+}
+
+// networkKnownHosts returns the operator's persistent known_hosts file so
+// network SSH TOFUs on first connect and hard-fails on host-key drift, per
+// MFI-GUI-02. Falls back to /dev/null only when the config dir cannot be
+// created (rare; better a warning at connect than a silent failure to
+// launch).
+func networkKnownHosts() string {
+	dir, err := os.UserConfigDir()
+	if err != nil || dir == "" {
+		return "/dev/null"
+	}
+	kh := filepath.Join(dir, "MobFI", "known_hosts")
+	if err := os.MkdirAll(filepath.Dir(kh), 0o700); err != nil {
+		return "/dev/null"
+	}
+	return kh
+}
 
 // ptyConn is a started pseudo-terminal session: read its output, write input,
 // resize it, and Close (which terminates the child). It is implemented per
@@ -57,15 +111,38 @@ type ConsoleInfo struct {
 func (g *GUI) ConsoleStart(deviceID, platform, sshUser, sshHost, sshPort, logPath string) (ConsoleInfo, error) {
 	var cmd, aux *exec.Cmd
 	var status string
-	sshOpts := []string{"-o", "StrictHostKeyChecking=accept-new", "-o", "UserKnownHostsFile=/dev/null"}
 
 	if platform == "ios" {
 		user := firstNonEmpty(sshUser, "root")
+		// MFI-CMD-03 / MFI-GUI-05: validate user (and host, when set)
+		// before any concatenation into an argv element. `-l <user> <host>`
+		// keeps them separate positionals; `--` before the target argv
+		// blocks any residual leading-`-` from being parsed as an ssh
+		// option (same CVE class as CVE-2017-1000117 / CVE-2017-9800).
+		if err := safeSSHField("user", user); err != nil {
+			return ConsoleInfo{}, err
+		}
+
 		if sshHost != "" {
 			// Direct network SSH.
+			if err := safeSSHField("host", sshHost); err != nil {
+				return ConsoleInfo{}, err
+			}
 			port := firstNonEmpty(sshPort, "22")
+			if _, err := strconv.Atoi(port); err != nil {
+				return ConsoleInfo{}, fmt.Errorf("ssh port %q must be numeric", port)
+			}
+			// MFI-GUI-02: network SSH uses a persistent known_hosts so
+			// the first connect TOFUs and later connects hard-fail on
+			// host-key drift; /dev/null (the prior behavior) leaked no
+			// TOFU signal at all and was effectively StrictHostKeyChecking=no.
+			sshOpts := []string{
+				"-o", "StrictHostKeyChecking=accept-new",
+				"-o", "UserKnownHostsFile=" + networkKnownHosts(),
+			}
 			args := append([]string{"-p", port}, sshOpts...)
-			cmd = sysproc.Command("ssh", append(args, user+"@"+sshHost)...)
+			args = append(args, "-l", user, "--", sshHost)
+			cmd = sysproc.Command("ssh", args...)
 			status = fmt.Sprintf("ssh %s@%s:%s", user, sshHost, port)
 		} else {
 			// USB: forward a local port to the device's SSH port with iproxy.
@@ -77,6 +154,9 @@ func (g *GUI) ConsoleStart(deviceID, platform, sshUser, sshHost, sshPort, logPat
 				return ConsoleInfo{}, err
 			}
 			devicePort := firstNonEmpty(sshPort, "22")
+			if _, err := strconv.Atoi(devicePort); err != nil {
+				return ConsoleInfo{}, fmt.Errorf("ssh port %q must be numeric", devicePort)
+			}
 			aux = sysproc.Command("iproxy", "-u", deviceID, fmt.Sprintf("%d:%s", local, devicePort))
 			if err := aux.Start(); err != nil {
 				return ConsoleInfo{}, fmt.Errorf("iproxy: %w", err)
@@ -85,9 +165,16 @@ func (g *GUI) ConsoleStart(deviceID, platform, sshUser, sshHost, sshPort, logPat
 				_ = aux.Process.Kill()
 				return ConsoleInfo{}, fmt.Errorf("iproxy forward not ready (is the device jailbroken with sshd on %s?): %w", devicePort, err)
 			}
+			// Loopback via iproxy: /dev/null known-hosts is acceptable
+			// (localhost trust boundary).
+			sshOpts := []string{
+				"-o", "StrictHostKeyChecking=accept-new",
+				"-o", "UserKnownHostsFile=/dev/null",
+			}
 			args := append([]string{"-p", strconv.Itoa(local)}, sshOpts...)
-			cmd = sysproc.Command("ssh", append(args, user+"@127.0.0.1")...)
-			status = fmt.Sprintf("ssh %s@ USB (iproxy :%d → device:%s)", user, local, devicePort)
+			args = append(args, "-l", user, "--", "127.0.0.1")
+			cmd = sysproc.Command("ssh", args...)
+			status = fmt.Sprintf("ssh %s@ USB (iproxy :%d -> device:%s)", user, local, devicePort)
 		}
 	} else {
 		if deviceID == "" {
@@ -96,7 +183,11 @@ func (g *GUI) ConsoleStart(deviceID, platform, sshUser, sshHost, sshPort, logPat
 		cmd = sysproc.Command("adb", "-s", deviceID, "shell")
 		status = "adb shell " + deviceID
 	}
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+	// MFI-XC-05: curated env for spawned adb / ssh / iproxy so operator
+	// secrets in the shell env (AWS_*, GITHUB_TOKEN, ANTHROPIC_*, HTTPS_PROXY)
+	// do not flow into device-side subprocesses that may dump env on error
+	// or route through a hostile ~/.ssh/config ProxyCommand.
+	cmd.Env = sysproc.CuratedEnv("TERM=xterm-256color")
 
 	p, err := startPTY(cmd)
 	if err != nil {
@@ -114,7 +205,7 @@ func (g *GUI) ConsoleStart(deviceID, platform, sshUser, sshHost, sshPort, logPat
 		}
 	}
 
-	id := fmt.Sprintf("con-%d", time.Now().UnixNano())
+	id := newSessionID()
 	consolesMu.Lock()
 	consoles[id] = &consoleSession{pty: p, aux: aux, log: logFile}
 	consolesMu.Unlock()

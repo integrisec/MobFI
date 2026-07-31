@@ -3,7 +3,10 @@ package secrets
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -28,7 +31,34 @@ const (
 const (
 	verifyTimeout     = 8 * time.Second
 	verifyConcurrency = 8
+	// maxPerHost caps total verifications sent to any one vendor per Verify
+	// call. Attacker seeds an app with N format-valid but fake tokens; without
+	// a cap Verify fires N GETs at that vendor and the operator's IP hits the
+	// vendor's abuse detection floor. See MFI-SEC-04.
+	maxPerHost = 50
+	// perHostGap paces requests to a single vendor host so a burst of many
+	// findings for the same rule does not trigger rate-limiting even below
+	// maxPerHost. See MFI-SEC-04.
+	perHostGap = 250 * time.Millisecond
 )
+
+// verifierHosts pairs each verifier rule with the vendor host it calls, so
+// the pacer can rate-limit per host regardless of which rule triggered.
+// Kept in sync manually with the verifiers table; a wrong entry only means
+// pacing is less accurate, never a functional bug.
+var verifierHosts = map[string]string{
+	"github-token":            "api.github.com",
+	"github-fine-grained-pat": "api.github.com",
+	"gitlab-token":            "gitlab.com",
+	"aws-access-key-id":       "sts.amazonaws.com",
+	"openai-api-key":          "api.openai.com",
+	"stripe-secret-key":       "api.stripe.com",
+	"slack-token":             "slack.com",
+	"postman-api-key":         "api.getpostman.com",
+	"notion-token":            "api.notion.com",
+	"airtable-token":          "api.airtable.com",
+	"anthropic-api-key":       "api.anthropic.com",
+}
 
 // verifier confirms whether a matched secret is live by calling its service's
 // API. It must never modify anything on the service -- read-only "whoami"-style
@@ -63,7 +93,32 @@ func Verifiable(ruleID string) bool { _, ok := verifiers[ruleID]; return ok }
 // checked once. Findings whose rule has no verifier are marked
 // VerifyUnsupported; the returned slice is the same one passed in (mutated).
 func Verify(ctx context.Context, findings []Finding) []Finding {
-	client := &http.Client{Timeout: verifyTimeout}
+	// MFI-XC-02: never route verification through the environment's HTTPS
+	// proxy. Every request carries a live client secret; a corporate MITM
+	// proxy on an operator's laptop would otherwise silently receive every
+	// discovered token during a client engagement.
+	transport := &http.Transport{
+		Proxy:                 nil,
+		DialContext:           (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          16,
+		IdleConnTimeout:       30 * time.Second,
+		TLSHandshakeTimeout:   5 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+	client := &http.Client{
+		Timeout:   verifyTimeout,
+		Transport: transport,
+		// MFI-SEC-02: whoami endpoints do not legitimately redirect. Go's
+		// default CheckRedirect follows up to 10 hops and strips only
+		// Authorization / Cookie on cross-origin -- custom vendor headers
+		// (PRIVATE-TOKEN, x-api-key, X-Api-Key) would ride through to a
+		// redirect target. Treating any redirect as an error keeps a
+		// discovered token from leaking to an attacker-controlled host.
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 
 	type key struct{ rule, secret string }
 	uniq := map[key]VerifyStatus{}
@@ -83,7 +138,38 @@ func Verify(ctx context.Context, findings []Finding) []Finding {
 		keys = append(keys, k)
 	}
 
+	// MFI-SEC-04: per-host pacer + per-host request cap. hostCount tracks
+	// how many verifications we have attempted per host so far, and
+	// hostNextAvailable holds the wall-clock time the next request to each
+	// host may go out. Excess requests to a host mark the finding as
+	// VerifyUnknown rather than firing.
 	var mu sync.Mutex
+	hostCount := map[string]int{}
+	hostNextAvailable := map[string]time.Time{}
+	waitForHost := func(host string) bool {
+		mu.Lock()
+		if hostCount[host] >= maxPerHost {
+			mu.Unlock()
+			return false
+		}
+		hostCount[host]++
+		earliest := hostNextAvailable[host]
+		nextSlot := time.Now()
+		if earliest.After(nextSlot) {
+			nextSlot = earliest
+		}
+		hostNextAvailable[host] = nextSlot.Add(perHostGap)
+		mu.Unlock()
+		if delay := time.Until(nextSlot); delay > 0 {
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return false
+			}
+		}
+		return true
+	}
+
 	sem := make(chan struct{}, verifyConcurrency)
 	var wg sync.WaitGroup
 	for _, k := range keys {
@@ -95,6 +181,13 @@ func Verify(ctx context.Context, findings []Finding) []Finding {
 		go func(k key) {
 			defer wg.Done()
 			defer func() { <-sem }()
+			host := verifierHosts[k.rule]
+			if host != "" && !waitForHost(host) {
+				mu.Lock()
+				uniq[k] = VerifyUnknown
+				mu.Unlock()
+				return
+			}
 			st := verifiers[k.rule](ctx, client, k.secret)
 			mu.Lock()
 			uniq[k] = st
@@ -220,10 +313,16 @@ func slackVerify(ctx context.Context, client *http.Client, secret string) Verify
 	if resp.StatusCode != http.StatusOK {
 		return VerifyUnknown
 	}
+	// MFI-SEC-05: cap the JSON body size so a redirect target / gateway
+	// error page cannot stream unlimited data into the decoder within the
+	// verify timeout window.
+	if !strings.HasPrefix(strings.ToLower(resp.Header.Get("Content-Type")), "application/json") {
+		return VerifyUnknown
+	}
 	var body struct {
 		OK bool `json:"ok"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&body); err != nil {
 		return VerifyUnknown
 	}
 	if body.OK {

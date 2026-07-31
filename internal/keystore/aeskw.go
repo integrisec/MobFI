@@ -7,13 +7,16 @@ import (
 	"errors"
 )
 
-// aesUnwrap implements the AES Key Unwrap algorithm (RFC 3394). It is used to
-// recover the iOS keybag class keys and per-file/-item keys, which are all
-// wrapped with a key-encryption key (KEK) using this construction.
+// aesUnwrap implements the AES Key Unwrap algorithm defined in RFC 3394
+// (https://datatracker.ietf.org/doc/html/rfc3394). It is used to recover
+// the iOS keybag class keys and per-file/-item keys, which are all wrapped
+// with a key-encryption key (KEK) using this construction.
 //
 // wrapped is n+1 64-bit blocks; the result is n 64-bit blocks. It returns an
-// error if the integrity check (the default IV, 0xA6A6A6A6A6A6A6A6) fails --
-// which is how a wrong KEK (e.g. wrong backup password) is detected.
+// error if the integrity check (the default IV 0xA6A6A6A6A6A6A6A6 defined
+// in RFC 3394 section 2.2.3) fails -- which is how a wrong KEK (e.g. wrong
+// backup password) is detected. Variable names (a, r, t, buf) mirror the
+// RFC's pseudocode notation.
 func aesUnwrap(kek, wrapped []byte) ([]byte, error) {
 	if len(wrapped) < 24 || len(wrapped)%8 != 0 {
 		return nil, errors.New("aesUnwrap: ciphertext must be a multiple of 8 bytes and at least 24")

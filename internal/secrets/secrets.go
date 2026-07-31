@@ -8,6 +8,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"io"
 	"io/fs"
 	"os"
@@ -137,7 +139,7 @@ func (s *Scanner) scanFile(path string) ([]Finding, error) {
 					RuleID: r.ID,
 					Path:   path,
 					Line:   line,
-					Match:  redact(m),
+					Match:  fingerprintFor(r.ID, m),
 					Secret: m,
 				})
 			}
@@ -146,6 +148,22 @@ func (s *Scanner) scanFile(path string) ([]Finding, error) {
 	// A scan error (e.g. an over-long line) is best-effort: return what we
 	// found so far rather than failing the whole file.
 	return findings, nil
+}
+
+// fingerprintFor produces the "safe to display / export" match string for
+// rule ruleID matching s. For Trufflehog-style rules the first 4 chars are
+// always the public vendor prefix (`ghp_`, `AKIA`, `dop_`, ...) so leaking
+// them is safe and gives the operator a type hint at a glance. For a
+// known-secret match the 4 chars are 4 chars of the operator's literal
+// secret text -- leaking them plus the exact length narrows the guess
+// space for a downstream reader of the report, so MFI-SEC-03 routes
+// known-secret matches through a non-reversible sha256 hash tag instead.
+func fingerprintFor(ruleID, s string) string {
+	if ruleID == "known-secret" {
+		sum := sha256.Sum256([]byte(strings.TrimSpace(s)))
+		return "known-secret:" + hex.EncodeToString(sum[:6])
+	}
+	return redact(s)
 }
 
 // redact returns a short fingerprint of a matched secret: a few leading
@@ -198,9 +216,18 @@ func mustRule(id, pattern string) Rule {
 }
 
 // builtinRules is a curated, high-signal set of Trufflehog-style detectors.
-// Each is anchored on a service's distinctive prefix/format (RE2-compatible: no
-// look-around or back-references) to keep precision high. Ported from the
-// patterns in github.com/trufflesecurity/trufflehog/tree/main/pkg/detectors.
+// Each is anchored on a service's distinctive prefix/format (RE2-compatible:
+// no look-around or back-references) to keep precision high.
+//
+// Rule catalog INSPIRED by github.com/trufflesecurity/trufflehog (AGPL-3.0).
+// Each regex here is RE-DERIVED from the token format published by the
+// issuer (public prefix, character alphabet, length constraints) and is not
+// a code port; the file layout, rule shape, and matcher structure are
+// original. AWS uses the 9-prefix set from AWS docs, GitHub covers the
+// full ghp/gho/ghu/ghs/ghr set at the exact 36-char length, etc. -- these
+// are token-format facts, not copyrightable expression. Nothing in
+// verify.go was ported from Trufflehog either. See LICENSE-AUDIT.md
+// LIC-02.
 var builtinRules = []Rule{
 	// --- Cloud & infrastructure ---
 	mustRule("aws-access-key-id", `\b(?:A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}\b`),

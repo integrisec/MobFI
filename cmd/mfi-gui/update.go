@@ -86,7 +86,11 @@ func updateWorker() {
 	}
 	markWorkerRun()
 
-	relaunch := os.Getenv(envRelaunch)
+	// MFI-UPD-08: only relaunch a target that resolves to the same install
+	// prefix as the currently-running worker executable. An attacker with a
+	// stolen approval token would otherwise set envRelaunch to /tmp/evil
+	// and get the worker to exec their binary once the update completes.
+	relaunch := validateRelaunchTarget(os.Getenv(envRelaunch), lg)
 	// Guarantee a recorded status and a relaunch, even on panic, so clicking
 	// Update never leaves the user with a closed app and no explanation.
 	defer func() {
@@ -301,6 +305,39 @@ func relaunchEnv() []string {
 	return out
 }
 
+// validateRelaunchTarget returns target if it resolves under the same
+// install prefix as the currently-running worker binary; empty string
+// otherwise. Prevents an attacker with a stolen approval token from
+// steering the post-update relaunch to their own executable.
+func validateRelaunchTarget(target string, lg *updateLog) string {
+	if target == "" {
+		return ""
+	}
+	self, err := os.Executable()
+	if err != nil {
+		lg.Printf("cannot resolve os.Executable, refusing relaunch: %v", err)
+		return ""
+	}
+	if resolved, err := filepath.EvalSymlinks(self); err == nil {
+		self = resolved
+	}
+	installPrefix := filepath.Dir(self) // usually /Applications/MobFI.app/Contents/MacOS or the install bindir
+	// On macOS the target is typically the .app bundle two levels up.
+	// Accept any target that starts with the install prefix's parent-of-
+	// parent (bundle root) or the install prefix itself.
+	bundleRoot := filepath.Dir(filepath.Dir(installPrefix))
+	tgt, err := filepath.EvalSymlinks(target)
+	if err != nil {
+		tgt = filepath.Clean(target)
+	}
+	if strings.HasPrefix(tgt+string(filepath.Separator), installPrefix+string(filepath.Separator)) ||
+		strings.HasPrefix(tgt+string(filepath.Separator), bundleRoot+string(filepath.Separator)) {
+		return target
+	}
+	lg.Printf("refusing relaunch to unrelated target %q (install prefix %q)", target, installPrefix)
+	return ""
+}
+
 // relaunchTarget is what launchApp should reopen: the .app bundle on macOS
 // (so LaunchServices applies its environment), otherwise the executable.
 func relaunchTarget(exe string) string {
@@ -313,26 +350,43 @@ func relaunchTarget(exe string) string {
 	return exe
 }
 
+// copyToTemp copies src to a fresh randomly-suffixed file in a per-run
+// tempdir (0o700). MFI-UPD-02: a fixed name in os.TempDir() opened without
+// O_EXCL is a classic /tmp symlink-race primitive on any shared Unix host
+// -- a local attacker planting /tmp/mobfi-update-worker as a symlink to
+// e.g. ~/.bashrc would cause the operator's next "Update now" to truncate
+// their rc file and write the MobFI binary bytes over it.
 func copyToTemp(src string) (string, error) {
-	name := "mobfi-update-worker"
-	if runtime.GOOS == "windows" {
-		name += ".exe"
-	}
-	dst := filepath.Join(os.TempDir(), name)
-	in, err := os.Open(src)
+	dir, err := os.MkdirTemp("", "mobfi-update-")
 	if err != nil {
 		return "", err
 	}
-	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755)
+	name := "worker"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	dst := filepath.Join(dir, name)
+	in, err := os.Open(src)
 	if err != nil {
+		os.RemoveAll(dir)
+		return "", err
+	}
+	defer in.Close()
+	// O_EXCL guarantees the file did not exist (impossible inside a
+	// freshly-minted MkdirTemp with 0o700, but retained as defence in depth
+	// against a namespace-collision on future refactors).
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o700)
+	if err != nil {
+		os.RemoveAll(dir)
 		return "", err
 	}
 	if _, err := io.Copy(out, in); err != nil {
 		out.Close()
+		os.RemoveAll(dir)
 		return "", err
 	}
 	if err := out.Close(); err != nil {
+		os.RemoveAll(dir)
 		return "", err
 	}
 	return dst, nil

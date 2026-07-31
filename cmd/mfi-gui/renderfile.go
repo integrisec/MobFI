@@ -107,19 +107,56 @@ func (g *GUI) FileStat(path string) (FileMeta, error) {
 	return m, nil
 }
 
+// dangerousOpenExtensions are file types the OS shell handler would execute
+// (or that would launch a script host) rather than open in a viewer. A
+// hostile app on the device can drop a `receipt.pdf.exe` or `.command` into
+// its data tree; if the operator clicks "Open externally" on it, the OS runs
+// the payload. Extraction is not a trust boundary for these types.
+var dangerousOpenExtensions = map[string]bool{
+	".exe": true, ".bat": true, ".cmd": true, ".com": true, ".ps1": true,
+	".psm1": true, ".vbs": true, ".vbe": true, ".js": true, ".jse": true,
+	".wsf": true, ".wsh": true, ".hta": true, ".msi": true, ".msp": true,
+	".scr": true, ".pif": true, ".cpl": true, ".lnk": true, ".url": true,
+	".jar": true, ".app": true, ".command": true, ".workflow": true,
+	".sh": true, ".zsh": true, ".bash": true, ".fish": true, ".py": true,
+	".pyw": true, ".rb": true, ".pl": true, ".php": true,
+}
+
 // OpenExternally opens a path in the OS default application.
+//
+// MFI-CMD-05: never let path be parsed as a flag by the OS launcher.
+// macOS `open <path>` and Linux `xdg-open <path>` both treat a leading `-`
+// as an option (`-a AppName`, `-b bundleid`, `-e`, etc.); a file with such
+// a name on the device would open the wrong thing. On macOS `open` accepts
+// `--` to end option parsing; on Linux we normalise a leading `-` to `./-`
+// which every path-taker accepts as a literal filename. On Windows the
+// `cmd /c start "" <path>` form is already unambiguous, but the path is
+// still `cd`-quoted to defend against embedded quotes.
+//
+// MFI-GUI-07: reject file extensions whose OS handler would execute rather
+// than display. A hostile app plants `statement.pdf.lnk`; without this
+// guard, "Open externally" launches the shortcut target.
 func (g *GUI) OpenExternally(path string) error {
 	if path == "" {
 		return fmt.Errorf("no path")
 	}
+	// Strip a trailing dot Windows would ignore, then check the extension.
+	ext := strings.ToLower(filepath.Ext(strings.TrimRight(path, ".")))
+	if dangerousOpenExtensions[ext] {
+		return fmt.Errorf("refusing to open externally: %q is a %s file whose OS handler would execute it rather than display", filepath.Base(path), ext)
+	}
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
-		cmd = sysproc.Command("open", path)
+		cmd = sysproc.Command("open", "--", path)
 	case "windows":
 		cmd = sysproc.Command("cmd", "/c", "start", "", path)
-	default: // linux, bsd, …
-		cmd = sysproc.Command("xdg-open", path)
+	default: // linux, bsd, ...
+		normal := path
+		if strings.HasPrefix(normal, "-") {
+			normal = "./" + normal
+		}
+		cmd = sysproc.Command("xdg-open", normal)
 	}
 	return cmd.Start()
 }

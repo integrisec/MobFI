@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -31,25 +32,36 @@ func LooksXML(data []byte) bool {
 }
 
 // DecodeXML parses an XML property list into plain Go values, mirroring the
-// types produced by Decode (binary).
-func DecodeXML(data []byte) (any, error) {
+// types produced by Decode (binary). It bounds recursion depth at
+// maxPlistDepth so a crafted `<array><array>...</array></array>` chain
+// cannot exhaust the goroutine stack (MFI-PAR-02).
+func DecodeXML(data []byte) (v any, err error) {
+	// Match Decode()'s recover -- encoding/xml can panic on some pathological
+	// inputs, and no matter how well-bounded the walk is a panic that
+	// escapes into the Wails runtime is worse than a returned error.
+	defer func() {
+		if r := recover(); r != nil {
+			v, err = nil, fmt.Errorf("plist: malformed xml input: %v", r)
+		}
+	}()
+
 	dec := xml.NewDecoder(bytes.NewReader(data))
 	for {
-		tok, err := dec.Token()
-		if err == io.EOF {
+		tok, terr := dec.Token()
+		if terr == io.EOF {
 			return nil, errors.New("plist: missing <plist> element")
 		}
-		if err != nil {
-			return nil, err
+		if terr != nil {
+			return nil, terr
 		}
 		if se, ok := tok.(xml.StartElement); ok && se.Name.Local == "plist" {
-			return parseXMLValue(dec)
+			return parseXMLValue(dec, 0)
 		}
 	}
 }
 
 // parseXMLValue returns the first value element within the current parent.
-func parseXMLValue(dec *xml.Decoder) (any, error) {
+func parseXMLValue(dec *xml.Decoder, depth int) (any, error) {
 	for {
 		tok, err := dec.Token()
 		if err != nil {
@@ -57,14 +69,17 @@ func parseXMLValue(dec *xml.Decoder) (any, error) {
 		}
 		switch t := tok.(type) {
 		case xml.StartElement:
-			return parseXMLElement(dec, t)
+			return parseXMLElement(dec, t, depth)
 		case xml.EndElement:
 			return nil, nil // e.g. an empty <plist></plist>
 		}
 	}
 }
 
-func parseXMLElement(dec *xml.Decoder, start xml.StartElement) (any, error) {
+func parseXMLElement(dec *xml.Decoder, start xml.StartElement, depth int) (any, error) {
+	if depth > maxPlistDepth {
+		return nil, fmt.Errorf("plist: xml nested too deep (> %d)", maxPlistDepth)
+	}
 	switch start.Name.Local {
 	case "true":
 		_, err := text(dec)
@@ -99,15 +114,18 @@ func parseXMLElement(dec *xml.Decoder, start xml.StartElement) (any, error) {
 		}
 		return base64.StdEncoding.DecodeString(stripSpace(s))
 	case "array":
-		return parseXMLArray(dec)
+		return parseXMLArray(dec, depth+1)
 	case "dict":
-		return parseXMLDict(dec)
+		return parseXMLDict(dec, depth+1)
 	default:
 		return nil, dec.Skip() // unknown element: consume it
 	}
 }
 
-func parseXMLArray(dec *xml.Decoder) (any, error) {
+func parseXMLArray(dec *xml.Decoder, depth int) (any, error) {
+	if depth > maxPlistDepth {
+		return nil, fmt.Errorf("plist: xml array nested too deep (> %d)", maxPlistDepth)
+	}
 	var out []any
 	for {
 		tok, err := dec.Token()
@@ -116,7 +134,7 @@ func parseXMLArray(dec *xml.Decoder) (any, error) {
 		}
 		switch t := tok.(type) {
 		case xml.StartElement:
-			v, err := parseXMLElement(dec, t)
+			v, err := parseXMLElement(dec, t, depth)
 			if err != nil {
 				return nil, err
 			}
@@ -127,7 +145,10 @@ func parseXMLArray(dec *xml.Decoder) (any, error) {
 	}
 }
 
-func parseXMLDict(dec *xml.Decoder) (any, error) {
+func parseXMLDict(dec *xml.Decoder, depth int) (any, error) {
+	if depth > maxPlistDepth {
+		return nil, fmt.Errorf("plist: xml dict nested too deep (> %d)", maxPlistDepth)
+	}
 	out := make(map[string]any)
 	haveKey := false
 	var key string
@@ -149,7 +170,7 @@ func parseXMLDict(dec *xml.Decoder) (any, error) {
 			if !haveKey {
 				return nil, errors.New("plist: dict value without a preceding <key>")
 			}
-			v, err := parseXMLElement(dec, t)
+			v, err := parseXMLElement(dec, t, depth)
 			if err != nil {
 				return nil, err
 			}

@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -20,6 +21,10 @@ import (
 // backup directory, given the backup password. It works on non-jailbroken
 // devices: the backup (as produced by MobFI's `backup` extraction scope, i.e.
 // idevicebackup2) must have been made with backup encryption enabled.
+//
+// See keybag.go for the keybag-format attribution (Apple iOS Security
+// whitepaper, iphone-dataprotection, Mobile Verification Toolkit); this
+// file is the higher-level pipeline over the same body of prior work.
 //
 // The pipeline: parse Manifest.plist -> unlock the backup keybag with the
 // password -> decrypt Manifest.db -> locate & decrypt the keychain file ->
@@ -120,7 +125,15 @@ func findKeychainEntry(ctx context.Context, plainDB []byte) (fileID string, file
 	}
 	tmp.Close()
 
-	db, err := sql.Open("sqlite", "file:"+tmp.Name()+"?mode=ro&immutable=1")
+	// MFI-PATH-03: build the sqlite URI via net/url so a tmp path with
+	// `?` / `#` / `%` / Windows separators does not confuse the driver's
+	// URI parser.
+	tmpURI := (&url.URL{
+		Scheme:   "file",
+		Path:     filepath.ToSlash(tmp.Name()),
+		RawQuery: "mode=ro&immutable=1",
+	}).String()
+	db, err := sql.Open("sqlite", tmpURI)
 	if err != nil {
 		return "", nil, fmt.Errorf("open Manifest.db: %w", err)
 	}
@@ -136,9 +149,17 @@ func findKeychainEntry(ctx context.Context, plainDB []byte) (fileID string, file
 	return fileID, fileBlob, nil
 }
 
+// maxFileBlobBytes caps the size of a Manifest.db `Files.file` blob before
+// handing it to plist.DecodeAny. Legitimate blobs are a few KB; a hostile
+// Manifest.db could put 500 MB here to amplify parser costs (MFI-PAR-09).
+const maxFileBlobBytes = 1 << 20
+
 // fileKeyFromBlob walks the NSKeyedArchiver file blob to find the wrapped
 // EncryptionKey and Size, then unwraps the file key with the keybag.
 func fileKeyFromBlob(kb *keybag, blob []byte) (key []byte, size int, err error) {
+	if len(blob) > maxFileBlobBytes {
+		return nil, 0, fmt.Errorf("file blob %d bytes exceeds the %d byte cap", len(blob), maxFileBlobBytes)
+	}
 	v, err := plist.DecodeAny(blob)
 	if err != nil {
 		return nil, 0, fmt.Errorf("decode file blob: %w", err)

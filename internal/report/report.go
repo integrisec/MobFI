@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"io"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/integrisec/MobFI/internal/diff"
@@ -28,7 +29,7 @@ type Report struct {
 // Build assembles a report from the collected findings and diff with raw
 // secrets stripped, so the report (text, JSON or HTML) is safe to share.
 func Build(findings []secrets.Finding, d *diff.Result) *Report {
-	return BuildWith(findings, d, false)
+	return BuildOpts(findings, d, Options{})
 }
 
 // BuildWith assembles a report, optionally retaining the raw secret values.
@@ -37,14 +38,68 @@ func Build(findings []secrets.Finding, d *diff.Result) *Report {
 // raw secrets are preserved and shown in every output format -- intended for
 // authorized local analysis, never for sharing.
 func BuildWith(findings []secrets.Finding, d *diff.Result, unredacted bool) *Report {
+	return BuildOpts(findings, d, Options{Unredacted: unredacted})
+}
+
+// Options configures BuildOpts. AnonymiseRoots rewrites every path that
+// starts with one of the given prefixes to a `<root-N>/`-prefixed relative
+// path in the report output, so a report shipped to a client does not leak
+// the operator's local case directory layout (username, engagement
+// codename, macOS ~/Library location, etc.). See MFI-XC-04.
+type Options struct {
+	Unredacted     bool
+	AnonymiseRoots []string
+}
+
+// BuildOpts is the canonical constructor. Build and BuildWith wrap it for
+// backward compatibility.
+func BuildOpts(findings []secrets.Finding, d *diff.Result, opts Options) *Report {
 	out := make([]secrets.Finding, len(findings))
 	for i, f := range findings {
-		if !unredacted {
+		if !opts.Unredacted {
 			f.Secret = ""
 		}
+		f.Path = anonymisePath(f.Path, opts.AnonymiseRoots)
 		out[i] = f
 	}
-	return &Report{GeneratedAt: time.Now().UTC(), Findings: out, Diff: d, Unredacted: unredacted}
+	if d != nil {
+		dCopy := *d
+		dCopy.RootA = anonymisePath(dCopy.RootA, opts.AnonymiseRoots)
+		dCopy.RootB = anonymisePath(dCopy.RootB, opts.AnonymiseRoots)
+		dCopy.Changes = make([]diff.Change, len(d.Changes))
+		for i, c := range d.Changes {
+			c.Path = anonymisePath(c.Path, opts.AnonymiseRoots)
+			dCopy.Changes[i] = c
+		}
+		d = &dCopy
+	}
+	return &Report{GeneratedAt: time.Now().UTC(), Findings: out, Diff: d, Unredacted: opts.Unredacted}
+}
+
+// anonymisePath returns p rewritten as `<root-N>/rel/...` when p starts with
+// one of the roots. Roots not matched leave the path unchanged so a bug in
+// the caller's root list surfaces as visible absolute paths rather than a
+// broken report.
+func anonymisePath(p string, roots []string) string {
+	if p == "" || len(roots) == 0 {
+		return p
+	}
+	for i, root := range roots {
+		if root == "" {
+			continue
+		}
+		rp := root
+		if !strings.HasSuffix(rp, "/") && !strings.HasSuffix(rp, `\`) {
+			rp += "/"
+		}
+		if strings.HasPrefix(p, rp) {
+			return fmt.Sprintf("<root-%d>/%s", i, p[len(rp):])
+		}
+		if p == root {
+			return fmt.Sprintf("<root-%d>/", i)
+		}
+	}
+	return p
 }
 
 // value returns what a finding should display: the raw secret when the report
@@ -101,7 +156,7 @@ func (r *Report) WriteText(w io.Writer) error {
 		if f.Verified != "" && f.Verified != secrets.VerifyUnsupported {
 			status = "  [" + string(f.Verified) + "]"
 		}
-		fmt.Fprintf(w, "  - [%s] %s:%d  %s%s\n", f.RuleID, f.Path, f.Line, r.value(f), status)
+		fmt.Fprintf(w, "  - [%s] %s:%d  %s%s\n", f.RuleID, safePath(f.Path), f.Line, r.value(f), status)
 	}
 
 	if r.Diff != nil {
@@ -109,13 +164,42 @@ func (r *Report) WriteText(w io.Writer) error {
 			len(r.Diff.Changes), s.DiffCounts[diff.Added], s.DiffCounts[diff.Removed], s.DiffCounts[diff.Modified])
 		for _, c := range r.Diff.Changes {
 			if c.Detail != "" {
-				fmt.Fprintf(w, "  %-8s %s (%s)\n", c.Kind, c.Path, c.Detail)
+				fmt.Fprintf(w, "  %-8s %s (%s)\n", c.Kind, safePath(c.Path), c.Detail)
 			} else {
-				fmt.Fprintf(w, "  %-8s %s\n", c.Kind, c.Path)
+				fmt.Fprintf(w, "  %-8s %s\n", c.Kind, safePath(c.Path))
 			}
 		}
 	}
 	return nil
+}
+
+// safePath returns p with control bytes (CR, LF, ANSI escapes, NUL,
+// backspace, ...) replaced by their `\xNN` hex escape so a device-supplied
+// filename cannot inject terminal escape sequences or forge log lines when
+// printed. See MFI-PATH-04. The JSON output preserves the raw bytes for
+// forensic use; this sanitiser is only applied to human-facing text
+// (terminal, log, plain-text report).
+func safePath(p string) string {
+	needs := false
+	for _, r := range p {
+		if r < 0x20 || r == 0x7f {
+			needs = true
+			break
+		}
+	}
+	if !needs {
+		return p
+	}
+	var b strings.Builder
+	b.Grow(len(p))
+	for _, r := range p {
+		if r < 0x20 || r == 0x7f {
+			fmt.Fprintf(&b, `\x%02X`, r)
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // WriteJSON writes the report as indented JSON.

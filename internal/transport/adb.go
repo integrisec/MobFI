@@ -115,23 +115,46 @@ func (a *adbConn) shellCmd(cmd string, args ...string) []string {
 }
 
 // wrap builds the argv passed to adb for a device-side command. sub is the adb
-// subcommand ("shell" or "exec-out"). In su mode the whole command is grouped
-// and run via `su -c`, passed as a single adb argument so adb does not
-// re-split it (which would break `su -c`'s single-command argument). Otherwise
-// it uses the run-as/plain tokens from shellCmd.
+// subcommand ("shell" or "exec-out"). `adb shell` and `adb exec-out` always
+// concatenate the remaining argv with spaces on the wire and hand the result
+// to /system/bin/sh -c on the device, so an unquoted metacharacter (`;`, `|`,
+// `` ` ``, `$(...)`, redirects, newlines) in any argv element executes as
+// on-device shell code. To defend the device shell from device- or
+// operator-supplied strings (filenames returned by `find`, bundle ids,
+// argv-injected paths) every argv element is single-quoted for exactly one
+// layer of shell parsing and joined with spaces. In su mode the wrapper uses
+// `su 0 <argv>` rather than `su -c 'joined'` so su exec's the argv directly
+// instead of invoking a second sh -c (which was the "double-shell" defect
+// tracked as MFI-CMD-01).
 func (a *adbConn) wrap(sub, cmd string, args ...string) []string {
-	base := []string{"-s", a.serial, sub}
+	argv := a.shellCmd(cmd, args...)
 	if a.su {
-		joined := strings.Join(append([]string{cmd}, args...), " ")
-		return append(base, "su -c "+shellQuote(joined))
+		argv = append([]string{"su", "0"}, argv...)
 	}
-	return append(base, a.shellCmd(cmd, args...)...)
+	return []string{"-s", a.serial, sub, quoteArgv(argv)}
 }
 
-// shellQuote single-quotes s for a POSIX shell so a grouped command survives
-// as one token.
+// shellQuote single-quotes s for a POSIX shell so it survives one layer of
+// sh parsing as one token. An embedded single quote becomes '\'' (close,
+// escaped, reopen) which every POSIX sh understands.
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// quoteArgv wraps each argv element in shellQuote and joins with spaces so
+// the resulting single string tokenises back into the original argv when the
+// device's sh -c parses it. Panics on a NUL byte in any element because Go's
+// os/exec transports argv through NUL-terminated C strings, so a NUL would be
+// silently truncated by exec even before it reached the device.
+func quoteArgv(argv []string) string {
+	q := make([]string, len(argv))
+	for i, s := range argv {
+		if strings.IndexByte(s, 0) != -1 {
+			panic("transport/adb: NUL byte in argv element (call site must validate first)")
+		}
+		q[i] = shellQuote(s)
+	}
+	return strings.Join(q, " ")
 }
 
 // Exec runs a shell command on the device via `adb shell`.
@@ -150,11 +173,23 @@ func (a *adbConn) Open(ctx context.Context, path string) (io.ReadCloser, error) 
 // Walk visits every entry under root on the device. It enumerates paths
 // with `find` (a second `find -type d` distinguishes directories) and
 // honours fs.SkipDir / fs.SkipAll. Permission errors from find are
-// tolerated: whatever paths were listed are still walked.
+// tolerated: whatever paths were listed are still walked. A hard transport
+// failure (adb died, device unplugged mid-walk) is surfaced as a callback
+// with err set on the root so extract.Run records a "partial" outcome
+// rather than silently missing half the tree. See MFI-XC-06.
 func (a *adbConn) Walk(ctx context.Context, root string, fn fs.WalkDirFunc) error {
 	all, err := a.find(ctx, root)
 	if len(all) == 0 && err != nil {
-		return fn(root, nil, err)
+		return fn(root, nil, fmt.Errorf("transport find failed at root: %w", err))
+	}
+	// If find returned SOMETHING but also an error, the underlying transport
+	// may have died partway. Report the error via the callback so callers
+	// see a non-nil err (rather than silently accepting the partial listing
+	// as authoritative).
+	if err != nil {
+		if werr := fn(root, nil, fmt.Errorf("transport find returned partial results: %w", err)); werr != nil {
+			return werr
+		}
 	}
 	isDir := toBoolSet(a.mustFind(ctx, root, "-type", "d"))
 	isFile := toBoolSet(a.mustFind(ctx, root, "-type", "f"))
@@ -228,7 +263,11 @@ func (a *adbConn) find(ctx context.Context, root string, extra ...string) ([]str
 }
 
 // mustFind runs find and returns whatever paths it listed, ignoring errors
-// (a partial listing due to permission denials is still useful).
+// (a partial listing due to permission denials is still useful). Callers
+// that need to distinguish transport-gone (empty + error) from partial-
+// permission (some paths + error) should call find directly. See
+// MFI-XC-06: Walk uses find (not mustFind) for the primary listing so a
+// transport failure surfaces as an error rather than a silent partial.
 func (a *adbConn) mustFind(ctx context.Context, root string, extra ...string) []string {
 	paths, _ := a.find(ctx, root, extra...)
 	return paths

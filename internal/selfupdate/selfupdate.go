@@ -50,6 +50,10 @@ type Info struct {
 	AssetName    string `json:"assetName,omitempty"`
 	AssetURL     string `json:"assetUrl,omitempty"`
 	ChecksumsURL string `json:"checksumsUrl,omitempty"`
+	// SignatureURL is the browser download URL of the ed25519 signature over
+	// SHA256SUMS.txt (`SHA256SUMS.sig`). Empty if the release does not
+	// publish one; applyBinary refuses to install without it.
+	SignatureURL string `json:"signatureUrl,omitempty"`
 
 	// CanApply reports whether Apply can perform the update in place: true in a
 	// git checkout, or when a matching prebuilt asset exists for a newer release.
@@ -59,6 +63,7 @@ type Info struct {
 const (
 	releasesAPI    = "https://api.github.com/repos/%s/%s/releases/latest"
 	checksumsAsset = "SHA256SUMS.txt"
+	signatureAsset = "SHA256SUMS.sig"
 	maxNotesLen    = 4000
 	httpTimeout    = 6 * time.Second
 	gitTimeout     = 8 * time.Second
@@ -89,8 +94,9 @@ func Check(ctx context.Context) (*Info, error) {
 		info.Available = true
 	}
 
-	// Locate the prebuilt asset for this platform + the checksums file, so a
-	// standalone binary install can self-update from the release.
+	// Locate the prebuilt asset for this platform + the checksums file + its
+	// ed25519 signature, so a standalone binary install can self-update from
+	// the release (applyBinary requires the signature).
 	info.AssetName = platformAssetName(info.Latest)
 	for _, a := range rel.Assets {
 		switch a.Name {
@@ -98,6 +104,8 @@ func Check(ctx context.Context) (*Info, error) {
 			info.AssetURL = a.BrowserDownloadURL
 		case checksumsAsset:
 			info.ChecksumsURL = a.BrowserDownloadURL
+		case signatureAsset:
+			info.SignatureURL = a.BrowserDownloadURL
 		}
 	}
 
@@ -146,7 +154,7 @@ func latestRelease(ctx context.Context) (*ghRelease, error) {
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := updateClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

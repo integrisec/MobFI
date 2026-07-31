@@ -44,6 +44,12 @@ var keybagHeaderTags = map[string]bool{
 	"ITER": true, "DPWT": true, "DPIC": true, "DPSL": true, "GRCE": true,
 }
 
+// maxKeybagTLV caps the per-tag TLV payload size. Every legitimate keybag
+// tag holds a few bytes (SALT 20B, WPKY 40B, UUID 16B, etc.); anything
+// bigger indicates a hostile keybag trying to amplify memory via multiple
+// oversized tag copies. See MFI-PAR-07.
+const maxKeybagTLV = 1 << 20
+
 // parseKeybag decodes a binary keybag blob into its attributes and class keys.
 func parseKeybag(blob []byte) (*keybag, error) {
 	kb := &keybag{attrs: map[string][]byte{}, classKeys: map[int]*classKey{}}
@@ -52,9 +58,16 @@ func parseKeybag(blob []byte) (*keybag, error) {
 
 	for off := 0; off+8 <= len(blob); {
 		tag := string(blob[off : off+4])
-		n := int(binary.BigEndian.Uint32(blob[off+4 : off+8]))
+		// MFI-PAR-07: length is uint32; on 32-bit builds `int(uint32)` can go
+		// negative and `off+n < len(blob)` would accept. Also cap absolute
+		// size so a hostile keybag cannot burn hundreds of MB per tag.
+		nRaw := binary.BigEndian.Uint32(blob[off+4 : off+8])
+		if uint64(nRaw) > maxKeybagTLV {
+			return nil, fmt.Errorf("keystore: keybag TLV %q payload %d exceeds the %d byte cap", tag, nRaw, maxKeybagTLV)
+		}
+		n := int(nRaw)
 		off += 8
-		if off+n > len(blob) {
+		if n < 0 || off+n > len(blob) {
 			return nil, errors.New("keystore: truncated keybag")
 		}
 		val := blob[off : off+n]
@@ -102,6 +115,12 @@ func parseKeybag(blob []byte) (*keybag, error) {
 	return kb, nil
 }
 
+// maxKeybagIter caps the PBKDF2 iteration count MobFI is willing to run.
+// Legitimate iOS backup keybags use ~10k; four orders of magnitude above
+// that is a safe ceiling that still refuses the crafted-fixture 2^32-1 case
+// that would otherwise burn hours of CPU per unlock attempt (MFI-PAR-03).
+const maxKeybagIter = 10_000_000
+
 // unlock derives the passcode key from the backup password and unwraps every
 // passcode-wrapped class key. Device-wrapped keys (whose KEK lives only on the
 // device) cannot be recovered from a backup and are left locked.
@@ -112,6 +131,12 @@ func (kb *keybag) unlock(password string) error {
 	dpic := int(be32(kb.attrs["DPIC"]))
 	if len(salt) == 0 || iter == 0 {
 		return errors.New("keystore: keybag missing SALT/ITER (not an encrypted-backup keybag?)")
+	}
+	if iter > maxKeybagIter {
+		return fmt.Errorf("keystore: refusing PBKDF2 iteration count %d (> %d); keybag looks hostile", iter, maxKeybagIter)
+	}
+	if dpic > maxKeybagIter {
+		return fmt.Errorf("keystore: refusing double-PBKDF2 iteration count %d (> %d); keybag looks hostile", dpic, maxKeybagIter)
 	}
 
 	// Backups use a double PBKDF2: first SHA-256 with the DPSL salt / DPIC

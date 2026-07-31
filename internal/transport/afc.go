@@ -98,7 +98,28 @@ type afcConn struct {
 	run      runner
 }
 
+// safeAFCPath normalises path so a device-supplied filename starting with
+// `-` is not reparsed as an afcclient option. Everything else is left as-is
+// (afcclient handles arbitrary UTF-8). See MFI-CMD-07.
+func safeAFCPath(path string) string {
+	if strings.HasPrefix(path, "-") {
+		return "./" + path
+	}
+	return path
+}
+
 func (c *afcConn) afc(ctx context.Context, args ...string) ([]byte, error) {
+	// Normalise any leading-`-` path in the positional args (positions vary
+	// by subcommand; a simple pass over each positional catches ls / info /
+	// get uniformly).
+	for i, a := range args {
+		// Skip the subcommand at index 0; everything after is a path or
+		// local destination.
+		if i == 0 {
+			continue
+		}
+		args[i] = safeAFCPath(a)
+	}
 	full := append([]string{"-u", c.udid, "--" + c.scope, c.bundleID}, args...)
 	return c.run(ctx, c.bin, full...)
 }

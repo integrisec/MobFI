@@ -1015,6 +1015,9 @@ $("#btn-scan").addEventListener("click", async () => {
   status.textContent = "Scanning…";
   // Drop the previous scan's results so a new scan doesn't show stale findings.
   currentFindings = [];
+  // Invalidate cached reveal from any prior scan; the new run resets the
+  // ordering and count, so previously-fetched secrets no longer align.
+  revealedFindings = null;
   clearRows("#scan-table tbody");
   const off = window.runtime.EventsOn("scan:progress", (p) => {
     status.textContent = `Scanning… ${p.files.toLocaleString()} file(s) — ${shortPath(p.path)}`;
@@ -1038,6 +1041,10 @@ $("#btn-scan").addEventListener("click", async () => {
         status.textContent = "Verifying findings against their services…";
         try {
           currentFindings = await gui().VerifyFindings();
+          // Verify may reorder / reshape g.lastFindings on the Go side;
+          // invalidate the cached reveal to force a re-fetch aligned with
+          // the new order the next time the operator clicks reveal.
+          revealedFindings = null;
           renderScan();
           const active = (currentFindings || []).filter((f) => f.verified === "active").length;
           status.textContent = `${currentFindings.length} finding(s) — ${active} active`;
@@ -1059,25 +1066,64 @@ $("#btn-scan").addEventListener("click", async () => {
   }
 });
 
-function scanRow(f) {
+// revealedFindings caches the last successful RevealSecrets() response so
+// per-row reveals / copies do not re-prompt after the operator's initial
+// confirm. Cleared when a new scan starts. MFI-SEC-01: raw secrets are not
+// present in currentFindings; they arrive only via gui().RevealSecrets(),
+// which is gated by a native Confirm dialog on the Go side.
+let revealedFindings = null;
+
+async function ensureRevealed() {
+  if (revealedFindings) return true;
+  try {
+    revealedFindings = await gui().RevealSecrets();
+    return !!revealedFindings;
+  } catch (e) {
+    revealedFindings = null;
+    return false;
+  }
+}
+
+async function secretForIndex(index, fallback) {
+  const ok = await ensureRevealed();
+  if (!ok) return fallback;
+  const r = revealedFindings[index];
+  return (r && r.secret) || fallback;
+}
+
+function scanRow(f, index) {
   const matchCell = el("td", { className: "revealable", textContent: f.match, title: "click to reveal" });
   let revealed = false;
-  matchCell.addEventListener("click", () => {
-    revealed = !revealed;
-    matchCell.textContent = revealed ? f.secret || f.match : f.match;
+  matchCell.addEventListener("click", async () => {
+    if (!revealed) {
+      const secret = await secretForIndex(index, "");
+      if (!secret) return;
+      matchCell.textContent = secret;
+      revealed = true;
+    } else {
+      matchCell.textContent = f.match;
+      revealed = false;
+    }
   });
   const statusCell = el("td", {});
   if (f.verified && f.verified !== "unsupported") {
     statusCell.append(el("span", { className: "v-" + f.verified, textContent: f.verified }));
   }
   const items = [
-    { label: "Render", primary: true, title: "Open this file in Render with the secret highlighted", onClick: () => sendToRender(f.path, f.secret) },
-    { label: "Decode", title: "Send this value to the Decode tab (Base64 / hex / URL)", onClick: () => sendToDecode(f.secret || f.match) },
+    { label: "Render", primary: true, title: "Open this file in Render with the secret highlighted", onClick: async () => {
+        const secret = await secretForIndex(index, f.match);
+        sendToRender(f.path, secret);
+      } },
+    { label: "Decode", title: "Send this value to the Decode tab (Base64 / hex / URL)", onClick: async () => {
+        const secret = await secretForIndex(index, f.match);
+        sendToDecode(secret);
+      } },
     {
       label: "Copy",
       onClick: async () => {
         try {
-          await gui().Copy(f.secret || f.match);
+          const secret = await secretForIndex(index, f.match);
+          await gui().Copy(secret);
           toast("copied secret", true);
         } catch (e) {
           fail(e);
@@ -1103,8 +1149,12 @@ function renderScan() {
     return;
   }
   updateScanSortIndicators();
+  // Tag each finding with its original index so secretForIndex can pair
+  // display rows with entries in the RevealSecrets() array (which stays in
+  // scan order regardless of sorting).
+  currentFindings.forEach((f, i) => { if (f._origIndex == null) f._origIndex = i; });
   for (const f of sortRows(currentFindings, scanSortField, scanSortDir)) {
-    $("#scan-table tbody").append(scanRow(f));
+    $("#scan-table tbody").append(scanRow(f, f._origIndex));
   }
 }
 
@@ -1514,13 +1564,22 @@ function renderMode() {
   return $("#rn-hex").checked ? "hex" : "auto";
 }
 
+// Tracks the previous render-pane blob URL so it can be revoked when a new
+// render replaces it. Without this, every PDF / image render leaks a Blob
+// on the object-URL registry until the tab closes. See MFI-GUI-08.
+let lastRenderBlobURL = null;
 function dataURLToBlobURL(dataURL) {
+  if (lastRenderBlobURL) {
+    try { URL.revokeObjectURL(lastRenderBlobURL); } catch (e) {}
+    lastRenderBlobURL = null;
+  }
   const comma = dataURL.indexOf(",");
   const mime = dataURL.substring(5, dataURL.indexOf(";"));
   const bin = atob(dataURL.substring(comma + 1));
   const arr = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-  return URL.createObjectURL(new Blob([arr], { type: mime }));
+  lastRenderBlobURL = URL.createObjectURL(new Blob([arr], { type: mime }));
+  return lastRenderBlobURL;
 }
 
 function humanSize(n) {
@@ -1557,9 +1616,17 @@ function displayRender(res) {
     case "image":
       pane.append(el("img", { className: "render-img", src: res.data_url, alt: res.name }));
       break;
-    case "pdf":
-      pane.append(el("iframe", { className: "render-pdf", src: dataURLToBlobURL(res.data_url) }));
+    case "pdf": {
+      // MFI-GUI-08: sandbox the iframe so a crafted PDF exploiting a
+      // PDFium / PDFKit bug (or PDF-XFA JavaScript) cannot escape into the
+      // parent origin and reach the Wails bindings. Sandbox="" is the
+      // most restrictive setting; the platform PDF viewer still runs, but
+      // any JS inside the iframe has no same-origin access.
+      const frame = el("iframe", { className: "render-pdf", src: dataURLToBlobURL(res.data_url) });
+      frame.setAttribute("sandbox", "");
+      pane.append(frame);
       break;
+    }
     case "code": {
       const box = el("div", { className: "code-view" });
       box.innerHTML = res.html; // Chroma output for a local file
@@ -2611,29 +2678,39 @@ if (window.runtime && window.runtime.EventsOn) {
     }
     p.then((info) => {
       if (!info) return;
-      const parts = [];
+      // MFI-GUI-03: build the banner from DOM nodes rather than a joined
+      // innerHTML string. Every string that arrives from the Go side
+      // (info.latest, info.current, info.gitBranch) goes through
+      // textContent so a hostile git branch name or a supply-chain-
+      // manipulated release tag cannot inject markup.
+      const nodes = []; // array of DocumentFragment-equivalent Nodes
+      const strongText = (t) => el("strong", { textContent: String(t) });
       if (info.available && info.latest) {
-        parts.push(
-          "MobFI <strong>v" + info.latest + "</strong> is available (you have v" +
-            info.current + ")."
-        );
+        const frag = document.createDocumentFragment();
+        frag.append("MobFI ", strongText("v" + info.latest),
+          " is available (you have v" + info.current + ").");
+        nodes.push(frag);
       }
       if (info.gitCheckout && info.gitBehind > 0) {
-        parts.push(
-          "Your checkout is <strong>" + info.gitBehind + "</strong> commit" +
-            (info.gitBehind === 1 ? "" : "s") + " behind " +
-            (info.gitBranch ? info.gitBranch + "'s upstream" : "upstream") +
-            " -- git pull to update."
-        );
+        const frag = document.createDocumentFragment();
+        frag.append("Your checkout is ", strongText(info.gitBehind),
+          " commit" + (info.gitBehind === 1 ? "" : "s") + " behind ",
+          info.gitBranch ? info.gitBranch + "'s upstream" : "upstream",
+          " -- git pull to update.");
+        nodes.push(frag);
       }
-      if (!parts.length) return; // up to date
+      if (!nodes.length) return; // up to date
 
       // Don't re-open a banner the user already dismissed for this same update;
       // a newer version (different key) will show again.
       currentKey = (info.latest || "") + "|" + (info.gitBehind || 0);
       if (currentKey === dismissedKey) return;
 
-      msg.innerHTML = parts.join(" ");
+      msg.replaceChildren();
+      nodes.forEach((n, i) => {
+        if (i > 0) msg.append(" ");
+        msg.append(n);
+      });
       if (info.releaseUrl) {
         viewBtn.classList.remove("hidden");
         viewBtn.onclick = () => { try { gui().OpenURL(info.releaseUrl); } catch (e) {} };

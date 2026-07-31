@@ -5,9 +5,17 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+// windowStateMu serialises load / save so a rapid-resize burst plus a
+// shutdown-time save cannot interleave and produce a truncated JSON file
+// the next launch would reject. Failure to persist geometry is best-effort,
+// but a corrupted file forces the operator's window layout back to defaults.
+// See MFI-XC-07.
+var windowStateMu sync.Mutex
 
 // windowState is the persisted window geometry. On macOS the position is
 // screen-relative (an offset from the current screen's visible frame), so it
@@ -36,6 +44,8 @@ func windowStatePath() (string, error) {
 // loadWindowState reads the saved geometry. ok is false if there is no usable
 // saved state (missing file, unreadable, or non-positive dimensions).
 func loadWindowState() (windowState, bool) {
+	windowStateMu.Lock()
+	defer windowStateMu.Unlock()
 	p, err := windowStatePath()
 	if err != nil {
 		return windowState{}, false
@@ -51,12 +61,14 @@ func loadWindowState() (windowState, bool) {
 	return ws, true
 }
 
-// saveWindowState writes the geometry, best-effort (errors are ignored — a
+// saveWindowState writes the geometry, best-effort (errors are ignored -- a
 // failure to persist geometry must never disrupt the app).
 func saveWindowState(ws windowState) {
 	if ws.Width <= 0 || ws.Height <= 0 {
 		return
 	}
+	windowStateMu.Lock()
+	defer windowStateMu.Unlock()
 	p, err := windowStatePath()
 	if err != nil {
 		return

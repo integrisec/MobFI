@@ -3,6 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- MFI-GUI-01: default-deny CSP so any XSS surviving downstream sinks (Chroma
+       output, update banner, PDF iframe, rendered file contents) cannot pivot to
+       remote fetch / eval or reach the Wails bindings from a third-party origin.
+       Every asset the app loads is same-origin (see the link/script tags below);
+       inline styles are retained because a few table-layout and progress rules
+       still ship as style="..." attributes. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src blob:; object-src 'none'; base-uri 'none'; form-action 'none';" />
   <title>MobFI</title>
   <link rel="icon" type="image/png" href="mobfi-logo-small-transparent.png" />
   <!-- Fetch the logo before first paint so it never intermittently misses the

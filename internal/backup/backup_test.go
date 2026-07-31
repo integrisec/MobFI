@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -60,3 +61,58 @@ func TestReconstruct(t *testing.T) {
 		t.Fatalf("unrelated app domain should not be extracted")
 	}
 }
+
+// TestReconstructRejectsPathEscape confirms that a Manifest.db entry with a
+// traversal in relativePath is refused rather than written outside Dest. See
+// SECURITY-AUDIT.md finding MFI-PATH-01.
+func TestReconstructRejectsPathEscape(t *testing.T) {
+	backupDir := t.TempDir()
+	db, err := sql.Open("sqlite", filepath.Join(backupDir, "Manifest.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stmts := []string{
+		`CREATE TABLE Files (fileID TEXT, domain TEXT, relativePath TEXT, flags INTEGER, file BLOB)`,
+		`INSERT INTO Files (fileID, domain, relativePath, flags) VALUES ('deadbeef','AppDomain-com.x','../../../../evil-target',1)`,
+		`INSERT INTO Files (fileID, domain, relativePath, flags) VALUES ('cafef00d','AppDomain-com.x','../../../../evil-dir',2)`,
+	}
+	for _, s := range stmts {
+		if _, err := db.Exec(s); err != nil {
+			t.Fatalf("setup %q: %v", s, err)
+		}
+	}
+	db.Close()
+
+	if err := os.MkdirAll(filepath.Join(backupDir, "de"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(backupDir, "de", "deadbeef"), []byte("pwned"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	dest := t.TempDir()
+	res, err := reconstruct(context.Background(), backupDir, Options{BundleID: "com.x", Dest: dest})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.FileCount != 0 {
+		t.Errorf("FileCount = %d, want 0 (both escapes must be skipped)", res.FileCount)
+	}
+	if len(res.Skipped) != 2 {
+		t.Fatalf("Skipped = %+v, want 2 escape entries", res.Skipped)
+	}
+	for _, s := range res.Skipped {
+		if !strings.Contains(s.Reason, "escape") {
+			t.Errorf("Skipped[%s].Reason = %q, want a path-escape reason", s.Path, s.Reason)
+		}
+	}
+	// Confirm nothing was written outside Dest at the sibling of Dest.
+	parent := filepath.Dir(dest)
+	if _, err := os.Stat(filepath.Join(parent, "evil-target")); !os.IsNotExist(err) {
+		t.Errorf("attacker file materialised outside Dest at %s", filepath.Join(parent, "evil-target"))
+	}
+	if _, err := os.Stat(filepath.Join(parent, "evil-dir")); !os.IsNotExist(err) {
+		t.Errorf("attacker directory materialised outside Dest at %s", filepath.Join(parent, "evil-dir"))
+	}
+}
+

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -72,6 +73,19 @@ func (g *GUI) OpenURL(url string) {
 // it delegates to a detached worker that updates after this GUI exits and
 // relaunches (the frontend shows a "closing to update" message).
 func (g *GUI) StartUpdate() error {
+	// MFI-UPD-04: gate every OS path on a NATIVE MessageDialog before
+	// starting anything. The webview-side JS Confirm is not a security
+	// boundary -- an XSS in a rendered file preview can invoke StartUpdate
+	// bypassing it. A native modal from the Go layer is the operator's own
+	// yes/no click, not a JS-produced value.
+	ok, err := g.Confirm("Update MobFI", "Install the latest MobFI update?\n\nThis replaces the running binary and relaunches. It can take a minute.")
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errors.New("update cancelled by operator")
+	}
+
 	if runtime.GOOS == "windows" {
 		token, err := approveUpdate()
 		if err != nil {
@@ -313,8 +327,25 @@ func (g *GUI) Confirm(title, message string) (bool, error) {
 	return res == "Yes", err
 }
 
+// stripSecrets returns a copy of fs with the raw Secret field zeroed. The
+// GUI hands this shape to the webview so a compromised JS (XSS in rendered
+// content, malicious file preview) cannot exfiltrate every discovered
+// secret from a call to ScanSecrets/VerifyFindings. Raw secrets stay in
+// g.lastFindings on the Go side; RevealSecrets releases them after a
+// native Confirm. See MFI-SEC-01.
+func stripSecrets(fs []secrets.Finding) []secrets.Finding {
+	out := make([]secrets.Finding, len(fs))
+	copy(out, fs)
+	for i := range out {
+		out[i].Secret = ""
+	}
+	return out
+}
+
 // ScanSecrets scans an extracted tree for secrets, relaying throttled
 // progress as "scan:progress" events. Cancellable via CancelOp("scan").
+// The returned slice never carries raw secrets on the wire -- call
+// RevealSecrets to retrieve them after operator confirmation.
 func (g *GUI) ScanSecrets(root string) ([]secrets.Finding, error) {
 	ctx, done := g.opContext("scan")
 	defer done()
@@ -331,13 +362,14 @@ func (g *GUI) ScanSecrets(root string) ([]secrets.Finding, error) {
 		g.lastFindings, g.scanned = findings, true
 		g.reportMu.Unlock()
 	}
-	return findings, err
+	return stripSecrets(findings), err
 }
 
 // VerifyFindings LIVE-verifies the last scan's findings by calling each
 // service's API, returning them with Verified set. It makes network calls that
 // send matched secrets to their services, so the frontend guards it behind an
-// explicit opt-in + confirmation. Cancellable via the "scan" op.
+// explicit opt-in + confirmation. Cancellable via the "scan" op. The returned
+// slice never carries raw secrets on the wire (MFI-SEC-01).
 func (g *GUI) VerifyFindings() ([]secrets.Finding, error) {
 	g.reportMu.Lock()
 	findings := g.lastFindings
@@ -351,7 +383,27 @@ func (g *GUI) VerifyFindings() ([]secrets.Finding, error) {
 	g.reportMu.Lock()
 	g.lastFindings = verified
 	g.reportMu.Unlock()
-	return verified, nil
+	return stripSecrets(verified), nil
+}
+
+// RevealSecrets shows a native Confirm dialog; on Yes, returns the last
+// scan's findings with raw Secret values populated (same order as
+// ScanSecrets). Intended for user-initiated per-row reveal / copy /
+// send-to-decode flows. The Confirm runs in the Go layer so a JS caller
+// cannot skip it (MFI-SEC-01).
+func (g *GUI) RevealSecrets() ([]secrets.Finding, error) {
+	ok, err := g.Confirm("Reveal secret values?", "This exposes the raw secret text of every discovered finding to the interface. Only do this for authorized local analysis.")
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, errors.New("reveal declined")
+	}
+	g.reportMu.Lock()
+	defer g.reportMu.Unlock()
+	out := make([]secrets.Finding, len(g.lastFindings))
+	copy(out, g.lastFindings)
+	return out, nil
 }
 
 // AddKnownSecrets adds a user-supplied known-secrets file to the scanner.

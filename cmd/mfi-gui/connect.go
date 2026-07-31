@@ -2,10 +2,23 @@ package main
 
 import (
 	"errors"
+	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/integrisec/MobFI/internal/sysproc"
 )
+
+// adbAddrRe accepts host:port where host is an IPv4 dotted-quad, an IPv6
+// bracketed literal, or a DNS name (letters, digits, dots, hyphens). port is
+// 1-5 digits. This rejects leading-`-` values that adb would parse as its
+// own options (-H, -P, -L, ...), embedded whitespace / metachars, and any
+// non-address shell payload. See MFI-CMD-06.
+var adbAddrRe = regexp.MustCompile(`^(\[[0-9A-Fa-f:]+\]|[A-Za-z0-9][A-Za-z0-9.-]*):[0-9]{1,5}$`)
+
+// pairCodeRe accepts the 6-digit pairing code emitted by the Android
+// Wireless Debugging dialog.
+var pairCodeRe = regexp.MustCompile(`^[0-9]{4,10}$`)
 
 // ConnectTCP connects to an Android device over adb TCP (`adb connect
 // host:port`). The device then shows up in the auto-refreshing list. It
@@ -14,6 +27,9 @@ func (g *GUI) ConnectTCP(addr string) (string, error) {
 	addr = strings.TrimSpace(addr)
 	if addr == "" {
 		return "", errors.New("enter a host:port")
+	}
+	if !adbAddrRe.MatchString(addr) {
+		return "", fmt.Errorf("address %q must be host:port (e.g. 192.168.1.10:5555)", addr)
 	}
 	out, err := sysproc.CommandContext(g.ctx, "adb", "connect", addr).CombinedOutput()
 	msg := strings.TrimSpace(string(out))
@@ -45,6 +61,12 @@ func (g *GUI) PairTCP(addr, code string) (string, error) {
 	}
 	if code == "" {
 		return "", errors.New("enter the 6-digit pairing code")
+	}
+	if !adbAddrRe.MatchString(addr) {
+		return "", fmt.Errorf("pairing address %q must be host:port", addr)
+	}
+	if !pairCodeRe.MatchString(code) {
+		return "", fmt.Errorf("pairing code must be digits only")
 	}
 	cmd := sysproc.CommandContext(g.ctx, "adb", "pair", addr, code)
 	cmd.Stdin = strings.NewReader(code + "\n") // for adb builds that prompt for the code

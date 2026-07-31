@@ -4,9 +4,11 @@ import (
 	"archive/zip"
 	"context"
 	"encoding/base64"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -69,8 +71,19 @@ func (g *GUI) AppMeta(deviceID, bundleID, apkPath string) (AppMeta, error) {
 }
 
 // deviceUnzipEntry extracts a single entry from an on-device APK to stdout
-// (exec-out keeps the bytes raw).
+// (exec-out keeps the bytes raw). MFI-CMD-04: entry originates from
+// `aapt dump badging` output (parseBadging / firstQuoted) which happily
+// returns anything the APK author put between two single quotes, so a
+// hostile APK can put a shell payload in an icon resource name. adb exec-out
+// concatenates argv with spaces on the wire and hands the result to the
+// device's sh -c, so an unvalidated `entry` executes on the device as
+// shell code. Reject anything that is not a boring resource path.
+var apkEntryRe = regexp.MustCompile(`^[A-Za-z0-9._/-]+$`)
+
 func deviceUnzipEntry(ctx context.Context, deviceID, apk, entry string) ([]byte, error) {
+	if !apkEntryRe.MatchString(entry) {
+		return nil, fmt.Errorf("refusing to unzip APK entry %q: name contains characters outside [A-Za-z0-9._/-]", entry)
+	}
 	return sysproc.CommandContext(ctx, "adb", "-s", deviceID, "exec-out", "unzip", "-p", apk, entry).Output()
 }
 

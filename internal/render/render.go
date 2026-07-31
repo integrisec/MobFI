@@ -159,11 +159,18 @@ func (xmlRenderer) Render(_ context.Context, path string) (*View, error) {
 	return &View{MIME: "application/xml", Text: pretty}, nil
 }
 
+// maxReindentDepth bounds nesting depth in reindentXML so a crafted plist /
+// xml fixture cannot pump the xml.Encoder's namespace stack up until the
+// goroutine stack blows. Bounded by the 1 MB read cap at the caller, but a
+// per-element check is cheap and defence-in-depth (MFI-PAR-08).
+const maxReindentDepth = 128
+
 func reindentXML(b []byte) (string, error) {
 	dec := xml.NewDecoder(bytes.NewReader(b))
 	var out bytes.Buffer
 	enc := xml.NewEncoder(&out)
 	enc.Indent("", "  ")
+	depth := 0
 	for {
 		tok, err := dec.Token()
 		if err == io.EOF {
@@ -171,6 +178,15 @@ func reindentXML(b []byte) (string, error) {
 		}
 		if err != nil {
 			return "", err
+		}
+		switch tok.(type) {
+		case xml.StartElement:
+			depth++
+			if depth > maxReindentDepth {
+				return "", fmt.Errorf("xml: reindent depth exceeded %d", maxReindentDepth)
+			}
+		case xml.EndElement:
+			depth--
 		}
 		if err := enc.EncodeToken(tok); err != nil {
 			return "", err
