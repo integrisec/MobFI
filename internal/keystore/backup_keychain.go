@@ -22,6 +22,10 @@ import (
 // devices: the backup (as produced by MobFI's `backup` extraction scope, i.e.
 // idevicebackup2) must have been made with backup encryption enabled.
 //
+// See keybag.go for the keybag-format attribution (Apple iOS Security
+// whitepaper, iphone-dataprotection, Mobile Verification Toolkit); this
+// file is the higher-level pipeline over the same body of prior work.
+//
 // The pipeline: parse Manifest.plist -> unlock the backup keybag with the
 // password -> decrypt Manifest.db -> locate & decrypt the keychain file ->
 // parse its items. Every stage degrades gracefully, reporting what it could and
