@@ -82,6 +82,11 @@ heading to the version and date and start a fresh `Unreleased` section.
   bearer-token generics. Each rule is covered by a positive-sample test.
 
 ### Changed
+- GUI polish: the Decode tab's empty "no result" cards no longer stretch to the
+  height of a decoded value; the Scan/Diff toolbars group each input with its
+  Browse button and right-align the report/export controls so they wrap cleanly;
+  and the data tables fill down to the window's bottom as a framed pane instead
+  of a short strip with empty space below.
 - The GUI now remembers its **fullscreen state** across launches, in addition to
   the window size and position (all three on macOS, Windows, and Linux). While
   fullscreen it preserves the last windowed size/position, so leaving fullscreen

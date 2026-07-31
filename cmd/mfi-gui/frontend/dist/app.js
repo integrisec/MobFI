@@ -175,7 +175,11 @@ function fitTableHeights() {
     if (box.offsetParent === null) return; // in a hidden view
     const top = box.getBoundingClientRect().top;
     const avail = window.innerHeight - top - 18; // small bottom margin
-    box.style.maxHeight = Math.max(180, avail) + "px";
+    // Fill the remaining space so the table is a framed pane down to the window
+    // bottom (rows scroll within it) rather than a short strip with empty space
+    // below. maxHeight:none lets the fixed height win over the 60vh CSS cap.
+    box.style.height = Math.max(180, avail) + "px";
+    box.style.maxHeight = "none";
   });
 }
 window.addEventListener("resize", fitTableHeights);

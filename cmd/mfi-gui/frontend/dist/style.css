@@ -196,6 +196,11 @@ h2 { margin: 0 0 6px; font-size: 17px; }
 .row { display: flex; align-items: center; justify-content: space-between; }
 
 .form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin: 14px 0 18px; }
+/* Keep an input and its Browse button together so a wrap never splits them. */
+.field { display: inline-flex; align-items: flex-end; gap: 10px; }
+/* Push the report/export controls to the right so the toolbar reads as
+   "inputs + actions … | report", and wraps as a unit on narrow windows. */
+.export-group { margin-left: auto; }
 
 /* The export/report controls, grouped into a distinct labelled panel so they
    don't blend into the scan/diff controls on the same row. */
@@ -670,6 +675,8 @@ label.inline input { min-width: 0; }
 .decode-results {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  align-items: start; /* each card sizes to its content -- a short error card
+                         doesn't stretch to match a tall decoded value */
   gap: 12px;
   margin-top: 14px;
 }

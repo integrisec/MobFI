@@ -125,10 +125,10 @@
     <section class="view hidden" id="view-scan">
       <h2>Scan for secrets</h2>
       <div class="form">
-        <label>Extracted root <input id="sc-root" placeholder="/path/to/extraction" /></label>
-        <button class="browse" id="sc-root-browse" type="button">Browse…</button>
-        <label>Known-secrets file <input id="sc-known" placeholder="(optional)" /></label>
-        <button class="browse" id="sc-known-browse" type="button">Browse…</button>
+        <span class="field"><label>Extracted root <input id="sc-root" placeholder="/path/to/extraction" /></label>
+        <button class="browse" id="sc-root-browse" type="button">Browse…</button></span>
+        <span class="field"><label>Known-secrets file <input id="sc-known" placeholder="(optional)" /></label>
+        <button class="browse" id="sc-known-browse" type="button">Browse…</button></span>
         <button class="primary" id="btn-scan">Scan</button>
         <button id="btn-scan-cancel" class="hidden">Cancel</button>
         <label class="inline" title="After scanning, call each service's API to confirm whether a found key is still active. This sends the matched secret to its service -- authorized testing only."><input type="checkbox" id="sc-verify" /> Verify live</label>
@@ -193,10 +193,10 @@
     <section class="view hidden" id="view-diff">
       <h2>Diff two captures</h2>
       <div class="form">
-        <label>Root A <input id="df-a" placeholder="/path/to/A" /></label>
-        <button class="browse" id="df-a-browse" type="button">Browse…</button>
-        <label>Root B <input id="df-b" placeholder="/path/to/B" /></label>
-        <button class="browse" id="df-b-browse" type="button">Browse…</button>
+        <span class="field"><label>Root A <input id="df-a" placeholder="/path/to/A" /></label>
+        <button class="browse" id="df-a-browse" type="button">Browse…</button></span>
+        <span class="field"><label>Root B <input id="df-b" placeholder="/path/to/B" /></label>
+        <button class="browse" id="df-b-browse" type="button">Browse…</button></span>
         <button class="primary" id="btn-diff">Diff</button>
         <button id="btn-diff-cancel" class="hidden">Cancel</button>
         <label class="inline"><input type="checkbox" id="df-wrap" /> Wrap</label>
