@@ -64,7 +64,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-UPD-07 | Low | Fixed | pending | download() checks Content-Length and wraps resp.Body in io.LimitReader capped at 512 MB. Compromised release host cannot fill the install volume. |
 | MFI-GUI-06 | Low | Open | | |
 | MFI-GUI-07 | Low | Fixed | pending | OpenExternally rejects file extensions whose OS handler would execute (`.exe`, `.bat`, `.lnk`, `.command`, `.sh`, ~30 more) so an extracted `receipt.pdf.exe` cannot be launched by clicking "Open externally". |
-| MFI-GUI-08 | Low | Open | | |
+| MFI-GUI-08 | Low | Fixed | pending | PDF iframe now carries `sandbox=""` (most restrictive); prior blob URL is revoked before the next render assigns a new one. |
 | MFI-PAR-08 | Low | Fixed | pending | reindentXML tracks nesting depth and errors past 128; xml.Encoder namespace stack cannot be pumped past that. |
 | MFI-PAR-09 | Low | Fixed | pending | fileKeyFromBlob rejects Manifest.db `Files.file` blobs > 1 MiB before handing to plist.DecodeAny. |
 | MFI-SEC-05 | Low | Fixed | pending | slackVerify checks Content-Type and reads at most 1 MiB via io.LimitReader; noise / redirect targets can no longer stream unlimited data into the JSON decoder. |

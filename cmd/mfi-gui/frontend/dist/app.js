@@ -1564,13 +1564,22 @@ function renderMode() {
   return $("#rn-hex").checked ? "hex" : "auto";
 }
 
+// Tracks the previous render-pane blob URL so it can be revoked when a new
+// render replaces it. Without this, every PDF / image render leaks a Blob
+// on the object-URL registry until the tab closes. See MFI-GUI-08.
+let lastRenderBlobURL = null;
 function dataURLToBlobURL(dataURL) {
+  if (lastRenderBlobURL) {
+    try { URL.revokeObjectURL(lastRenderBlobURL); } catch (e) {}
+    lastRenderBlobURL = null;
+  }
   const comma = dataURL.indexOf(",");
   const mime = dataURL.substring(5, dataURL.indexOf(";"));
   const bin = atob(dataURL.substring(comma + 1));
   const arr = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-  return URL.createObjectURL(new Blob([arr], { type: mime }));
+  lastRenderBlobURL = URL.createObjectURL(new Blob([arr], { type: mime }));
+  return lastRenderBlobURL;
 }
 
 function humanSize(n) {
@@ -1607,9 +1616,17 @@ function displayRender(res) {
     case "image":
       pane.append(el("img", { className: "render-img", src: res.data_url, alt: res.name }));
       break;
-    case "pdf":
-      pane.append(el("iframe", { className: "render-pdf", src: dataURLToBlobURL(res.data_url) }));
+    case "pdf": {
+      // MFI-GUI-08: sandbox the iframe so a crafted PDF exploiting a
+      // PDFium / PDFKit bug (or PDF-XFA JavaScript) cannot escape into the
+      // parent origin and reach the Wails bindings. Sandbox="" is the
+      // most restrictive setting; the platform PDF viewer still runs, but
+      // any JS inside the iframe has no same-origin access.
+      const frame = el("iframe", { className: "render-pdf", src: dataURLToBlobURL(res.data_url) });
+      frame.setAttribute("sandbox", "");
+      pane.append(frame);
       break;
+    }
     case "code": {
       const box = el("div", { className: "code-view" });
       box.innerHTML = res.html; // Chroma output for a local file
