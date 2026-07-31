@@ -869,6 +869,9 @@ $("#btn-scan").addEventListener("click", async () => {
   cancelBtn.classList.remove("hidden");
   status.classList.add("busy");
   status.textContent = "Scanning…";
+  // Drop the previous scan's results so a new scan doesn't show stale findings.
+  currentFindings = [];
+  clearRows("#scan-table tbody");
   const off = window.runtime.EventsOn("scan:progress", (p) => {
     status.textContent = `Scanning… ${p.files.toLocaleString()} file(s) — ${shortPath(p.path)}`;
   });
