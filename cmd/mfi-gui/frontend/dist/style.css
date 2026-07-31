@@ -625,13 +625,18 @@ ul.perms li { break-inside: avoid; }
   color: var(--text);
 }
 .code-view { font-size: 12.5px; }
-.code-view pre { margin: 0; padding: 14px; overflow: auto; }
+/* No own scrollbar: let the render pane be the single scroll container so the
+   horizontal bar sits at the pane's bottom and the vertical bar at its right.
+   width:max-content sizes the block to the widest line so the code background
+   spans the full scroll width. */
+.code-view pre { margin: 0; padding: 14px; width: max-content; min-width: 100%; }
 
 /* Wrap toggle: soft-wrap long lines in the text and code panes */
 .render-pane.wrap .render-text,
 .render-pane.wrap .code-view pre {
   white-space: pre-wrap;
   word-break: break-word;
+  width: auto; /* wrapping fits the pane; no horizontal scroll */
 }
 
 .row-actions { display: flex; align-items: center; gap: 16px; }
@@ -708,7 +713,7 @@ label.inline input { min-width: 0; }
   max-height: 52vh;
   overflow: auto;
 }
-.decode-code pre { margin: 0; padding: 10px 12px; font-size: 12.5px; white-space: pre; }
+.decode-code pre { margin: 0; padding: 10px 12px; font-size: 12.5px; white-space: pre; width: max-content; min-width: 100%; }
 
 /* Keys tab: method / notes / limitations panel. */
 .keys-notes { margin: 6px 0 2px; }
