@@ -54,7 +54,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-PAR-07 | Medium | Fixed | pending | parseKeybag caps each TLV payload at 1 MiB; rejects negative `int(uint32)` casts on 32-bit builds. |
 | MFI-SEC-02 | Medium | Fixed | pending | Verifier client sets CheckRedirect to ErrUseLastResponse; redirect targets never receive vendor auth headers. |
 | MFI-SEC-03 | Medium | Fixed | pending | fingerprintFor routes known-secret matches through `sha256(m)[:6]` hex tag instead of the 4-char-prefix + exact-length redact; downstream readers cannot dictionary-narrow the operator's literal secrets. Trufflehog rules unchanged (their 4-char prefixes are the public vendor prefix). |
-| MFI-SEC-04 | Medium | Open | | |
+| MFI-SEC-04 | Medium | Fixed | pending | Verify now paces requests per vendor host at 250ms and caps total per host at 50; excess -> VerifyUnknown. |
 | MFI-XC-03 | Medium | Open | | |
 | MFI-XC-04 | Medium | Open | | |
 | MFI-XC-05 | Medium | Open | | |
@@ -67,7 +67,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-GUI-08 | Low | Open | | |
 | MFI-PAR-08 | Low | Fixed | pending | reindentXML tracks nesting depth and errors past 128; xml.Encoder namespace stack cannot be pumped past that. |
 | MFI-PAR-09 | Low | Fixed | pending | fileKeyFromBlob rejects Manifest.db `Files.file` blobs > 1 MiB before handing to plist.DecodeAny. |
-| MFI-SEC-05 | Low | Open | | |
+| MFI-SEC-05 | Low | Fixed | pending | slackVerify checks Content-Type and reads at most 1 MiB via io.LimitReader; noise / redirect targets can no longer stream unlimited data into the JSON decoder. |
 | MFI-XC-07 | Low | Open | | |
 | MFI-XC-08 | Low | Open | | |
 | MFI-PATH-03 | Low | Open | | |
