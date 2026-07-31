@@ -38,18 +38,33 @@ func Open(ctx context.Context, path string) (DB, error) {
 	if err := checkSQLite(path); err != nil {
 		return nil, err
 	}
-	// mode=ro + immutable=1: never write, and assume no other writer, so
-	// the original evidence file is left byte-for-byte untouched.
-	dsn := "file:" + path + "?mode=ro&immutable=1"
-	db, err := sql.Open("sqlite", dsn)
-	if err != nil {
-		return nil, err
+	// Prefer mode=ro + immutable=1: never write, and assume no other writer, so
+	// the (already-copied) evidence file is left byte-for-byte untouched. Some
+	// real databases won't open that way -- e.g. one carrying a hot WAL that
+	// must be read to see committed rows -- so fall back to plain read-only,
+	// which still never writes the main database.
+	var firstErr error
+	for _, dsn := range []string{
+		"file:" + path + "?mode=ro&immutable=1",
+		"file:" + path + "?mode=ro",
+	} {
+		db, err := sql.Open("sqlite", dsn)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if err := db.PingContext(ctx); err != nil {
+			db.Close()
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		return &sqliteDB{db: db}, nil
 	}
-	if err := db.PingContext(ctx); err != nil {
-		db.Close()
-		return nil, err
-	}
-	return &sqliteDB{db: db}, nil
+	return nil, firstErr
 }
 
 func checkSQLite(path string) error {

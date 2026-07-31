@@ -214,6 +214,20 @@ func (g *GUI) RenderPath(path, mode string, pretty bool) (RenderResult, error) {
 		}
 	}
 
+	// A SQLite database (by header, regardless of extension: .sqlite, .db, or
+	// none) should always open as a database, not a hex dump. The shared
+	// renderer's table summary can fail on a locked/unusual DB, but it is still
+	// browsable in the Database tab, so surface it as such either way.
+	if fileHasPrefix(path, "SQLite format 3\x00") {
+		r.MIME = "application/vnd.sqlite3"
+		if view, err := g.app.Render(g.ctx, path); err == nil && view != nil {
+			r.Kind, r.Text = "text", view.Text
+		} else {
+			r.Kind, r.Text = "text", "SQLite database — open it in the Database tab to browse its tables."
+		}
+		return r, nil
+	}
+
 	// Structured/text formats via the shared renderer.
 	view, err := g.app.Render(g.ctx, path)
 	if err != nil || view == nil {

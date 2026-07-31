@@ -50,6 +50,12 @@ heading to the version and date and start a fresh `Unreleased` section.
   bearer-token generics. Each rule is covered by a positive-sample test.
 
 ### Fixed
+- SQLite databases now always open as databases in the Render tab -- detected by
+  their file header regardless of extension (`.sqlite`, `.db`, or none) -- rather
+  than falling back to a hex dump when the table summary can't be produced (e.g.
+  a locked or unusual database). Such a file is shown with the "Open in Database"
+  action so it can still be browsed. `dbview` also now falls back from an
+  `immutable` open to plain read-only, so databases carrying a hot WAL open too.
 - GUI scrollable panes (the Devices/Scan/Diff/Apps/Database tables and the
   Render/output panes) now show always-visible scrollbars on both axes. macOS
   hides overlay scrollbars until you actively scroll, so they had looked absent;
