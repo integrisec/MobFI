@@ -75,8 +75,8 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-CMD-07 | Low | Fixed | pending | afcConn.afc normalises leading-`-` device paths to `./-` before passing to afcclient; no path element can be reparsed as an afcclient option. |
 | MFI-UPD-08 | Info | Open | | |
 | MFI-UPD-09 | Info | Open | | |
-| MFI-CMD-08 | Info | Open | | |
-| MFI-CMD-09 | Info | Open | | |
+| MFI-CMD-08 | Info | Fixed | pending | dirSizeBytes validates dumpsys-derived dataDir/codePath via safeDumpsysPath before splicing into an adb-shell argv; rejects space / control / shell metacharacters. |
+| MFI-CMD-09 | Info | Fixed | pending | bundleIDRe (`^[A-Za-z][A-Za-z0-9._$-]*$`) validates bundle IDs before dumpsys / run-as / (future) simctl calls. |
 | MFI-CMD-10 | Info | Fixed | pending | adbCatRoot now single-quotes path for outer device shell and uses only `su 0 <argv>`; drops the vulnerable `su -c 'cat <path>'` fallback. |
 
 ## License findings

