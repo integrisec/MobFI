@@ -47,7 +47,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-UPD-04 | Medium | Fixed | pending | StartUpdate now fires a native MessageDialog (Yes/No) on every OS before starting the update. An XSS invoking the Bind cannot skip it since the dialog runs in the Go layer. |
 | MFI-UPD-05 | Medium | Fixed | pending | Persisted version floor at $UserConfigDir/MobFI/version-floor.txt; refuse to install version <= floor. Written after each successful install. |
 | MFI-UPD-06 | Medium | Fixed | pending | Dedicated updateClient with TLS 1.2 floor, explicit Transport (Proxy nil), and CheckRedirect that rejects redirects to hosts outside the GitHub release-serving allowlist. |
-| MFI-GUI-04 | Medium | Open | | |
+| MFI-GUI-04 | Medium | Deferred | -- | Full session-picked-root gating requires substantial UX design (every Bind method that takes a path needs to descend from a PickDirectory / PickFile result). MFI-GUI-01 CSP dramatically reduces the XSS-to-Bind pivot; addressing the residual "compromised JS reads arbitrary files" needs a design pass, not an ad-hoc patch. Tracked as follow-up work in TODO.md. |
 | MFI-GUI-05 | Medium | Fixed | pending | Same ConsoleStart rewrite as MFI-CMD-03: `-l user -- host` splits the concatenated argv element into separate fields, both validated to reject leading `-`. |
 | MFI-PAR-05 | Medium | Fixed | pending | count in collection/dict/utf-16 string now capped at len(data) before make([]any/uint16, count); attacker cannot request an 8x memory amplification. |
 | MFI-PAR-06 | Medium | Fixed | pending | dbview renderCell truncates cell display at 64 KiB with a `<truncated, total N bytes>` marker; multi-GB text-shaped blobs no longer OOM. |
@@ -62,7 +62,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-CMD-06 | Medium | Fixed | pending | ConnectTCP / PairTCP validate addr against host:port regex and code against digit regex; leading-`-` addr can no longer be parsed as an adb option. |
 | MFI-DEP-03 | Medium | Fixed | 9451a60 | Bumped x/text to v0.40.0. Fixes GO-2026-5970 / CVE-2026-56852 norm.Iter infinite-loop. Landed alongside MFI-DEP-02 due to shared go.mod tidy. |
 | MFI-UPD-07 | Low | Fixed | pending | download() checks Content-Length and wraps resp.Body in io.LimitReader capped at 512 MB. Compromised release host cannot fill the install volume. |
-| MFI-GUI-06 | Low | Open | | |
+| MFI-GUI-06 | Low | N/A | -- | Superseded by MFI-GUI-01. The CSP `default-src 'none'; script-src 'self'` blocks any inline script that a Chroma-output edge case might inject. Follow-up sandbox for defence in depth deferred to TODO.md. |
 | MFI-GUI-07 | Low | Fixed | pending | OpenExternally rejects file extensions whose OS handler would execute (`.exe`, `.bat`, `.lnk`, `.command`, `.sh`, ~30 more) so an extracted `receipt.pdf.exe` cannot be launched by clicking "Open externally". |
 | MFI-GUI-08 | Low | Fixed | pending | PDF iframe now carries `sandbox=""` (most restrictive); prior blob URL is revoked before the next render assigns a new one. |
 | MFI-PAR-08 | Low | Fixed | pending | reindentXML tracks nesting depth and errors past 128; xml.Encoder namespace stack cannot be pumped past that. |
