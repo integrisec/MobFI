@@ -10,6 +10,18 @@ heading to the version and date and start a fresh `Unreleased` section.
 ## [Unreleased]
 
 ### Added
+- **Keychain / Keystore dump** (new **Keys** tab and `mfi keys` command): recover
+  as much as the device state allows from the platform credential store, degrading
+  gracefully. iOS methods: decrypt the keychain from an **encrypted iTunes/Finder
+  backup** on a stock, non-jailbroken device (parses the backup keybag, derives the
+  passcode key, and unwraps the class/file/item keys — the AES key-unwrap and
+  keybag handling are unit-tested against RFC 3394 vectors), or run
+  `keychain_dumper` over **SSH-over-USB** on a jailbroken device. Android: inventory
+  the `/data/misc/keystore` blobs on a **rooted** device. Secret values are redacted
+  unless **Reveal** is set (behind a confirmation). Honest about hard limits —
+  iOS Secure Enclave and Android hardware-backed private keys are non-exportable by
+  design and are inventoried, never dumped — and every path reports what it could
+  and couldn't recover, and why.
 - **String decoders** for inspecting encoded values found in files, database
   cells, or secret findings: **Base64** (standard and URL-safe, padded or raw),
   **ASCII hex** (tolerates spaces, `0x`, and `:`/`-` separators), and **URL**

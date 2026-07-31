@@ -18,6 +18,7 @@ import (
 	"github.com/integrisec/MobFI/internal/diff"
 	"github.com/integrisec/MobFI/internal/doctor"
 	"github.com/integrisec/MobFI/internal/extract"
+	"github.com/integrisec/MobFI/internal/keystore"
 	"github.com/integrisec/MobFI/internal/render"
 	"github.com/integrisec/MobFI/internal/report"
 	"github.com/integrisec/MobFI/internal/secrets"
@@ -170,10 +171,24 @@ func saveGeometry(ctx context.Context) {
 	saveWindowState(windowState{Width: w, Height: h, X: x, Y: y, Placed: true})
 }
 
-// DetectDevices lists reachable Android/iOS devices.
 // Decode runs the Base64/hex/URL decoders over s for the Decode tab.
 func (g *GUI) Decode(s string) []decode.Result { return g.app.Decode(s) }
 
+// DumpKeys recovers keychain/keystore secrets for the Keys tab, degrading to
+// what the device state allows.
+func (g *GUI) DumpKeys(platform, deviceID, transport, state, backupDir, password string, reveal bool) (*keystore.Result, error) {
+	return g.app.DumpKeys(g.ctx, keystore.Options{
+		Platform:  platform,
+		DeviceID:  deviceID,
+		Transport: transport,
+		State:     state,
+		BackupDir: backupDir,
+		Password:  password,
+		Reveal:    reveal,
+	})
+}
+
+// DetectDevices lists reachable Android/iOS devices.
 func (g *GUI) DetectDevices() ([]device.Device, error) {
 	devices, err := g.app.DetectDevices(g.ctx)
 	if err != nil {

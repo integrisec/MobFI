@@ -672,6 +672,29 @@ label.inline input { min-width: 0; }
 .decode-hex { margin-top: 8px; color: var(--muted); font-size: 12px; }
 .decode-error { color: var(--muted); font-size: 12.5px; font-style: italic; }
 
+/* Keys tab: method / notes / limitations panel. */
+.keys-notes { margin: 6px 0 2px; }
+.keys-notes:empty { display: none; }
+.keys-method { font-size: 13px; margin-bottom: 8px; }
+.keys-degraded {
+  margin-left: 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #111;
+  background: var(--danger);
+  border-radius: 10px;
+  padding: 1px 8px;
+}
+.keys-list { margin-bottom: 8px; }
+.keys-list-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 2px; }
+.keys-list ul { margin: 0; padding-left: 18px; }
+.keys-list li { font-size: 12.5px; margin: 2px 0; }
+.keys-list.limits li { color: var(--muted); }
+.keys-binary { color: var(--muted); font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+#ky-ios-backup.hidden { display: none; }
+#ky-password { min-width: 16ch; }
+
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .chip {
   background: var(--panel-2);

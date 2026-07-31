@@ -274,8 +274,11 @@ function renderDevices(devices) {
       pendingConsoleConnect = true; // auto-connect once selected
       showView("console");
     });
+    deviceTransport.set(d.id, d.transport);
+    const keysBtn = el("button", { textContent: "Keys" });
+    keysBtn.addEventListener("click", () => useInKeys(d));
     const actions = el("td", { className: "col-actions" }, appsBtn);
-    actions.append(" ", useBtn, " ", consoleBtn);
+    actions.append(" ", useBtn, " ", consoleBtn, " ", keysBtn);
 
     const rootCell = el("td", {});
     applyRootCell(rootCell, rootCache.get(d.id));
@@ -1707,6 +1710,148 @@ $("#btn-decode-paste").addEventListener("click", async () => {
   }
 });
 
+// --- Keys (Keychain / Keystore dump) ----------------------------------------
+const deviceTransport = new Map(); // device id -> transport, for state detection
+
+function updateKeysPlatformUI() {
+  const ios = $("#ky-platform").value === "ios";
+  $("#ky-ios-backup").classList.toggle("hidden", !ios);
+}
+
+// useInKeys prefills the Keys tab from a detected device and switches to it.
+function useInKeys(d) {
+  $("#ky-device").value = d.id;
+  $("#ky-platform").value = d.platform === "android" ? "android" : "ios";
+  deviceTransport.set(d.id, d.transport);
+  updateKeysPlatformUI();
+  showView("keys");
+  detectKeysState();
+}
+
+async function detectKeysState() {
+  const id = $("#ky-device").value.trim();
+  const platform = $("#ky-platform").value;
+  const out = $("#ky-state-out");
+  if (!id) {
+    out.textContent = "";
+    return;
+  }
+  out.textContent = "checking…";
+  try {
+    const state = await gui().DeviceRoot(id, platform, deviceTransport.get(id) || "");
+    out.textContent = "state: " + state;
+    out.dataset.state = state;
+  } catch (e) {
+    out.textContent = "state: unknown";
+    out.dataset.state = "";
+  }
+}
+
+function renderKeys(res) {
+  const notes = $("#keys-notes");
+  notes.replaceChildren();
+  if (!res) return;
+  const head = el("div", { className: "keys-method" },
+    el("strong", { textContent: "Method: " }), document.createTextNode(res.method || "—"));
+  if (res.degraded) head.append(el("span", { className: "keys-degraded", textContent: "degraded" }));
+  notes.append(head);
+  const addList = (title, arr, cls) => {
+    if (!arr || !arr.length) return;
+    const box = el("div", { className: "keys-list " + cls });
+    box.append(el("div", { className: "keys-list-title", textContent: title }));
+    const ul = el("ul", {});
+    for (const s of arr) ul.append(el("li", { textContent: s }));
+    box.append(ul);
+    notes.append(box);
+  };
+  addList("Notes", res.notes, "notes");
+  addList("Limitations", res.limitations, "limits");
+
+  clearRows("#keys-table tbody");
+  const items = res.items || [];
+  if (!items.length) {
+    emptyRow("#keys-table tbody", 6, "no items recovered");
+    return;
+  }
+  for (const it of items) $("#keys-table tbody").append(keysRow(it));
+}
+
+function keysRow(it) {
+  const extra = it.extra
+    ? Object.entries(it.extra).map(([k, v]) => `${k}=${v}`).join(" · ")
+    : "";
+  const valCell = el("td", {});
+  valCell.append(el("span", { className: it.binary ? "keys-binary" : "", textContent: it.value || "" }));
+
+  const copyBtn = el("button", { textContent: "Copy" });
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await gui().Copy(it.value || "");
+      toast("copied", true);
+    } catch (e) {
+      fail(e);
+    }
+  });
+  const decodeBtn = el("button", { textContent: "Decode", title: "Send this value to the Decode tab" });
+  decodeBtn.addEventListener("click", () => sendToDecode(it.value || ""));
+  const actions = el("td", { className: "col-actions" }, copyBtn);
+  actions.append(" ", decodeBtn);
+
+  return el("tr", {},
+    el("td", { textContent: it.class || "" }),
+    el("td", { textContent: it.service || "" }),
+    el("td", { textContent: [it.account, extra].filter(Boolean).join(" · ") }),
+    el("td", { textContent: it.accessible || "" }),
+    valCell,
+    actions,
+  );
+}
+
+$("#ky-platform").addEventListener("change", () => {
+  updateKeysPlatformUI();
+  detectKeysState();
+});
+$("#ky-device").addEventListener("input", () => { $("#ky-state-out").textContent = ""; });
+$("#ky-detect-state").addEventListener("click", detectKeysState);
+wireBrowse("ky-backup-browse", "ky-backup", "dir");
+
+$("#btn-keys-dump").addEventListener("click", async () => {
+  const platform = $("#ky-platform").value;
+  const device = $("#ky-device").value.trim();
+  const state = $("#ky-state-out").dataset.state || "";
+  const backup = $("#ky-backup").value.trim();
+  const password = $("#ky-password").value;
+  const reveal = $("#ky-reveal").checked;
+  if (platform === "ios" && !backup && state !== "jailbroken") {
+    toast("For a non-jailbroken iPhone, provide an encrypted backup directory + password.");
+  }
+  if (reveal) {
+    let ok = false;
+    try {
+      ok = await gui().Confirm("Reveal secret values?", "This includes raw keychain/keystore secret values in the results. Only do this for authorized local analysis.");
+    } catch (e) { ok = false; }
+    if (!ok) return;
+  }
+  const btn = $("#btn-keys-dump");
+  const status = $("#keys-status");
+  btn.disabled = true;
+  status.classList.add("busy");
+  status.textContent = "Dumping…";
+  try {
+    const res = await gui().DumpKeys(platform, device, deviceTransport.get(device) || "", state, backup, password, reveal);
+    renderKeys(res);
+    status.classList.remove("busy");
+    const n = (res && res.items) ? res.items.length : 0;
+    status.textContent = `${n} item(s)` + (res && res.degraded ? " (degraded)" : "");
+  } catch (e) {
+    status.classList.remove("busy");
+    status.textContent = "";
+    fail(e);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 function makeHResizer(divider, target, storeKey) {
   if (!divider || !target) return;
   if (storeKey) {
@@ -1757,6 +1902,8 @@ wireBrowse("db-file-browse", "db-file", "file");
 makeResizable($("#devices-table"), "mobfi.cols.devices");
 makeResizable($("#scan-table"), "mobfi.cols.scan");
 makeResizable($("#diff-table"), "mobfi.cols.diff");
+makeResizable($("#keys-table"), "mobfi.cols.keys");
+updateKeysPlatformUI();
 setupScanSorting(); // after makeResizable, which creates the .th-label spans
 setupDiffSorting();
 

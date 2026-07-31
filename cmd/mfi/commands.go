@@ -17,6 +17,7 @@ import (
 	"github.com/integrisec/MobFI/internal/diff"
 	"github.com/integrisec/MobFI/internal/doctor"
 	"github.com/integrisec/MobFI/internal/extract"
+	"github.com/integrisec/MobFI/internal/keystore"
 	"github.com/integrisec/MobFI/internal/secrets"
 )
 
@@ -40,6 +41,7 @@ Commands:
   db        Inspect a SQLite database file (read-only)
   render    Render a file (XML, JSON, plist, SQLite, text, hex)
   decode    Decode a string (Base64, ASCII hex, URL percent-encoding)
+  keys      Dump the iOS Keychain / Android Keystore (state-dependent)
   doctor    Check for the external device tools (adb, libimobiledevice)
   update    Check whether a newer MobFI release is available
   version   Print the MobFI version
@@ -479,6 +481,76 @@ func runRender(ctx context.Context, core *app.App, args []string) error {
 		fmt.Println()
 	}
 	return nil
+}
+
+// runKeys dumps the platform credential store (iOS Keychain / Android
+// Keystore), degrading to what the device state allows.
+func runKeys(ctx context.Context, core *app.App, args []string) error {
+	fs := flag.NewFlagSet("keys", flag.ContinueOnError)
+	platform := fs.String("platform", "", "ios or android (inferred as ios when -backup is given)")
+	deviceID := fs.String("device", "", "device UDID (iOS) or serial (Android)")
+	state := fs.String("state", "", "device state: jailbroken (iOS) or rooted (Android)")
+	backupDir := fs.String("backup", "", "iOS: path to an ENCRYPTED backup directory (keychain source for non-jailbroken devices)")
+	password := fs.String("password", "", "iOS: backup password for -backup (or set MFI_BACKUP_PASSWORD)")
+	reveal := fs.Bool("reveal", false, "include raw secret values in the output (default: redacted)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	plat := *platform
+	if plat == "" && *backupDir != "" {
+		plat = "ios"
+	}
+	if plat != "ios" && plat != "android" {
+		return fmt.Errorf("keys requires -platform ios|android (or -backup for an iOS backup)")
+	}
+	pw := *password
+	if pw == "" {
+		pw = os.Getenv("MFI_BACKUP_PASSWORD")
+	}
+	res, err := core.DumpKeys(ctx, keystore.Options{
+		Platform:  plat,
+		DeviceID:  *deviceID,
+		State:     *state,
+		BackupDir: *backupDir,
+		Password:  pw,
+		Reveal:    *reveal,
+	})
+	if err != nil {
+		return err
+	}
+	printKeysResult(res)
+	return nil
+}
+
+func printKeysResult(res *keystore.Result) {
+	fmt.Printf("Method: %s", res.Method)
+	if res.Degraded {
+		fmt.Print("  (degraded)")
+	}
+	fmt.Println()
+	for _, n := range res.Notes {
+		fmt.Println("  note: " + n)
+	}
+	fmt.Printf("Items: %d\n", len(res.Items))
+	for _, it := range res.Items {
+		fmt.Printf("  [%s] %s", it.Class, it.Source)
+		if it.Service != "" {
+			fmt.Printf(" service=%q", it.Service)
+		}
+		if it.Account != "" {
+			fmt.Printf(" account=%q", it.Account)
+		}
+		if it.Accessible != "" {
+			fmt.Printf(" accessible=%s", it.Accessible)
+		}
+		if it.Value != "" {
+			fmt.Printf(" value=%s", it.Value)
+		}
+		fmt.Println()
+	}
+	for _, l := range res.Limitations {
+		fmt.Println("  limitation: " + l)
+	}
 }
 
 // runDecode decodes a string as Base64, ASCII hex, and URL percent-encoding.

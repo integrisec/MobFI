@@ -20,6 +20,7 @@
       <button class="tab" data-view="apps">Apps</button>
       <button class="tab" data-view="extract">Extract</button>
       <button class="tab" data-view="scan">Scan</button>
+      <button class="tab" data-view="keys">Keys</button>
       <button class="tab" data-view="diff">Diff</button>
       <button class="tab" data-view="db">Database</button>
       <button class="tab" data-view="render">Render</button>
@@ -151,6 +152,39 @@
       <p class="hint">Matches are redacted — click a match to reveal the raw secret, or use Copy.</p>
       <table class="grid" id="scan-table">
         <thead><tr><th>Rule</th><th>Path</th><th>Line</th><th>Match</th><th class="no-resize">Status</th><th class="no-resize col-actions"></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- Keys (Keychain / Keystore) -->
+    <section class="view hidden" id="view-keys">
+      <h2>Keychain / Keystore</h2>
+      <p class="hint">Dump the platform credential store, recovering as much as the device state allows and degrading gracefully. iOS Secure Enclave and Android hardware-backed private keys are non-exportable by design — those are inventoried, never dumped. Authorized devices only.</p>
+      <div class="form">
+        <label>Platform
+          <select id="ky-platform">
+            <option value="ios">iOS</option>
+            <option value="android">Android</option>
+          </select>
+        </label>
+        <label>Device ID <input id="ky-device" placeholder="select in Devices, or type a serial/UDID" /></label>
+        <button id="ky-detect-state" type="button">Detect state</button>
+        <span class="mime" id="ky-state-out"></span>
+      </div>
+      <div class="form" id="ky-ios-backup">
+        <label>Encrypted backup dir <input id="ky-backup" placeholder="iOS non-jailbroken: path to an encrypted backup" /></label>
+        <button class="browse" id="ky-backup-browse" type="button">Browse…</button>
+        <label>Backup password <input id="ky-password" type="password" placeholder="backup password" autocomplete="off" /></label>
+      </div>
+      <div class="form">
+        <label class="inline" title="Include raw secret values in the results. For authorized local analysis only."><input type="checkbox" id="ky-reveal" /> Reveal secrets</label>
+        <button class="primary" id="btn-keys-dump">Dump</button>
+        <button id="btn-keys-cancel" class="hidden">Cancel</button>
+        <span class="mime" id="keys-status"></span>
+      </div>
+      <div id="keys-notes" class="keys-notes"></div>
+      <table class="grid" id="keys-table">
+        <thead><tr><th>Class</th><th>Service</th><th>Account</th><th>Accessible</th><th>Value</th><th class="no-resize col-actions"></th></tr></thead>
         <tbody></tbody>
       </table>
     </section>

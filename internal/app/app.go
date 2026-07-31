@@ -16,6 +16,7 @@ import (
 	"github.com/integrisec/MobFI/internal/diff"
 	"github.com/integrisec/MobFI/internal/doctor"
 	"github.com/integrisec/MobFI/internal/extract"
+	"github.com/integrisec/MobFI/internal/keystore"
 	"github.com/integrisec/MobFI/internal/render"
 	"github.com/integrisec/MobFI/internal/report"
 	"github.com/integrisec/MobFI/internal/secrets"
@@ -263,6 +264,12 @@ func (a *App) Render(ctx context.Context, path string) (*render.View, error) {
 // inspecting encoded values found in files, databases, or secret findings.
 func (a *App) Decode(s string) []decode.Result {
 	return decode.All(s)
+}
+
+// DumpKeys recovers secrets from the platform credential store (iOS Keychain /
+// Android Keystore), degrading gracefully to what the device state allows.
+func (a *App) DumpKeys(ctx context.Context, opts keystore.Options) (*keystore.Result, error) {
+	return keystore.Dump(ctx, opts)
 }
 
 // CheckUpdate reports whether a newer MobFI release is available and/or the

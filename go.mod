@@ -7,6 +7,7 @@ require (
 	github.com/alecthomas/chroma/v2 v2.27.0
 	github.com/creack/pty v1.1.24
 	github.com/wailsapp/wails/v2 v2.13.0
+	golang.org/x/crypto v0.51.0
 	golang.org/x/sys v0.46.0
 	modernc.org/sqlite v1.54.0
 )
@@ -40,7 +41,6 @@ require (
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/wailsapp/go-webview2 v1.0.22 // indirect
 	github.com/wailsapp/mimetype v1.4.1 // indirect
-	golang.org/x/crypto v0.51.0 // indirect
 	golang.org/x/net v0.54.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	modernc.org/libc v1.74.1 // indirect
