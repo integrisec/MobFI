@@ -80,8 +80,15 @@ func (g *GUI) StartUpdate() error {
 		if err := startUpdateWorker("gui", token); err != nil {
 			return err
 		}
+		// The running .exe can't be overwritten, so MobFI closes and the detached
+		// worker updates in its own console window. Tell the user clearly (in the
+		// overlay) before we quit, and hold long enough to read it.
+		emit := func(m string) { wailsruntime.EventsEmit(g.ctx, "update:progress", m) }
+		emit("MobFI will now close to update (its running program file can't be replaced while open).")
+		emit("A separate \"MobFI updater\" window will show the progress.")
+		emit("MobFI reopens automatically when it finishes (about a minute) -- please don't relaunch it manually.")
 		go func() {
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(3 * time.Second)
 			wailsruntime.Quit(g.ctx)
 		}()
 		return nil

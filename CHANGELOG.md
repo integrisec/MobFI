@@ -90,6 +90,13 @@ heading to the version and date and start a fresh `Unreleased` section.
   Dismissing the banner stays quiet until a newer version appears.
 
 ### Fixed
+- Windows in-place update now **shows its progress**. Because a running `.exe`
+  can't be overwritten, MobFI closes and a detached worker performs the update;
+  previously that worker was silent (the update modal flashed for a moment, the
+  app vanished, and it reopened ~45s later with no output). The worker now opens
+  its own **"MobFI updater" console window** that streams the git pull + rebuild
+  output, and the app shows a clear "closing to update -- a progress window will
+  open, MobFI reopens automatically" message (held ~3s) before it closes.
 - SQLite databases now always open as databases in the Render tab -- detected by
   their file header regardless of extension (`.sqlite`, `.db`, or none) -- rather
   than falling back to a hex dump when the table summary can't be produced (e.g.

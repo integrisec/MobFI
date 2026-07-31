@@ -103,21 +103,44 @@ func updateWorker() {
 		lg.Printf("worker done")
 	}()
 
+	// On Windows, show progress in a dedicated console window (the GUI had to
+	// close so its .exe could be replaced, so it can't stream into the app).
+	console := workerConsole()
+	cprintf := func(format string, a ...any) {
+		if console != nil {
+			fmt.Fprintf(console, format+"\n", a...)
+		}
+	}
+	if console != nil {
+		defer console.Close()
+	}
+	cprintf("MobFI updater")
+	cprintf("Updating %s. This window closes and MobFI reopens automatically when done.\n", target)
+
 	refreshPath() // resolve go/git/wails via the login-shell / registry PATH
 	if pid, err := strconv.Atoi(os.Getenv(envPPID)); err == nil {
 		lg.Printf("waiting for GUI (pid %d) to exit...", pid)
+		cprintf("Waiting for MobFI to close...")
 		waitForExit(pid, 45*time.Second)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
 	defer cancel()
 	lg.Printf("applying update (PATH=%s)", os.Getenv("PATH"))
-	res, err := app.New().ApplyUpdate(ctx, target, func(msg string) { lg.Printf("  %s", msg) })
+	res, err := app.New().ApplyUpdate(ctx, target, func(msg string) {
+		lg.Printf("  %s", msg)
+		cprintf("%s", msg)
+	})
 	writeUpdateStatus(os.Getenv(envStatus), res, err)
 	if err != nil {
 		lg.Printf("update FAILED: %v", err)
+		cprintf("\nUpdate FAILED: %v", err)
 	} else {
 		lg.Printf("update OK: %+v", res)
+		cprintf("\nUpdate complete. Reopening MobFI...")
+	}
+	if console != nil {
+		time.Sleep(5 * time.Second) // let the user read the result before the window closes
 	}
 }
 

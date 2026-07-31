@@ -13,6 +13,10 @@ import (
 	"time"
 )
 
+// workerConsole is Windows-only (macOS/Linux stream progress into the app
+// window instead of a detached worker console).
+func workerConsole() *os.File { return nil }
+
 // waitForExit polls until process pid is gone or timeout elapses. Signal 0
 // does not deliver a signal; it only checks that the process still exists.
 func waitForExit(pid int, timeout time.Duration) {
