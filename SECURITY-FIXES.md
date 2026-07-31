@@ -69,7 +69,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-PAR-09 | Low | Fixed | pending | fileKeyFromBlob rejects Manifest.db `Files.file` blobs > 1 MiB before handing to plist.DecodeAny. |
 | MFI-SEC-05 | Low | Fixed | pending | slackVerify checks Content-Type and reads at most 1 MiB via io.LimitReader; noise / redirect targets can no longer stream unlimited data into the JSON decoder. |
 | MFI-XC-07 | Low | Fixed | pending | Added package-scope sync.Mutex around load/save of window.json; concurrent debounced-resize + shutdown writes no longer interleave. |
-| MFI-XC-08 | Low | Open | | |
+| MFI-XC-08 | Low | Fixed | pending | Console session IDs are now 16-byte crypto/rand hex; a future XSS pivot cannot enumerate active sessions by wall-clock. |
 | MFI-PATH-03 | Low | Open | | |
 | MFI-PATH-04 | Low | Open | | |
 | MFI-CMD-07 | Low | Open | | |

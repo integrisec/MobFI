@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -15,6 +17,19 @@ import (
 	"github.com/integrisec/MobFI/internal/sysproc"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+// newSessionID returns a 16-byte-random-hex identifier for a console session.
+// crypto/rand rather than time.Now().UnixNano() so a future XSS pivot cannot
+// enumerate active session IDs by wall-clock. See MFI-XC-08.
+func newSessionID() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		// crypto/rand failure is exceptionally rare; fall back to the
+		// prior time-based scheme rather than blocking a console session.
+		return fmt.Sprintf("con-%d", time.Now().UnixNano())
+	}
+	return "con-" + hex.EncodeToString(b)
+}
 
 // safeSSHField rejects values that would slot into the ssh argv as an option
 // (leading `-`), carry ssh-conf syntax that can inject a ProxyCommand (`=` in
@@ -186,7 +201,7 @@ func (g *GUI) ConsoleStart(deviceID, platform, sshUser, sshHost, sshPort, logPat
 		}
 	}
 
-	id := fmt.Sprintf("con-%d", time.Now().UnixNano())
+	id := newSessionID()
 	consolesMu.Lock()
 	consoles[id] = &consoleSession{pty: p, aux: aux, log: logFile}
 	consolesMu.Unlock()
