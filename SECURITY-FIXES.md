@@ -36,7 +36,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-GUI-02 | High | Fixed | pending | Network SSH now uses ~/.config/MobFI/known_hosts (0700) with StrictHostKeyChecking=accept-new; first connect TOFUs, later connects hard-fail on drift. Loopback (USB iproxy) still uses /dev/null (localhost trust). |
 | MFI-GUI-03 | High | Open | | |
 | MFI-PAR-01 | High | Fixed | pending | Added maxPlistDepth=128 counter threaded through object/collection/dict; recursion depth beyond that returns an error instead of stack-overflowing. |
-| MFI-PAR-02 | High | Open | | |
+| MFI-PAR-02 | High | Fixed | pending | Added maxPlistDepth counter to DecodeXML / parseXMLArray / parseXMLDict / parseXMLElement; also added an outer recover to keep xml decoder panics from escaping into the Wails runtime. |
 | MFI-PAR-03 | High | Open | | |
 | MFI-PAR-04 | High | Fixed | pending | numObjects * offsetIntSize now uses math/bits.Mul64 to reject overflow before allocation; also cap numObjects at len(data). |
 | MFI-SEC-01 | High | Open | | |
