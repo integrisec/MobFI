@@ -77,7 +77,19 @@ func Verify(ctx context.Context, findings []Finding) []Finding {
 		TLSHandshakeTimeout:   5 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
-	client := &http.Client{Timeout: verifyTimeout, Transport: transport}
+	client := &http.Client{
+		Timeout:   verifyTimeout,
+		Transport: transport,
+		// MFI-SEC-02: whoami endpoints do not legitimately redirect. Go's
+		// default CheckRedirect follows up to 10 hops and strips only
+		// Authorization / Cookie on cross-origin -- custom vendor headers
+		// (PRIVATE-TOKEN, x-api-key, X-Api-Key) would ride through to a
+		// redirect target. Treating any redirect as an error keeps a
+		// discovered token from leaking to an attacker-controlled host.
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 
 	type key struct{ rule, secret string }
 	uniq := map[key]VerifyStatus{}

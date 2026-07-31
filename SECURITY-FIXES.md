@@ -52,7 +52,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-PAR-05 | Medium | Open | | |
 | MFI-PAR-06 | Medium | Open | | |
 | MFI-PAR-07 | Medium | Open | | |
-| MFI-SEC-02 | Medium | Open | | |
+| MFI-SEC-02 | Medium | Fixed | pending | Verifier client sets CheckRedirect to ErrUseLastResponse; redirect targets never receive vendor auth headers. |
 | MFI-SEC-03 | Medium | Open | | |
 | MFI-SEC-04 | Medium | Open | | |
 | MFI-XC-03 | Medium | Open | | |
