@@ -115,23 +115,46 @@ func (a *adbConn) shellCmd(cmd string, args ...string) []string {
 }
 
 // wrap builds the argv passed to adb for a device-side command. sub is the adb
-// subcommand ("shell" or "exec-out"). In su mode the whole command is grouped
-// and run via `su -c`, passed as a single adb argument so adb does not
-// re-split it (which would break `su -c`'s single-command argument). Otherwise
-// it uses the run-as/plain tokens from shellCmd.
+// subcommand ("shell" or "exec-out"). `adb shell` and `adb exec-out` always
+// concatenate the remaining argv with spaces on the wire and hand the result
+// to /system/bin/sh -c on the device, so an unquoted metacharacter (`;`, `|`,
+// `` ` ``, `$(...)`, redirects, newlines) in any argv element executes as
+// on-device shell code. To defend the device shell from device- or
+// operator-supplied strings (filenames returned by `find`, bundle ids,
+// argv-injected paths) every argv element is single-quoted for exactly one
+// layer of shell parsing and joined with spaces. In su mode the wrapper uses
+// `su 0 <argv>` rather than `su -c 'joined'` so su exec's the argv directly
+// instead of invoking a second sh -c (which was the "double-shell" defect
+// tracked as MFI-CMD-01).
 func (a *adbConn) wrap(sub, cmd string, args ...string) []string {
-	base := []string{"-s", a.serial, sub}
+	argv := a.shellCmd(cmd, args...)
 	if a.su {
-		joined := strings.Join(append([]string{cmd}, args...), " ")
-		return append(base, "su -c "+shellQuote(joined))
+		argv = append([]string{"su", "0"}, argv...)
 	}
-	return append(base, a.shellCmd(cmd, args...)...)
+	return []string{"-s", a.serial, sub, quoteArgv(argv)}
 }
 
-// shellQuote single-quotes s for a POSIX shell so a grouped command survives
-// as one token.
+// shellQuote single-quotes s for a POSIX shell so it survives one layer of
+// sh parsing as one token. An embedded single quote becomes '\'' (close,
+// escaped, reopen) which every POSIX sh understands.
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// quoteArgv wraps each argv element in shellQuote and joins with spaces so
+// the resulting single string tokenises back into the original argv when the
+// device's sh -c parses it. Panics on a NUL byte in any element because Go's
+// os/exec transports argv through NUL-terminated C strings, so a NUL would be
+// silently truncated by exec even before it reached the device.
+func quoteArgv(argv []string) string {
+	q := make([]string, len(argv))
+	for i, s := range argv {
+		if strings.IndexByte(s, 0) != -1 {
+			panic("transport/adb: NUL byte in argv element (call site must validate first)")
+		}
+		q[i] = shellQuote(s)
+	}
+	return strings.Join(q, " ")
 }
 
 // Exec runs a shell command on the device via `adb shell`.

