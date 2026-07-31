@@ -65,6 +65,39 @@ Two thin frontends drive it:
 
 ---
 
+## Operator handbook
+
+The complete operator reference lives in
+**[`docs/handbook.md`](docs/handbook.md)** (or
+[`docs/handbook.pdf`](docs/handbook.pdf) for the print version): every
+workflow in both frontends, the device-state constraints that decide which
+workflow is possible, and troubleshooting for each.
+
+| Chapter | Covers |
+|---|---|
+| Introduction | What MobFI is, the trust model, capability-by-device-state |
+| Installation | Prerequisites and per-OS setup |
+| First run | An end-to-end capture in fifteen minutes |
+| Devices | Detection, USB/TCP/pairing, states |
+| Apps | Enumerating installed apps and picking a target |
+| Extraction | Android `run-as`/root, iOS container/documents/backup scopes |
+| Scanning | The rule catalog, known-secret lists, live verification |
+| Diffing | Attributing data to an action |
+| Database | Read-only SQLite inspection |
+| Rendering & decoding | Reading native formats and encoded strings |
+| Keys | Keychain and Keystore recovery, and their hard limits |
+| Reporting | Text / JSON / HTML output and redaction |
+| Console | Interactive device shell |
+| Updating | Self-update and version pinning |
+| Troubleshooting | Symptom-first fixes |
+| CLI reference | Every command and flag |
+
+The handbook is generated from per-chapter sources in `docs/handbook/`.
+Edit those, not the generated files; see
+[`docs/handbook/README.md`](docs/handbook/README.md) for the workflow.
+
+---
+
 ## Prerequisites
 
 **To build:**
@@ -422,13 +455,23 @@ make test                                        # go test ./...
 make vet                                         # go vet ./...
 make fmt                                         # gofmt -w .
 make check-ascii                                 # .ps1 files must be pure ASCII
+make handbook                                    # regenerate docs/handbook.{md,pdf}
+make handbook-check                              # verify handbook matches its sources
+make hooks                                       # enable the repo's git hooks (one-time)
 go test ./internal/secrets/ -run TestScanTree    # a single package / test
 ```
 
+Run `make hooks` once per clone. It points git at `.githooks/`, whose
+pre-commit hook regenerates the handbook whenever a chapter source is part
+of the commit, so `docs/handbook.md` and `docs/handbook.pdf` never drift
+from `docs/handbook/`.
+
 CI (`.github/workflows/ci.yml`) runs `go vet`/`go test` on the cgo-free core +
-CLI and enforces `make check-ascii` — PowerShell scripts must stay pure ASCII,
+CLI, enforces `make check-ascii` — PowerShell scripts must stay pure ASCII,
 since Windows PowerShell 5.1 reads BOM-less files as Windows-1252 and
-mis-parses stray non-ASCII (e.g. an em-dash pasted from a doc).
+mis-parses stray non-ASCII (e.g. an em-dash pasted from a doc) — and runs
+`make handbook-check` so a chapter edit committed without regenerating fails
+the build.
 
 Repository layout:
 

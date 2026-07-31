@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+#
+# pre-commit: regenerate the operator handbook when a chapter source is
+# in the staged changeset, and stage the rebuilt artifacts so they ride
+# along in the same commit.
+#
+# Sources: whatever `scripts/build-handbook.sh --list-sources` reports
+#          (docs/handbook/NN-slug.md).
+# Artifacts: docs/handbook.md, docs/handbook.pdf
+#
+# Degrades gracefully:
+#   - pandoc missing:      markdown regenerates, PDF is left as-is.
+#   - no PDF engine:       same.
+#   - build script fails:  warns, does NOT block the commit. Fix and
+#                          regenerate manually with `make handbook`.
+#
+# Install (once per clone):
+#   git config core.hooksPath .githooks
+#
+# Bypass for a single commit:
+#   git commit --no-verify
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "${REPO_ROOT}"
+
+SCRIPT="scripts/build-handbook.sh"
+[[ -x "${SCRIPT}" ]] || exit 0
+
+# Staged paths (added / copied / modified / renamed).
+mapfile -t STAGED < <(git diff --cached --name-only --diff-filter=ACMR)
+[[ "${#STAGED[@]}" -gt 0 ]] || exit 0
+
+# Does the staged set touch any handbook source? The build script itself
+# and its stylesheet also count: both change the rendered output.
+mapfile -t SOURCES < <(bash "${SCRIPT}" --list-sources 2>/dev/null || true)
+SOURCES+=("scripts/build-handbook.sh" "scripts/lib/handbook.css")
+
+needs_rebuild=0
+for src in "${SOURCES[@]}"; do
+  for staged in "${STAGED[@]}"; do
+    if [[ "${src}" == "${staged}" ]]; then
+      needs_rebuild=1
+      break 2
+    fi
+  done
+done
+
+[[ "${needs_rebuild}" -eq 1 ]] || exit 0
+
+echo "handbook: chapter sources changed, regenerating docs/handbook.{md,pdf}..."
+if ! bash "${SCRIPT}"; then
+  echo "handbook: regeneration FAILED. Commit proceeding with stale artifacts." >&2
+  echo "handbook: fix the error and run \`make handbook\` before pushing." >&2
+  exit 0
+fi
+
+for artifact in docs/handbook.md docs/handbook.pdf; do
+  [[ -f "${artifact}" ]] && git add "${artifact}"
+done
+
+echo "handbook: regenerated and staged."
