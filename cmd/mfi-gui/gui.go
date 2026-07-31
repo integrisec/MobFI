@@ -170,12 +170,24 @@ func (g *GUI) PersistWindow() {
 	saveGeometry(g.ctx)
 }
 
-// saveGeometry snapshots the window's current size and (screen-relative)
-// position.
+// saveGeometry snapshots the window's current size, (screen-relative) position,
+// and fullscreen status. While fullscreen, WindowGetSize/Position report the
+// screen -- not the windowed geometry -- so keep the last windowed values and
+// only record the fullscreen flag, so leaving fullscreen restores the right
+// size/position next launch.
 func saveGeometry(ctx context.Context) {
+	if wailsruntime.WindowIsFullscreen(ctx) {
+		ws, ok := loadWindowState()
+		if !ok {
+			ws = windowState{Width: defaultWidth, Height: defaultHeight}
+		}
+		ws.Fullscreen = true
+		saveWindowState(ws)
+		return
+	}
 	w, h := wailsruntime.WindowGetSize(ctx)
 	x, y := wailsruntime.WindowGetPosition(ctx)
-	saveWindowState(windowState{Width: w, Height: h, X: x, Y: y, Placed: true})
+	saveWindowState(windowState{Width: w, Height: h, X: x, Y: y, Placed: true, Fullscreen: false})
 }
 
 // Decode runs the Base64/hex/URL decoders over s for the Decode tab.

@@ -16,11 +16,12 @@ import (
 // in favour of centring. Placed distinguishes a real saved position from the
 // zero value (and migrates pre-position configs, which centre).
 type windowState struct {
-	Width  int  `json:"width"`
-	Height int  `json:"height"`
-	X      int  `json:"x"`
-	Y      int  `json:"y"`
-	Placed bool `json:"placed"`
+	Width      int  `json:"width"`
+	Height     int  `json:"height"`
+	X          int  `json:"x"`
+	Y          int  `json:"y"`
+	Placed     bool `json:"placed"`
+	Fullscreen bool `json:"fullscreen"`
 }
 
 // windowStatePath is <user-config>/MobFI/window.json.
@@ -119,13 +120,19 @@ func applyWindowGeometry(ctx context.Context, ws windowState, haveSaved bool) {
 		}
 	}
 
-	// Position: restore only a fully on-screen saved position.
+	// Position: restore only a fully on-screen saved position, else centre.
 	w, h := wailsruntime.WindowGetSize(ctx)
 	if haveSaved && ws.Placed && positionOnScreen(ws.X, ws.Y, w, h, sw, sh) {
 		wailsruntime.WindowSetPosition(ctx, ws.X, ws.Y)
-		return
+	} else {
+		wailsruntime.WindowCenter(ctx)
 	}
-	wailsruntime.WindowCenter(ctx)
+
+	// Fullscreen last, so the windowed size/position above is what the window
+	// returns to when the user leaves fullscreen.
+	if haveSaved && ws.Fullscreen {
+		wailsruntime.WindowFullscreen(ctx)
+	}
 }
 
 // positionOnScreen reports whether a window of size w×h placed at the

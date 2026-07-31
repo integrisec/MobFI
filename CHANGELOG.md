@@ -82,6 +82,10 @@ heading to the version and date and start a fresh `Unreleased` section.
   bearer-token generics. Each rule is covered by a positive-sample test.
 
 ### Changed
+- The GUI now remembers its **fullscreen state** across launches, in addition to
+  the window size and position (all three on macOS, Windows, and Linux). While
+  fullscreen it preserves the last windowed size/position, so leaving fullscreen
+  returns to the right geometry.
 - The Keys table is now sortable by any column (Class/Service/Account/Accessible/
   Value), with the sort preference persisted -- matching the Scan and Diff tables.
 - The desktop GUI now checks for updates **in the background while running** --
