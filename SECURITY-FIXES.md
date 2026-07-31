@@ -56,7 +56,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-SEC-03 | Medium | Fixed | pending | fingerprintFor routes known-secret matches through `sha256(m)[:6]` hex tag instead of the 4-char-prefix + exact-length redact; downstream readers cannot dictionary-narrow the operator's literal secrets. Trufflehog rules unchanged (their 4-char prefixes are the public vendor prefix). |
 | MFI-SEC-04 | Medium | Fixed | pending | Verify now paces requests per vendor host at 250ms and caps total per host at 50; excess -> VerifyUnknown. |
 | MFI-XC-03 | Medium | Fixed | pending | CLI main wraps top-level context with signal.NotifyContext(SIGINT, SIGTERM); Ctrl-C now cancels in-flight adb / ideviceinstaller / idevicebackup2 subprocesses and lets scoped `defer os.RemoveAll` calls run. |
-| MFI-XC-04 | Medium | Open | | |
+| MFI-XC-04 | Medium | Fixed | pending | report.BuildOpts accepts AnonymiseRoots list; paths under a listed root are rewritten to `<root-N>/rel/...`; Build/BuildWith wrap for compat. Callers (CLI report / GUI export) can now pass the scan root to keep operator username / case codename out of the shipped file. |
 | MFI-XC-05 | Medium | Fixed | pending | sysproc.CuratedEnv filters spawned-process env to an allowlist (PATH, HOME, LANG, TERM, ADB_*, ...) and blocks a deny-list (AWS_*, GITHUB_TOKEN, ANTHROPIC_*, HTTPS_PROXY, ...). Console PTY now uses CuratedEnv. |
 | MFI-XC-06 | Medium | Fixed | pending | adbConn.Walk surfaces transport-partial-listing errors through the walk callback rather than silently accepting a truncated listing as authoritative. |
 | MFI-CMD-06 | Medium | Fixed | pending | ConnectTCP / PairTCP validate addr against host:port regex and code against digit regex; leading-`-` addr can no longer be parsed as an adb option. |
