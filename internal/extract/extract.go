@@ -210,3 +210,8 @@ func within(base, target string) bool {
 	}
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
+
+// Within is the exported form of within, so sibling extractors that build a
+// destination path via SafeJoin (e.g. iOS backup reconstruction) apply the
+// same "path escapes destination" invariant this package enforces internally.
+func Within(base, target string) bool { return within(base, target) }

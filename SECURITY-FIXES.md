@@ -23,7 +23,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | ID | Severity | Status | Fix | Notes |
 |---|---|---|---|---|
 | MFI-UPD-01 | Critical | Open | | Requires operator to set up signing infrastructure; code enforces verification. |
-| MFI-PATH-01 | Critical | Open | | |
+| MFI-PATH-01 | Critical | Fixed | pending | Added extract.Within guard + NUL / leading-separator rejection to backup.reconstruct; regression test TestReconstructRejectsPathEscape. |
 | MFI-CMD-01 | Critical | Open | | |
 | MFI-CMD-02 | High | Open | | |
 | MFI-CMD-03 | High | Open | | |

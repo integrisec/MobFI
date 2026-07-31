@@ -278,8 +278,23 @@ func reconstruct(ctx context.Context, backupDir string, o Options) (*extract.Res
 		if err := rows.Scan(&fileID, &domain, &relPath, &flags); err != nil {
 			return res, err
 		}
+		// The Manifest.db is on the same trust footing as the device: an
+		// attacker with control of a compromised backup can populate
+		// relativePath with "../../.ssh/authorized_keys" (or a NUL / leading
+		// slash on Windows). SafeJoin sanitises per-component filename
+		// characters but Clean still resolves ".." lexically, so a boundary
+		// check is required here just as extract.Run applies one on the
+		// live-device walk path.
+		if strings.ContainsAny(relPath, "\x00") || strings.HasPrefix(relPath, "/") || strings.HasPrefix(relPath, `\`) {
+			res.Skipped = append(res.Skipped, extract.SkippedFile{Path: domain + "/" + relPath, Reason: "invalid relative path"})
+			continue
+		}
 		// flags: 1 = file, 2 = directory, 4 = symlink.
 		local := extract.SafeJoin(o.Dest, domain+"/"+relPath)
+		if !extract.Within(o.Dest, local) {
+			res.Skipped = append(res.Skipped, extract.SkippedFile{Path: domain + "/" + relPath, Reason: "path escapes destination"})
+			continue
+		}
 		switch flags {
 		case 2:
 			if err := os.MkdirAll(local, 0o755); err != nil {
