@@ -71,7 +71,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-XC-07 | Low | Fixed | pending | Added package-scope sync.Mutex around load/save of window.json; concurrent debounced-resize + shutdown writes no longer interleave. |
 | MFI-XC-08 | Low | Fixed | pending | Console session IDs are now 16-byte crypto/rand hex; a future XSS pivot cannot enumerate active sessions by wall-clock. |
 | MFI-PATH-03 | Low | Fixed | pending | All SQLite `file:` URIs now built via net/url + filepath.ToSlash; paths with `?` / `#` / `%` / Windows separators no longer confuse the driver. |
-| MFI-PATH-04 | Low | Open | | |
+| MFI-PATH-04 | Low | Fixed | pending | safePath() escapes control bytes to `\xNN` in the plain-text report output; ANSI escape sequences in a device-supplied path can no longer forge terminal lines. JSON output preserves raw bytes for forensics. |
 | MFI-CMD-07 | Low | Open | | |
 | MFI-UPD-08 | Info | Open | | |
 | MFI-UPD-09 | Info | Open | | |

@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"io"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/integrisec/MobFI/internal/diff"
@@ -101,7 +102,7 @@ func (r *Report) WriteText(w io.Writer) error {
 		if f.Verified != "" && f.Verified != secrets.VerifyUnsupported {
 			status = "  [" + string(f.Verified) + "]"
 		}
-		fmt.Fprintf(w, "  - [%s] %s:%d  %s%s\n", f.RuleID, f.Path, f.Line, r.value(f), status)
+		fmt.Fprintf(w, "  - [%s] %s:%d  %s%s\n", f.RuleID, safePath(f.Path), f.Line, r.value(f), status)
 	}
 
 	if r.Diff != nil {
@@ -109,13 +110,42 @@ func (r *Report) WriteText(w io.Writer) error {
 			len(r.Diff.Changes), s.DiffCounts[diff.Added], s.DiffCounts[diff.Removed], s.DiffCounts[diff.Modified])
 		for _, c := range r.Diff.Changes {
 			if c.Detail != "" {
-				fmt.Fprintf(w, "  %-8s %s (%s)\n", c.Kind, c.Path, c.Detail)
+				fmt.Fprintf(w, "  %-8s %s (%s)\n", c.Kind, safePath(c.Path), c.Detail)
 			} else {
-				fmt.Fprintf(w, "  %-8s %s\n", c.Kind, c.Path)
+				fmt.Fprintf(w, "  %-8s %s\n", c.Kind, safePath(c.Path))
 			}
 		}
 	}
 	return nil
+}
+
+// safePath returns p with control bytes (CR, LF, ANSI escapes, NUL,
+// backspace, ...) replaced by their `\xNN` hex escape so a device-supplied
+// filename cannot inject terminal escape sequences or forge log lines when
+// printed. See MFI-PATH-04. The JSON output preserves the raw bytes for
+// forensic use; this sanitiser is only applied to human-facing text
+// (terminal, log, plain-text report).
+func safePath(p string) string {
+	needs := false
+	for _, r := range p {
+		if r < 0x20 || r == 0x7f {
+			needs = true
+			break
+		}
+	}
+	if !needs {
+		return p
+	}
+	var b strings.Builder
+	b.Grow(len(p))
+	for _, r := range p {
+		if r < 0x20 || r == 0x7f {
+			fmt.Fprintf(&b, `\x%02X`, r)
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // WriteJSON writes the report as indented JSON.
