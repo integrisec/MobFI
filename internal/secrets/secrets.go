@@ -216,9 +216,18 @@ func mustRule(id, pattern string) Rule {
 }
 
 // builtinRules is a curated, high-signal set of Trufflehog-style detectors.
-// Each is anchored on a service's distinctive prefix/format (RE2-compatible: no
-// look-around or back-references) to keep precision high. Ported from the
-// patterns in github.com/trufflesecurity/trufflehog/tree/main/pkg/detectors.
+// Each is anchored on a service's distinctive prefix/format (RE2-compatible:
+// no look-around or back-references) to keep precision high.
+//
+// Rule catalog INSPIRED by github.com/trufflesecurity/trufflehog (AGPL-3.0).
+// Each regex here is RE-DERIVED from the token format published by the
+// issuer (public prefix, character alphabet, length constraints) and is not
+// a code port; the file layout, rule shape, and matcher structure are
+// original. AWS uses the 9-prefix set from AWS docs, GitHub covers the
+// full ghp/gho/ghu/ghs/ghr set at the exact 36-char length, etc. -- these
+// are token-format facts, not copyrightable expression. Nothing in
+// verify.go was ported from Trufflehog either. See LICENSE-AUDIT.md
+// LIC-02.
 var builtinRules = []Rule{
 	// --- Cloud & infrastructure ---
 	mustRule("aws-access-key-id", `\b(?:A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}\b`),
