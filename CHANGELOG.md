@@ -10,6 +10,12 @@ heading to the version and date and start a fresh `Unreleased` section.
 ## [Unreleased]
 
 ### Added
+- Table rows now use a **primary button + "…" overflow menu** (and a **right-click**
+  menu on the row) for their actions, instead of a growing row of buttons -- so
+  the action column stays compact no matter how many device-scoped features are
+  added (Devices/Apps/Scan/Diff/Keys). The webview's default context menu is
+  suppressed except in text fields, the terminal, and when text is selected (so
+  right-click "Copy" still works on rendered/output text).
 - **Keychain / Keystore dump** (new **Keys** tab and `mfi keys` command): recover
   as much as the device state allows from the platform credential store, degrading
   gracefully. iOS methods: decrypt the keychain from an **encrypted iTunes/Finder

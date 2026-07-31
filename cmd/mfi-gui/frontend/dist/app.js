@@ -175,6 +175,103 @@ function emptyRow(tbodySel, cols, text) {
   $(tbodySel).append(tr);
 }
 
+// --- Row actions: a primary button + a "…" overflow menu, plus right-click ---
+// Each table row supplies a list of actions: [{ label, title?, onClick, primary? }].
+// actionCell shows the primary action as a button and the rest behind "…";
+// wireRowMenu makes a right-click anywhere on the row open the full list. This
+// keeps rows compact no matter how many device-scoped features we add.
+let openActionMenuEl = null;
+
+function closeActionMenu() {
+  if (!openActionMenuEl) return;
+  openActionMenuEl.remove();
+  openActionMenuEl = null;
+  document.removeEventListener("mousedown", onActionMenuOutside, true);
+  document.removeEventListener("keydown", onActionMenuKey, true);
+  window.removeEventListener("blur", closeActionMenu);
+}
+function onActionMenuOutside(e) {
+  if (openActionMenuEl && !openActionMenuEl.contains(e.target)) closeActionMenu();
+}
+function onActionMenuKey(e) {
+  if (e.key === "Escape") closeActionMenu();
+}
+function openActionMenu(x, y, items) {
+  closeActionMenu();
+  const menu = el("div", { className: "ctx-menu" });
+  for (const it of items) {
+    if (!it) continue;
+    const mi = el("div", { className: "ctx-item", textContent: it.label });
+    if (it.title) mi.title = it.title;
+    mi.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      closeActionMenu();
+      it.onClick(ev);
+    });
+    menu.append(mi);
+  }
+  document.body.append(menu);
+  const r = menu.getBoundingClientRect();
+  let px = x;
+  let py = y;
+  if (px + r.width > window.innerWidth - 8) px = window.innerWidth - r.width - 8;
+  if (py + r.height > window.innerHeight - 8) py = window.innerHeight - r.height - 8;
+  menu.style.left = Math.max(8, px) + "px";
+  menu.style.top = Math.max(8, py) + "px";
+  openActionMenuEl = menu;
+  setTimeout(() => {
+    document.addEventListener("mousedown", onActionMenuOutside, true);
+    document.addEventListener("keydown", onActionMenuKey, true);
+    window.addEventListener("blur", closeActionMenu);
+  }, 0);
+}
+
+function actionCell(items) {
+  items = (items || []).filter(Boolean);
+  const td = el("td", { className: "col-actions" });
+  if (!items.length) return td;
+  const primary = items.find((i) => i.primary) || items[0];
+  const btn = el("button", { textContent: primary.label, title: primary.title || "" });
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    primary.onClick(e);
+  });
+  td.append(btn);
+  const rest = items.filter((i) => i !== primary);
+  if (rest.length) {
+    const more = el("button", { className: "kebab", textContent: "…", title: "More actions" });
+    more.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const r = more.getBoundingClientRect();
+      openActionMenu(r.left, r.bottom + 2, rest);
+    });
+    td.append(" ", more);
+  }
+  return td;
+}
+
+// wireRowMenu opens the full action list on a right-click anywhere in the row.
+function wireRowMenu(tr, items) {
+  items = (items || []).filter(Boolean);
+  if (items.length) {
+    tr.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      openActionMenu(e.clientX, e.clientY, items);
+    });
+  }
+  return tr;
+}
+
+// Suppress the webview's default context menu (Reload/Inspect) except where the
+// native menu is useful: text fields, the terminal, and any time text is
+// selected (so right-click "Copy" still works on rendered/output text). Wired
+// table rows open their own action menu via wireRowMenu.
+document.addEventListener("contextmenu", (e) => {
+  if (e.target.closest("input, textarea, [contenteditable], .term, .xterm")) return;
+  if (window.getSelection && window.getSelection().toString().trim()) return;
+  e.preventDefault();
+});
+
 // loadingRow shows a spinner + message while an async table load is in flight.
 // Reuses the shared .busy::before spinner.
 function loadingRow(tbodySel, cols, text) {
@@ -259,39 +356,43 @@ function renderDevices(devices) {
   $("#devices-table").classList.toggle("hidden", devices.length === 0);
   if (devices.length === 0) return;
   for (const d of devices) {
-    const appsBtn = el("button", { textContent: "List apps" });
-    appsBtn.addEventListener("click", () => loadApps(d.id));
-    const useBtn = el("button", { textContent: "Use in Extract" });
-    useBtn.addEventListener("click", () => {
-      $("#ex-device").value = d.id;
-      updateExtractScope();
-      $("#ex-bundle").focus();
-      showView("extract");
-    });
-    const consoleBtn = el("button", { textContent: "Console" });
-    consoleBtn.addEventListener("click", () => {
-      pendingConsoleDeviceID = d.id;
-      pendingConsoleConnect = true; // auto-connect once selected
-      showView("console");
-    });
     deviceTransport.set(d.id, d.transport);
-    const keysBtn = el("button", { textContent: "Keys" });
-    keysBtn.addEventListener("click", () => useInKeys(d));
-    const actions = el("td", { className: "col-actions" }, appsBtn);
-    actions.append(" ", useBtn, " ", consoleBtn, " ", keysBtn);
+    // Actions in tab order: Apps, Extract, Keys, Console.
+    const items = [
+      { label: "List apps", primary: true, onClick: () => loadApps(d.id) },
+      {
+        label: "Use in Extract",
+        onClick: () => {
+          $("#ex-device").value = d.id;
+          updateExtractScope();
+          $("#ex-bundle").focus();
+          showView("extract");
+        },
+      },
+      { label: "Keys", onClick: () => useInKeys(d) },
+      {
+        label: "Console",
+        onClick: () => {
+          pendingConsoleDeviceID = d.id;
+          pendingConsoleConnect = true; // auto-connect once selected
+          showView("console");
+        },
+      },
+    ];
 
     const rootCell = el("td", {});
     applyRootCell(rootCell, rootCache.get(d.id));
 
-    $("#devices-table tbody").append(el("tr", {},
+    const tr = wireRowMenu(el("tr", {},
       el("td", { textContent: d.id }),
       el("td", { textContent: d.name }),
       el("td", { textContent: d.platform }),
       el("td", { textContent: d.transport }),
       el("td", { className: `state-${d.state}`, textContent: d.state }),
       rootCell,
-      actions
-    ));
+      actionCell(items)
+    ), items);
+    $("#devices-table tbody").append(tr);
 
     if (!rootCache.has(d.id)) fetchDeviceRoot(d, rootCell);
   }
@@ -574,34 +675,39 @@ function renderApps() {
     return;
   }
   for (const a of rows) {
-    const copyBtn = el("button", { textContent: "Copy" });
-    copyBtn.addEventListener("click", async () => {
-      try {
-        await gui().Copy(a.bundle_id);
-        toast("copied " + a.bundle_id, true);
-      } catch (e) {
-        fail(e);
-      }
-    });
-    const useBtn = el("button", { textContent: "Use in Extract" });
-    useBtn.addEventListener("click", () => {
-      $("#ex-device").value = currentAppsDevice;
-      $("#ex-bundle").value = a.bundle_id;
-      updateExtractScope();
-      showView("extract");
-    });
-    const actions = el("td", { className: "col-actions" }, copyBtn);
-    actions.append(" ", useBtn);
+    const items = [
+      {
+        label: "Use in Extract",
+        primary: true,
+        onClick: () => {
+          $("#ex-device").value = currentAppsDevice;
+          $("#ex-bundle").value = a.bundle_id;
+          updateExtractScope();
+          showView("extract");
+        },
+      },
+      {
+        label: "Copy bundle id",
+        onClick: async () => {
+          try {
+            await gui().Copy(a.bundle_id);
+            toast("copied " + a.bundle_id, true);
+          } catch (e) {
+            fail(e);
+          }
+        },
+      },
+    ];
 
-    const row = el("tr", {},
+    const row = wireRowMenu(el("tr", {},
       el("td", { className: "col-icon app-icon" }, avatar(a)),
       el("td", { textContent: a.bundle_id }),
       el("td", { className: "app-name", textContent: a.name || humanize(a.bundle_id) }),
       el("td", { className: "app-version", textContent: a.version || "" }),
       el("td", { textContent: a.data_path }),
       el("td", { textContent: a.install_path }),
-      actions
-    );
+      actionCell(items)
+    ), items);
     row._app = a;
     row.addEventListener("click", (e) => {
       if (e.target.closest("button")) return; // let action buttons do their thing
@@ -925,34 +1031,33 @@ function scanRow(f) {
     revealed = !revealed;
     matchCell.textContent = revealed ? f.secret || f.match : f.match;
   });
-  const copyBtn = el("button", { textContent: "Copy" });
-  copyBtn.addEventListener("click", async () => {
-    try {
-      await gui().Copy(f.secret || f.match);
-      toast("copied secret", true);
-    } catch (e) {
-      fail(e);
-    }
-  });
-  const renderBtn = el("button", { textContent: "Render", title: "Open this file in Render with the secret highlighted" });
-  renderBtn.addEventListener("click", () => sendToRender(f.path, f.secret));
-  const decodeBtn = el("button", { textContent: "Decode", title: "Send this value to the Decode tab (Base64 / hex / URL)" });
-  decodeBtn.addEventListener("click", () => sendToDecode(f.secret || f.match));
   const statusCell = el("td", {});
   if (f.verified && f.verified !== "unsupported") {
     statusCell.append(el("span", { className: "v-" + f.verified, textContent: f.verified }));
   }
-  // Space the action buttons like the Devices tab (append with " " spacers).
-  const actions = el("td", { className: "col-actions" }, renderBtn);
-  actions.append(" ", decodeBtn, " ", copyBtn);
-  return el("tr", {},
+  const items = [
+    { label: "Render", primary: true, title: "Open this file in Render with the secret highlighted", onClick: () => sendToRender(f.path, f.secret) },
+    { label: "Decode", title: "Send this value to the Decode tab (Base64 / hex / URL)", onClick: () => sendToDecode(f.secret || f.match) },
+    {
+      label: "Copy",
+      onClick: async () => {
+        try {
+          await gui().Copy(f.secret || f.match);
+          toast("copied secret", true);
+        } catch (e) {
+          fail(e);
+        }
+      },
+    },
+  ];
+  return wireRowMenu(el("tr", {},
     el("td", { textContent: f.rule_id }),
     el("td", { textContent: f.path }),
     el("td", { textContent: f.line }),
     matchCell,
     statusCell,
-    actions
-  );
+    actionCell(items)
+  ), items);
 }
 
 function renderScan() {
@@ -1200,22 +1305,19 @@ function renderDiff() {
     const bPath = joinPath(currentDiff.root_b, c.path);
     const target = c.kind === "removed" ? aPath : bPath; // the surviving side
 
-    const actions = el("td", { className: "col-actions" });
-    const renderBtn = el("button", { textContent: "Render →" });
-    renderBtn.addEventListener("click", () => sendToRender(target));
-    actions.append(renderBtn);
+    const items = [
+      { label: "Render", primary: true, title: "Open in the Render tab", onClick: () => sendToRender(target) },
+    ];
     if (c.kind === "modified") {
-      const cmpBtn = el("button", { textContent: "Compare" });
-      cmpBtn.addEventListener("click", () => openFileDiff(aPath, bPath, c.path));
-      actions.append(" ", cmpBtn);
+      items.push({ label: "Compare", onClick: () => openFileDiff(aPath, bPath, c.path) });
     }
 
-    $("#diff-table tbody").append(el("tr", {},
+    $("#diff-table tbody").append(wireRowMenu(el("tr", {},
       el("td", {}, el("span", { className: `pill ${c.kind}`, textContent: c.kind })),
       el("td", { textContent: c.path }),
       el("td", { textContent: c.detail || "" }),
-      actions
-    ));
+      actionCell(items)
+    ), items));
   }
 }
 
@@ -1783,28 +1885,30 @@ function keysRow(it) {
   const valCell = el("td", {});
   valCell.append(el("span", { className: it.binary ? "keys-binary" : "", textContent: it.value || "" }));
 
-  const copyBtn = el("button", { textContent: "Copy" });
-  copyBtn.addEventListener("click", async () => {
-    try {
-      await gui().Copy(it.value || "");
-      toast("copied", true);
-    } catch (e) {
-      fail(e);
-    }
-  });
-  const decodeBtn = el("button", { textContent: "Decode", title: "Send this value to the Decode tab" });
-  decodeBtn.addEventListener("click", () => sendToDecode(it.value || ""));
-  const actions = el("td", { className: "col-actions" }, copyBtn);
-  actions.append(" ", decodeBtn);
+  const items = [
+    {
+      label: "Copy",
+      primary: true,
+      onClick: async () => {
+        try {
+          await gui().Copy(it.value || "");
+          toast("copied", true);
+        } catch (e) {
+          fail(e);
+        }
+      },
+    },
+    { label: "Decode", title: "Send this value to the Decode tab", onClick: () => sendToDecode(it.value || "") },
+  ];
 
-  return el("tr", {},
+  return wireRowMenu(el("tr", {},
     el("td", { textContent: it.class || "" }),
     el("td", { textContent: it.service || "" }),
     el("td", { textContent: [it.account, extra].filter(Boolean).join(" · ") }),
     el("td", { textContent: it.accessible || "" }),
     valCell,
-    actions,
-  );
+    actionCell(items)
+  ), items);
 }
 
 $("#ky-platform").addEventListener("change", () => {
