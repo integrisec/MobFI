@@ -59,21 +59,26 @@ func dumpKeystore2(ctx context.Context, serial string, uidToPkg map[string]strin
 	}
 	defer db.Close()
 
-	items, err := queryKeystore2(ctx, db, uidToPkg)
+	items, diag, err := queryKeystore2(ctx, db, uidToPkg)
 	if err != nil {
 		return nil, []string{"keystore2 database present but its schema could not be read: " + err.Error()}, nil
 	}
-	return items, []string{fmt.Sprintf("Parsed %d key(s) from the keystore2 database (persistent.sqlite).", len(items))}, nil
+	notes := []string{fmt.Sprintf("Parsed %d key(s) from the keystore2 database (persistent.sqlite).", len(items))}
+	if diag != "" {
+		notes = append(notes, diag)
+	}
+	return items, notes, nil
 }
 
 // queryKeystore2 reads key entries from an open keystore2 database. It tries a
 // rich query (with security level) and falls back to a minimal one, so a schema
-// drift across Android versions degrades rather than fails.
-func queryKeystore2(ctx context.Context, db *sql.DB, uidToPkg map[string]string) ([]Item, error) {
-	// security_level lives on keyparameter rows: 0=software, 1=TEE, 2=StrongBox.
-	// No key_type filter: its enum meaning has shifted across Android versions,
-	// and over-filtering risks hiding real keys (the "0 items" failure mode). We
-	// list every aliased entry and let the owner/alias speak for itself.
+// drift across Android versions degrades rather than fails. diag carries a
+// non-fatal explanation when the enriched query couldn't run.
+func queryKeystore2(ctx context.Context, db *sql.DB, uidToPkg map[string]string) (items []Item, diag string, err error) {
+	// security_level lives on keyparameter rows: 0=software, 1=TEE, 2=StrongBox,
+	// 100=keystore(software). No key_type filter: its enum meaning has shifted
+	// across Android versions, and over-filtering risks hiding real keys (the
+	// "0 items" failure mode). We list every aliased entry.
 	const rich = `
 		SELECT k.namespace, k.alias, COALESCE(sl.lvl, -1)
 		FROM keyentry k
@@ -81,24 +86,25 @@ func queryKeystore2(ctx context.Context, db *sql.DB, uidToPkg map[string]string)
 		  ON sl.keyentryid = k.id
 		WHERE k.alias IS NOT NULL
 		ORDER BY k.namespace, k.alias`
-	rows, err := db.QueryContext(ctx, rich)
-	if err != nil {
-		// Minimal fallback: just the owning namespace and alias.
+	rows, rerr := db.QueryContext(ctx, rich)
+	if rerr != nil {
+		// Minimal fallback: just the owning namespace and alias. Surface why the
+		// enriched query (with the security level) didn't run.
+		diag = "security level unavailable -- the enriched keystore2 query failed (" + rerr.Error() + "); showing 'unknown'"
 		rows, err = db.QueryContext(ctx,
 			`SELECT namespace, alias, -1 FROM keyentry WHERE alias IS NOT NULL ORDER BY namespace, alias`)
 		if err != nil {
-			return nil, err
+			return nil, diag, err
 		}
 	}
 	defer rows.Close()
 
-	var items []Item
 	for rows.Next() {
 		var ns sql.NullInt64
 		var alias sql.NullString
 		var lvl sql.NullInt64
 		if err := rows.Scan(&ns, &alias, &lvl); err != nil {
-			return nil, err
+			return nil, diag, err
 		}
 		uid := ""
 		if ns.Valid {
@@ -114,7 +120,7 @@ func queryKeystore2(ctx context.Context, db *sql.DB, uidToPkg map[string]string)
 			Value:      "<key material not exportable>",
 		})
 	}
-	return items, rows.Err()
+	return items, diag, rows.Err()
 }
 
 func securityLevelName(lvl sql.NullInt64) string {
@@ -122,14 +128,16 @@ func securityLevelName(lvl sql.NullInt64) string {
 		return "hardware-backed"
 	}
 	switch lvl.Int64 {
-	case 0:
+	case -1:
+		return "unknown"
+	case 0, 100:
 		return "software"
 	case 1:
 		return "TEE (TrustedEnvironment)"
 	case 2:
 		return "StrongBox"
 	default:
-		return "hardware-backed"
+		return fmt.Sprintf("security level %d", lvl.Int64)
 	}
 }
 

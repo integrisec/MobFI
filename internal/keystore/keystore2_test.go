@@ -43,9 +43,12 @@ func TestQueryKeystore2(t *testing.T) {
 	defer db.Close()
 	uidMap := map[string]string{"10123": "com.example.app"}
 
-	items, err := queryKeystore2(context.Background(), db, uidMap)
+	items, diag, err := queryKeystore2(context.Background(), db, uidMap)
 	if err != nil {
 		t.Fatalf("queryKeystore2: %v", err)
+	}
+	if diag != "" {
+		t.Fatalf("unexpected fallback diag on a valid schema: %q", diag)
 	}
 	if len(items) != 3 {
 		t.Fatalf("got %d keys, want 3", len(items))
@@ -53,6 +56,9 @@ func TestQueryKeystore2(t *testing.T) {
 	// Sorted by namespace: uid 0 (super key), 1000, then 10123.
 	if items[0].Account != "super_key" || items[0].Service != "uid 0" {
 		t.Errorf("item0 = %+v", items[0])
+	}
+	if items[0].Accessible != "unknown (non-exportable)" { // no key params -> unknown level
+		t.Errorf("item0 accessible = %q, want unknown", items[0].Accessible)
 	}
 	if items[1].Account != "platform_key" || items[1].Service != "uid 1000" {
 		t.Errorf("item1 = %+v", items[1])
