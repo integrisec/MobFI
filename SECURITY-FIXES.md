@@ -50,7 +50,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-GUI-04 | Medium | Open | | |
 | MFI-GUI-05 | Medium | Fixed | pending | Same ConsoleStart rewrite as MFI-CMD-03: `-l user -- host` splits the concatenated argv element into separate fields, both validated to reject leading `-`. |
 | MFI-PAR-05 | Medium | Fixed | pending | count in collection/dict/utf-16 string now capped at len(data) before make([]any/uint16, count); attacker cannot request an 8x memory amplification. |
-| MFI-PAR-06 | Medium | Open | | |
+| MFI-PAR-06 | Medium | Fixed | pending | dbview renderCell truncates cell display at 64 KiB with a `<truncated, total N bytes>` marker; multi-GB text-shaped blobs no longer OOM. |
 | MFI-PAR-07 | Medium | Fixed | pending | parseKeybag caps each TLV payload at 1 MiB; rejects negative `int(uint32)` casts on 32-bit builds. |
 | MFI-SEC-02 | Medium | Fixed | pending | Verifier client sets CheckRedirect to ErrUseLastResponse; redirect targets never receive vendor auth headers. |
 | MFI-SEC-03 | Medium | Open | | |
@@ -65,8 +65,8 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-GUI-06 | Low | Open | | |
 | MFI-GUI-07 | Low | Fixed | pending | OpenExternally rejects file extensions whose OS handler would execute (`.exe`, `.bat`, `.lnk`, `.command`, `.sh`, ~30 more) so an extracted `receipt.pdf.exe` cannot be launched by clicking "Open externally". |
 | MFI-GUI-08 | Low | Open | | |
-| MFI-PAR-08 | Low | Open | | |
-| MFI-PAR-09 | Low | Open | | |
+| MFI-PAR-08 | Low | Fixed | pending | reindentXML tracks nesting depth and errors past 128; xml.Encoder namespace stack cannot be pumped past that. |
+| MFI-PAR-09 | Low | Fixed | pending | fileKeyFromBlob rejects Manifest.db `Files.file` blobs > 1 MiB before handing to plist.DecodeAny. |
 | MFI-SEC-05 | Low | Open | | |
 | MFI-XC-07 | Low | Open | | |
 | MFI-XC-08 | Low | Open | | |

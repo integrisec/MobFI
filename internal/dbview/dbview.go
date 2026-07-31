@@ -216,18 +216,32 @@ func (s *sqliteDB) Read(ctx context.Context, table string, limit int) (*Table, e
 	return out, rows.Err()
 }
 
+// maxCellDisplayBytes caps how much of a single cell is materialised into
+// the display string. modernc.org/sqlite returns multi-GB blobs without
+// complaint; a text-shaped blob column that carries hostile input would
+// otherwise OOM the process (MFI-PAR-06).
+const maxCellDisplayBytes = 64 << 10
+
 // renderCell turns a scanned SQLite value into a display string. Textual
 // blobs are shown as-is; binary blobs are summarised rather than dumped.
+// Both branches truncate at maxCellDisplayBytes with an explicit marker so
+// large-cell DoS is bounded but the caller still sees SOMETHING.
 func renderCell(v any) string {
 	switch val := v.(type) {
 	case nil:
 		return "NULL"
 	case []byte:
 		if utf8.Valid(val) && !hasControlBytes(val) {
+			if len(val) > maxCellDisplayBytes {
+				return string(val[:maxCellDisplayBytes]) + fmt.Sprintf("... <truncated, total %d bytes>", len(val))
+			}
 			return string(val)
 		}
 		return fmt.Sprintf("<blob %d bytes>", len(val))
 	case string:
+		if len(val) > maxCellDisplayBytes {
+			return val[:maxCellDisplayBytes] + fmt.Sprintf("... <truncated, total %d bytes>", len(val))
+		}
 		return val
 	default:
 		return fmt.Sprint(val)

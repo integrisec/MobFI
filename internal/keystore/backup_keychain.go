@@ -136,9 +136,17 @@ func findKeychainEntry(ctx context.Context, plainDB []byte) (fileID string, file
 	return fileID, fileBlob, nil
 }
 
+// maxFileBlobBytes caps the size of a Manifest.db `Files.file` blob before
+// handing it to plist.DecodeAny. Legitimate blobs are a few KB; a hostile
+// Manifest.db could put 500 MB here to amplify parser costs (MFI-PAR-09).
+const maxFileBlobBytes = 1 << 20
+
 // fileKeyFromBlob walks the NSKeyedArchiver file blob to find the wrapped
 // EncryptionKey and Size, then unwraps the file key with the keybag.
 func fileKeyFromBlob(kb *keybag, blob []byte) (key []byte, size int, err error) {
+	if len(blob) > maxFileBlobBytes {
+		return nil, 0, fmt.Errorf("file blob %d bytes exceeds the %d byte cap", len(blob), maxFileBlobBytes)
+	}
 	v, err := plist.DecodeAny(blob)
 	if err != nil {
 		return nil, 0, fmt.Errorf("decode file blob: %w", err)
