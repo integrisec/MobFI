@@ -35,10 +35,10 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-GUI-01 | High | Fixed | pending | Default-deny CSP added to index.html. Every asset is same-origin; blob: retained for PDF iframes and images. |
 | MFI-GUI-02 | High | Fixed | pending | Network SSH now uses ~/.config/MobFI/known_hosts (0700) with StrictHostKeyChecking=accept-new; first connect TOFUs, later connects hard-fail on drift. Loopback (USB iproxy) still uses /dev/null (localhost trust). |
 | MFI-GUI-03 | High | Open | | |
-| MFI-PAR-01 | High | Open | | |
+| MFI-PAR-01 | High | Fixed | pending | Added maxPlistDepth=128 counter threaded through object/collection/dict; recursion depth beyond that returns an error instead of stack-overflowing. |
 | MFI-PAR-02 | High | Open | | |
 | MFI-PAR-03 | High | Open | | |
-| MFI-PAR-04 | High | Open | | |
+| MFI-PAR-04 | High | Fixed | pending | numObjects * offsetIntSize now uses math/bits.Mul64 to reject overflow before allocation; also cap numObjects at len(data). |
 | MFI-SEC-01 | High | Open | | |
 | MFI-XC-01 | High | Fixed | pending | dbview.Open no longer falls back from immutable=1 to mode=ro on the evidence file. On immutable failure it copies the DB + WAL/SHM/journal sidecars to a scratch tempdir and opens the copy; scratch dir is torn down on Close. |
 | MFI-XC-02 | High | Fixed | pending | Verifier client uses an explicit http.Transport with Proxy: nil; HTTPS_PROXY / HTTP_PROXY are no longer honored so discovered secrets never flow through a corporate MITM. |
@@ -49,7 +49,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-UPD-06 | Medium | Fixed | pending | Dedicated updateClient with TLS 1.2 floor, explicit Transport (Proxy nil), and CheckRedirect that rejects redirects to hosts outside the GitHub release-serving allowlist. |
 | MFI-GUI-04 | Medium | Open | | |
 | MFI-GUI-05 | Medium | Fixed | pending | Same ConsoleStart rewrite as MFI-CMD-03: `-l user -- host` splits the concatenated argv element into separate fields, both validated to reject leading `-`. |
-| MFI-PAR-05 | Medium | Open | | |
+| MFI-PAR-05 | Medium | Fixed | pending | count in collection/dict/utf-16 string now capped at len(data) before make([]any/uint16, count); attacker cannot request an 8x memory amplification. |
 | MFI-PAR-06 | Medium | Open | | |
 | MFI-PAR-07 | Medium | Open | | |
 | MFI-SEC-02 | Medium | Fixed | pending | Verifier client sets CheckRedirect to ErrUseLastResponse; redirect targets never receive vendor auth headers. |

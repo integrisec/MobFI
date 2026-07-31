@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/bits"
 	"time"
 	"unicode/utf16"
 )
@@ -58,9 +59,29 @@ func Decode(data []byte) (v any, err error) {
 	if offsetIntSize < 1 || offsetIntSize > 8 || objRefSize < 1 || objRefSize > 8 {
 		return nil, errors.New("plist: bad trailer sizes")
 	}
-	end := offsetTableOffset + numObjects*uint64(offsetIntSize)
+	// MFI-PAR-04: numObjects * offsetIntSize is attacker-controlled; the
+	// multiplication wraps in uint64 and can bypass the range check that
+	// follows. math/bits.Mul64 gives us the (hi, lo) parts so we can reject
+	// overflow before it becomes a giant allocation via make([]uint64,
+	// numObjects) below.
+	hi, low := bits.Mul64(numObjects, uint64(offsetIntSize))
+	if hi != 0 {
+		return nil, errors.New("plist: numObjects * offsetIntSize overflows uint64")
+	}
+	end := offsetTableOffset + low
+	if end < offsetTableOffset {
+		return nil, errors.New("plist: offset-table end overflows uint64")
+	}
 	if numObjects == 0 || end > uint64(len(data)) || topObject >= numObjects {
 		return nil, errors.New("plist: offset table out of range")
+	}
+	// Additional sanity gate for the []uint64 allocation on line below: a
+	// malicious numObjects near uint64 max still fits the previous check if
+	// offsetIntSize is 1, but 8*numObjects for the []uint64 backing store
+	// would exhaust the process. Cap numObjects at len(data), which is the
+	// theoretical maximum count of objects that could fit.
+	if numObjects > uint64(len(data)) {
+		return nil, errors.New("plist: numObjects exceeds file size")
 	}
 
 	offsets := make([]uint64, numObjects)
@@ -71,8 +92,14 @@ func Decode(data []byte) (v any, err error) {
 	}
 
 	d := &decoder{data: data, offsets: offsets, refSize: objRefSize, visiting: map[uint64]bool{}}
-	return d.object(topObject)
+	return d.object(topObject, 0)
 }
+
+// maxPlistDepth caps binary-plist recursion. The cycle-detection map catches
+// direct back-references but not depth: N nested arrays / dicts each fit in
+// a few bytes, so a crafted fixture pushes Go's stack into throw("stack
+// overflow"), which is NOT recoverable via the outer defer. See MFI-PAR-01.
+const maxPlistDepth = 128
 
 type decoder struct {
 	data     []byte
@@ -88,7 +115,10 @@ func (d *decoder) at(off, n uint64) []byte {
 	return d.data[off : off+n]
 }
 
-func (d *decoder) object(index uint64) (any, error) {
+func (d *decoder) object(index uint64, depth int) (any, error) {
+	if depth > maxPlistDepth {
+		return nil, fmt.Errorf("plist: nested too deep (> %d)", maxPlistDepth)
+	}
 	if index >= uint64(len(d.offsets)) {
 		return nil, fmt.Errorf("plist: object index %d out of range", index)
 	}
@@ -133,6 +163,9 @@ func (d *decoder) object(index uint64) (any, error) {
 
 	case 0x60: // UTF-16BE string (count = code units)
 		count, start := d.sizeAndStart(off, lo)
+		if count > uint64(len(d.data)) {
+			return nil, fmt.Errorf("plist: utf-16 string count %d exceeds file size", count)
+		}
 		u16 := make([]uint16, count)
 		b := d.at(start, count*2)
 		for i := uint64(0); i < count; i++ {
@@ -145,16 +178,22 @@ func (d *decoder) object(index uint64) (any, error) {
 		return UID(readUint(d.at(off+1, n))), nil
 
 	case 0xA0, 0xC0: // array / set
-		return d.collection(index, off, lo)
+		return d.collection(index, off, lo, depth+1)
 
 	case 0xD0: // dict
-		return d.dict(index, off, lo)
+		return d.dict(index, off, lo, depth+1)
 	}
 	return nil, fmt.Errorf("plist: unknown marker 0x%02x", marker)
 }
 
-func (d *decoder) collection(index, off uint64, lo byte) (any, error) {
+func (d *decoder) collection(index, off uint64, lo byte, depth int) (any, error) {
 	count, start := d.sizeAndStart(off, lo)
+	// MFI-PAR-05: count is attacker-controlled; make([]any, count) allocates
+	// 16 bytes/elem. Cap by the file size (an object cannot legitimately
+	// hold more entries than the total byte length of the file).
+	if count > uint64(len(d.data)) {
+		return nil, fmt.Errorf("plist: collection count %d exceeds file size", count)
+	}
 	d.visiting[index] = true
 	defer delete(d.visiting, index)
 
@@ -162,7 +201,7 @@ func (d *decoder) collection(index, off uint64, lo byte) (any, error) {
 	rs := uint64(d.refSize)
 	refs := d.at(start, count*rs)
 	for i := uint64(0); i < count; i++ {
-		v, err := d.object(readUint(refs[i*rs : (i+1)*rs]))
+		v, err := d.object(readUint(refs[i*rs:(i+1)*rs]), depth)
 		if err != nil {
 			return nil, err
 		}
@@ -171,8 +210,11 @@ func (d *decoder) collection(index, off uint64, lo byte) (any, error) {
 	return out, nil
 }
 
-func (d *decoder) dict(index, off uint64, lo byte) (any, error) {
+func (d *decoder) dict(index, off uint64, lo byte, depth int) (any, error) {
 	count, start := d.sizeAndStart(off, lo)
+	if count > uint64(len(d.data)) {
+		return nil, fmt.Errorf("plist: dict count %d exceeds file size", count)
+	}
 	d.visiting[index] = true
 	defer delete(d.visiting, index)
 
@@ -181,11 +223,11 @@ func (d *decoder) dict(index, off uint64, lo byte) (any, error) {
 	valRefs := d.at(start+count*rs, count*rs)
 	out := make(map[string]any, count)
 	for i := uint64(0); i < count; i++ {
-		k, err := d.object(readUint(keyRefs[i*rs : (i+1)*rs]))
+		k, err := d.object(readUint(keyRefs[i*rs:(i+1)*rs]), depth)
 		if err != nil {
 			return nil, err
 		}
-		v, err := d.object(readUint(valRefs[i*rs : (i+1)*rs]))
+		v, err := d.object(readUint(valRefs[i*rs:(i+1)*rs]), depth)
 		if err != nil {
 			return nil, err
 		}
