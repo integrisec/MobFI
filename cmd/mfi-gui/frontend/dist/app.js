@@ -1837,6 +1837,9 @@ $("#btn-keys-dump").addEventListener("click", async () => {
   btn.disabled = true;
   status.classList.add("busy");
   status.textContent = "Dumping…";
+  // Drop the previous dump's results so a new dump doesn't show stale data.
+  $("#keys-notes").replaceChildren();
+  clearRows("#keys-table tbody");
   try {
     const res = await gui().DumpKeys(platform, device, deviceTransport.get(device) || "", state, backup, password, reveal);
     renderKeys(res);
