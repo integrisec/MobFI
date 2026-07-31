@@ -42,8 +42,8 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-SEC-01 | High | Open | | |
 | MFI-XC-01 | High | Open | | |
 | MFI-XC-02 | High | Open | | |
-| MFI-DEP-01 | High | Fixed | pending | Bumped go directive to 1.25.12; picks up CVE-2025-61728, -61726, -61731, -68119, -68121 and later stdlib crypto/tls + net/http client fixes. |
-| MFI-DEP-02 | High | Open | | |
+| MFI-DEP-01 | High | Fixed | 0b9025e | Bumped go directive to 1.25.12; picks up CVE-2025-61728, -61726, -61731, -68119, -68121 and later stdlib crypto/tls + net/http client fixes. |
+| MFI-DEP-02 | High | Fixed | 9451a60 | Bumped x/net to v0.57.0. Fixes GO-2026-5942 / CVE-2026-46600 dnsmessage panic. |
 | MFI-UPD-04 | Medium | Open | | |
 | MFI-UPD-05 | Medium | Open | | |
 | MFI-UPD-06 | Medium | Open | | |
@@ -60,7 +60,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-XC-05 | Medium | Open | | |
 | MFI-XC-06 | Medium | Open | | |
 | MFI-CMD-06 | Medium | Open | | |
-| MFI-DEP-03 | Medium | Open | | |
+| MFI-DEP-03 | Medium | Fixed | 9451a60 | Bumped x/text to v0.40.0. Fixes GO-2026-5970 / CVE-2026-56852 norm.Iter infinite-loop. Landed alongside MFI-DEP-02 due to shared go.mod tidy. |
 | MFI-UPD-07 | Low | Open | | |
 | MFI-GUI-06 | Low | Open | | |
 | MFI-GUI-07 | Low | Open | | |
