@@ -175,10 +175,22 @@ func DumpAndroidKeystore(ctx context.Context, serial string, reveal bool) (*Resu
 	}
 	res := &Result{Platform: "android", Method: "keystore inventory (root)"}
 	res.Items = parseAndroidKeystore(string(out))
-	res.Notes = append(res.Notes, fmt.Sprintf("Inventoried %d keystore entr(ies).", len(res.Items)))
+	legacy := len(res.Items)
+
+	// Android 12+ tracks keys in the keystore2 database rather than per-file
+	// blobs; parse it when present so modern devices aren't reported as empty.
 	if strings.Contains(string(out), "persistent.sqlite") {
-		res.Notes = append(res.Notes, "A keystore2 database (persistent.sqlite) is present; newer keys are tracked there and are also non-exportable.")
+		uidMap := adbUIDMap(ctx, serial)
+		ks2, notes, err := dumpKeystore2(ctx, serial, uidMap)
+		res.Notes = append(res.Notes, notes...)
+		if err != nil {
+			res.Notes = append(res.Notes, "keystore2 database present but could not be read: "+err.Error())
+		}
+		res.Items = append(res.Items, ks2...)
 	}
+
+	res.Notes = append(res.Notes, fmt.Sprintf("Inventoried %d keystore entr(ies) (%d legacy blob(s), %d keystore2 key(s)).",
+		len(res.Items), legacy, len(res.Items)-legacy))
 	res.Limitations = append(res.Limitations,
 		"Key material is hardware-backed and non-exportable: this is an inventory of which keys exist, not the private/secret keys themselves.")
 	return res, nil
