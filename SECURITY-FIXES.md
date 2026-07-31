@@ -22,7 +22,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 
 | ID | Severity | Status | Fix | Notes |
 |---|---|---|---|---|
-| MFI-UPD-01 | Critical | Fixed | pending | ed25519 signature verification over SHA256SUMS.txt. Build-time pubKey via ldflags; empty pubKey fails closed. Release workflow must publish SHA256SUMS.sig. Regression tests cover empty/malformed/wrong-size key, wrong signature, tampered content, and missing SignatureURL. |
+| MFI-UPD-01 | Critical | Fixed | pending | ed25519 signature verification over SHA256SUMS.txt. Build-time pubKey via ldflags; empty pubKey fails closed. Release workflow must publish SHA256SUMS.sig. **Requires the operator to set up release signing per SIGNING.md before the next release; without it, self-update via the binary path is broken.** Regression tests cover empty/malformed/wrong-size key, wrong signature, tampered content, and missing SignatureURL. |
 | MFI-PATH-01 | Critical | Fixed | pending | Added extract.Within guard + NUL / leading-separator rejection to backup.reconstruct; regression test TestReconstructRejectsPathEscape. |
 | MFI-CMD-01 | Critical | Fixed | pending | Replaced `su -c 'joined'` with `su 0 <argv>`; every argv element passed to `adb shell`/`exec-out` is single-quoted for exactly one on-device sh parse. Regression test TestADBQuotesShellMetacharsInFilenames. |
 | MFI-CMD-02 | High | Fixed | pending | Same wrap() rewrite as MFI-CMD-01: every non-su argv element also flows through quoteArgv, so a metachar in a device filename never surfaces as an extra sh token on device. |
@@ -31,7 +31,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-CMD-05 | High | Fixed | pending | OpenExternally uses `open -- <path>` on macOS and `./`-prefixes leading-`-` paths on Linux xdg-open, so no path is parsed as a launcher flag. |
 | MFI-PATH-02 | High | Fixed | pending | extract.OpenLocalForWrite opens destination with O_NOFOLLOW on Unix (Lstat-based reject on Windows) and mode 0o600. writeLocal + backup.copyFile both route through it. |
 | MFI-UPD-02 | High | Fixed | pending | copyToTemp uses os.MkdirTemp (0o700) + a fresh file inside; O_EXCL on the create. No more predictable `/tmp/mobfi-update-worker` symlink-race primitive. |
-| MFI-UPD-03 | High | Fixed | pending | applyGit now runs `git verify-commit HEAD` after pull; refuses to invoke install.sh / install.ps1 unless HEAD is signed by a key in the operator's gpg / ssh trust set. Operator must set up signing infrastructure. |
+| MFI-UPD-03 | High | Fixed | pending | applyGit now runs `git verify-commit HEAD` after pull; refuses to invoke install.sh / install.ps1 unless HEAD is signed by a key in the operator's gpg / ssh trust set. **Requires maintainer commit-signing + operator trust setup per SIGNING.md; without it, self-update via the git path is broken.** |
 | MFI-GUI-01 | High | Fixed | pending | Default-deny CSP added to index.html. Every asset is same-origin; blob: retained for PDF iframes and images. |
 | MFI-GUI-02 | High | Fixed | pending | Network SSH now uses ~/.config/MobFI/known_hosts (0700) with StrictHostKeyChecking=accept-new; first connect TOFUs, later connects hard-fail on drift. Loopback (USB iproxy) still uses /dev/null (localhost trust). |
 | MFI-GUI-03 | High | Open | | |
