@@ -53,7 +53,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-PAR-06 | Medium | Fixed | pending | dbview renderCell truncates cell display at 64 KiB with a `<truncated, total N bytes>` marker; multi-GB text-shaped blobs no longer OOM. |
 | MFI-PAR-07 | Medium | Fixed | pending | parseKeybag caps each TLV payload at 1 MiB; rejects negative `int(uint32)` casts on 32-bit builds. |
 | MFI-SEC-02 | Medium | Fixed | pending | Verifier client sets CheckRedirect to ErrUseLastResponse; redirect targets never receive vendor auth headers. |
-| MFI-SEC-03 | Medium | Open | | |
+| MFI-SEC-03 | Medium | Fixed | pending | fingerprintFor routes known-secret matches through `sha256(m)[:6]` hex tag instead of the 4-char-prefix + exact-length redact; downstream readers cannot dictionary-narrow the operator's literal secrets. Trufflehog rules unchanged (their 4-char prefixes are the public vendor prefix). |
 | MFI-SEC-04 | Medium | Open | | |
 | MFI-XC-03 | Medium | Open | | |
 | MFI-XC-04 | Medium | Open | | |
