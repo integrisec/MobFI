@@ -34,7 +34,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-UPD-03 | High | Fixed | pending | applyGit now runs `git verify-commit HEAD` after pull; refuses to invoke install.sh / install.ps1 unless HEAD is signed by a key in the operator's gpg / ssh trust set. **Requires maintainer commit-signing + operator trust setup per SIGNING.md; without it, self-update via the git path is broken.** |
 | MFI-GUI-01 | High | Fixed | pending | Default-deny CSP added to index.html. Every asset is same-origin; blob: retained for PDF iframes and images. |
 | MFI-GUI-02 | High | Fixed | pending | Network SSH now uses ~/.config/MobFI/known_hosts (0700) with StrictHostKeyChecking=accept-new; first connect TOFUs, later connects hard-fail on drift. Loopback (USB iproxy) still uses /dev/null (localhost trust). |
-| MFI-GUI-03 | High | Open | | |
+| MFI-GUI-03 | High | Fixed | pending | Update banner rebuilt from DocumentFragment + textContent; info.latest / info.gitBranch cannot inject markup. |
 | MFI-PAR-01 | High | Fixed | pending | Added maxPlistDepth=128 counter threaded through object/collection/dict; recursion depth beyond that returns an error instead of stack-overflowing. |
 | MFI-PAR-02 | High | Fixed | pending | Added maxPlistDepth counter to DecodeXML / parseXMLArray / parseXMLDict / parseXMLElement; also added an outer recover to keep xml decoder panics from escaping into the Wails runtime. |
 | MFI-PAR-03 | High | Fixed | pending | Cap PBKDF2 `ITER` and `DPIC` at 10^7; reject anything larger with a clear error. |

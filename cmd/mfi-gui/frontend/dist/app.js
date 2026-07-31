@@ -2661,29 +2661,39 @@ if (window.runtime && window.runtime.EventsOn) {
     }
     p.then((info) => {
       if (!info) return;
-      const parts = [];
+      // MFI-GUI-03: build the banner from DOM nodes rather than a joined
+      // innerHTML string. Every string that arrives from the Go side
+      // (info.latest, info.current, info.gitBranch) goes through
+      // textContent so a hostile git branch name or a supply-chain-
+      // manipulated release tag cannot inject markup.
+      const nodes = []; // array of DocumentFragment-equivalent Nodes
+      const strongText = (t) => el("strong", { textContent: String(t) });
       if (info.available && info.latest) {
-        parts.push(
-          "MobFI <strong>v" + info.latest + "</strong> is available (you have v" +
-            info.current + ")."
-        );
+        const frag = document.createDocumentFragment();
+        frag.append("MobFI ", strongText("v" + info.latest),
+          " is available (you have v" + info.current + ").");
+        nodes.push(frag);
       }
       if (info.gitCheckout && info.gitBehind > 0) {
-        parts.push(
-          "Your checkout is <strong>" + info.gitBehind + "</strong> commit" +
-            (info.gitBehind === 1 ? "" : "s") + " behind " +
-            (info.gitBranch ? info.gitBranch + "'s upstream" : "upstream") +
-            " -- git pull to update."
-        );
+        const frag = document.createDocumentFragment();
+        frag.append("Your checkout is ", strongText(info.gitBehind),
+          " commit" + (info.gitBehind === 1 ? "" : "s") + " behind ",
+          info.gitBranch ? info.gitBranch + "'s upstream" : "upstream",
+          " -- git pull to update.");
+        nodes.push(frag);
       }
-      if (!parts.length) return; // up to date
+      if (!nodes.length) return; // up to date
 
       // Don't re-open a banner the user already dismissed for this same update;
       // a newer version (different key) will show again.
       currentKey = (info.latest || "") + "|" + (info.gitBehind || 0);
       if (currentKey === dismissedKey) return;
 
-      msg.innerHTML = parts.join(" ");
+      msg.replaceChildren();
+      nodes.forEach((n, i) => {
+        if (i > 0) msg.append(" ");
+        msg.append(n);
+      });
       if (info.releaseUrl) {
         viewBtn.classList.remove("hidden");
         viewBtn.onclick = () => { try { gui().OpenURL(info.releaseUrl); } catch (e) {} };
