@@ -1882,9 +1882,16 @@ async function detectKeysState() {
   }
 }
 
+let keysSortField = null;
+let keysSortDir = 1;
+let currentKeyItems = [];
+const KEYS_COLUMNS = ["class", "service", "account", "accessible", "value", null]; // th index -> field
+
 function renderKeys(res) {
   const notes = $("#keys-notes");
   notes.replaceChildren();
+  currentKeyItems = [];
+  clearRows("#keys-table tbody");
   if (!res) return;
   const head = el("div", { className: "keys-method" },
     el("strong", { textContent: "Method: " }), document.createTextNode(res.method || "—"));
@@ -1902,13 +1909,55 @@ function renderKeys(res) {
   addList("Notes", res.notes, "notes");
   addList("Limitations", res.limitations, "limits");
 
+  currentKeyItems = res.items || [];
+  renderKeysTable();
+}
+
+function renderKeysTable() {
   clearRows("#keys-table tbody");
-  const items = res.items || [];
-  if (!items.length) {
+  if (!currentKeyItems.length) {
     emptyRow("#keys-table tbody", 6, "no items recovered");
     return;
   }
-  for (const it of items) $("#keys-table tbody").append(keysRow(it));
+  updateKeysSortIndicators();
+  for (const it of sortRows(currentKeyItems, keysSortField, keysSortDir)) {
+    $("#keys-table tbody").append(keysRow(it));
+  }
+}
+
+function updateKeysSortIndicators() {
+  document.querySelectorAll("#keys-table thead th.sortable").forEach((th) => {
+    const arrow = th.dataset.field === keysSortField ? (keysSortDir === 1 ? " ▲" : " ▼") : "";
+    const labelEl = th.querySelector(".th-label");
+    if (labelEl) labelEl.textContent = th.dataset.label + arrow;
+    else th.textContent = th.dataset.label + arrow;
+  });
+}
+
+function setupKeysSorting() {
+  const saved = JSON.parse(localStorage.getItem("mobfi.keys.sort") || "null");
+  if (saved && saved.field) {
+    keysSortField = saved.field;
+    keysSortDir = saved.dir;
+  }
+  document.querySelectorAll("#keys-table thead th").forEach((th, i) => {
+    const field = KEYS_COLUMNS[i];
+    if (!field) return;
+    th.classList.add("sortable");
+    th.dataset.field = field;
+    const labelEl = th.querySelector(".th-label");
+    th.dataset.label = labelEl ? labelEl.textContent : th.textContent;
+    th.addEventListener("click", () => {
+      if (keysSortField === field) keysSortDir = -keysSortDir;
+      else {
+        keysSortField = field;
+        keysSortDir = 1;
+      }
+      localStorage.setItem("mobfi.keys.sort", JSON.stringify({ field: keysSortField, dir: keysSortDir }));
+      renderKeysTable();
+    });
+  });
+  updateKeysSortIndicators();
 }
 
 function keysRow(it) {
@@ -2046,6 +2095,7 @@ makeResizable($("#keys-table"), "mobfi.cols.keys");
 updateKeysPlatformUI();
 setupScanSorting(); // after makeResizable, which creates the .th-label spans
 setupDiffSorting();
+setupKeysSorting();
 
 // Draggable splitter between the app list and the details panel (persisted).
 makeVResizer($("#apps-vsplit"), $("#apps-scroll"), "mobfi.apps.listHeight");

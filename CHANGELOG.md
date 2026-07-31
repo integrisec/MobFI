@@ -82,6 +82,8 @@ heading to the version and date and start a fresh `Unreleased` section.
   bearer-token generics. Each rule is covered by a positive-sample test.
 
 ### Changed
+- The Keys table is now sortable by any column (Class/Service/Account/Accessible/
+  Value), with the sort preference persisted -- matching the Scan and Diff tables.
 - The desktop GUI now checks for updates **in the background while running** --
   every few hours and when the window regains focus -- not only at launch, so a
   release published mid-session surfaces the update banner without a restart.
