@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -120,7 +121,15 @@ func findKeychainEntry(ctx context.Context, plainDB []byte) (fileID string, file
 	}
 	tmp.Close()
 
-	db, err := sql.Open("sqlite", "file:"+tmp.Name()+"?mode=ro&immutable=1")
+	// MFI-PATH-03: build the sqlite URI via net/url so a tmp path with
+	// `?` / `#` / `%` / Windows separators does not confuse the driver's
+	// URI parser.
+	tmpURI := (&url.URL{
+		Scheme:   "file",
+		Path:     filepath.ToSlash(tmp.Name()),
+		RawQuery: "mode=ro&immutable=1",
+	}).String()
+	db, err := sql.Open("sqlite", tmpURI)
 	if err != nil {
 		return "", nil, fmt.Errorf("open Manifest.db: %w", err)
 	}

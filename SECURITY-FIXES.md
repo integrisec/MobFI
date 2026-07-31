@@ -70,7 +70,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-SEC-05 | Low | Fixed | pending | slackVerify checks Content-Type and reads at most 1 MiB via io.LimitReader; noise / redirect targets can no longer stream unlimited data into the JSON decoder. |
 | MFI-XC-07 | Low | Fixed | pending | Added package-scope sync.Mutex around load/save of window.json; concurrent debounced-resize + shutdown writes no longer interleave. |
 | MFI-XC-08 | Low | Fixed | pending | Console session IDs are now 16-byte crypto/rand hex; a future XSS pivot cannot enumerate active sessions by wall-clock. |
-| MFI-PATH-03 | Low | Open | | |
+| MFI-PATH-03 | Low | Fixed | pending | All SQLite `file:` URIs now built via net/url + filepath.ToSlash; paths with `?` / `#` / `%` / Windows separators no longer confuse the driver. |
 | MFI-PATH-04 | Low | Open | | |
 | MFI-CMD-07 | Low | Open | | |
 | MFI-UPD-08 | Info | Open | | |

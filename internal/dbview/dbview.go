@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +17,14 @@ import (
 
 	_ "modernc.org/sqlite" // cgo-free SQLite driver, registered as "sqlite"
 )
+
+// sqliteDSN builds a SQLite file: URI for path with the given URI
+// parameters. Uses net/url so a path with `?` / `#` / `%` characters or
+// Windows backslashes does not confuse the driver's URI parser (MFI-PATH-03).
+func sqliteDSN(path, rawQuery string) string {
+	u := &url.URL{Scheme: "file", Path: filepath.ToSlash(path), RawQuery: rawQuery}
+	return u.String()
+}
 
 // sqliteMagic is the 16-byte header every SQLite 3 database begins with.
 var sqliteMagic = []byte("SQLite format 3\x00")
@@ -50,7 +59,7 @@ func Open(ctx context.Context, path string) (DB, error) {
 	}
 
 	// First try: immutable open on the original file. This never writes.
-	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro&immutable=1")
+	db, err := sql.Open("sqlite", sqliteDSN(path, "mode=ro&immutable=1"))
 	if err == nil {
 		if pingErr := db.PingContext(ctx); pingErr == nil {
 			return &sqliteDB{db: db}, nil
@@ -65,7 +74,7 @@ func Open(ctx context.Context, path string) (DB, error) {
 	if copyErr != nil {
 		return nil, fmt.Errorf("dbview: could not open %s immutable and copy-fallback failed: %w", path, copyErr)
 	}
-	db, err = sql.Open("sqlite", "file:"+scratch+"?mode=ro")
+	db, err = sql.Open("sqlite", sqliteDSN(scratch, "mode=ro"))
 	if err != nil {
 		cleanup()
 		return nil, err

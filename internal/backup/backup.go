@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -240,7 +241,15 @@ func isEncrypted(backupDir string) (bool, error) {
 // reconstruct copies the target app's backed-up files from their hashed names
 // into a readable tree under Dest, grouped by backup domain.
 func reconstruct(ctx context.Context, backupDir string, o Options) (*extract.Result, error) {
-	dsn := "file:" + filepath.Join(backupDir, "Manifest.db") + "?mode=ro&immutable=1"
+	// MFI-PATH-03: build the sqlite URI via net/url so a backupDir containing
+	// `?` / `#` / `%` (or Windows backslashes) does not confuse the driver's
+	// URI parser. filepath.ToSlash normalises Windows separators for the URI.
+	manifestURI := (&url.URL{
+		Scheme:   "file",
+		Path:     filepath.ToSlash(filepath.Join(backupDir, "Manifest.db")),
+		RawQuery: "mode=ro&immutable=1",
+	}).String()
+	dsn := manifestURI
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("backup: open Manifest.db: %w", err)
