@@ -2478,7 +2478,15 @@ if (window.runtime && window.runtime.EventsOn) {
   const dismissBtn = document.getElementById("update-dismiss");
   if (!banner || !msg) return;
 
-  dismissBtn.addEventListener("click", () => banner.classList.add("hidden"));
+  const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // re-check every 6 hours
+  let lastCheck = 0;
+  let currentKey = null; // identifies the currently-offered update
+  let dismissedKey = null; // the update the user dismissed (don't re-nag for it)
+
+  dismissBtn.addEventListener("click", () => {
+    banner.classList.add("hidden");
+    dismissedKey = currentKey; // stay quiet until a newer update appears
+  });
 
   // Run the update out-of-process: MobFI closes, a detached worker performs the
   // update (git pull + rebuild, or binary swap), then reopens the app. The
@@ -2505,6 +2513,7 @@ if (window.runtime && window.runtime.EventsOn) {
 
   let attempts = 0;
   const run = () => {
+    lastCheck = Date.now();
     let p;
     try {
       p = gui().CheckForUpdate();
@@ -2531,6 +2540,11 @@ if (window.runtime && window.runtime.EventsOn) {
       }
       if (!parts.length) return; // up to date
 
+      // Don't re-open a banner the user already dismissed for this same update;
+      // a newer version (different key) will show again.
+      currentKey = (info.latest || "") + "|" + (info.gitBehind || 0);
+      if (currentKey === dismissedKey) return;
+
       msg.innerHTML = parts.join(" ");
       if (info.releaseUrl) {
         viewBtn.classList.remove("hidden");
@@ -2543,6 +2557,13 @@ if (window.runtime && window.runtime.EventsOn) {
     }).catch(() => { /* offline or rate-limited: stay quiet */ });
   };
   run();
+  // Keep checking in the background while the app runs, and when the window
+  // regains focus after a while -- so a release published mid-session is noticed
+  // without a restart.
+  setInterval(run, CHECK_INTERVAL_MS);
+  window.addEventListener("focus", () => {
+    if (Date.now() - lastCheck > CHECK_INTERVAL_MS) run();
+  });
 })();
 
 // Launch splash: fade out shortly after load, or on click / any key.

@@ -81,6 +81,12 @@ heading to the version and date and start a fresh `Unreleased` section.
   credentials (MongoDB, SQL, Redis, HTTP basic-auth), plus broader keyword and
   bearer-token generics. Each rule is covered by a positive-sample test.
 
+### Changed
+- The desktop GUI now checks for updates **in the background while running** --
+  every few hours and when the window regains focus -- not only at launch, so a
+  release published mid-session surfaces the update banner without a restart.
+  Dismissing the banner stays quiet until a newer version appears.
+
 ### Fixed
 - SQLite databases now always open as databases in the Render tab -- detected by
   their file header regardless of extension (`.sqlite`, `.db`, or none) -- rather
