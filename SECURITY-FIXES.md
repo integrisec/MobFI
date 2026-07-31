@@ -73,8 +73,8 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | MFI-PATH-03 | Low | Fixed | pending | All SQLite `file:` URIs now built via net/url + filepath.ToSlash; paths with `?` / `#` / `%` / Windows separators no longer confuse the driver. |
 | MFI-PATH-04 | Low | Fixed | pending | safePath() escapes control bytes to `\xNN` in the plain-text report output; ANSI escape sequences in a device-supplied path can no longer forge terminal lines. JSON output preserves raw bytes for forensics. |
 | MFI-CMD-07 | Low | Fixed | pending | afcConn.afc normalises leading-`-` device paths to `./-` before passing to afcclient; no path element can be reparsed as an afcclient option. |
-| MFI-UPD-08 | Info | Open | | |
-| MFI-UPD-09 | Info | Open | | |
+| MFI-UPD-08 | Info | Fixed | pending | validateRelaunchTarget rejects any relaunch target outside the currently-running worker's install prefix; stops a stolen approval token from steering re-exec to an attacker binary. |
+| MFI-UPD-09 | Info | Fixed | pending | replaceExecutable retries the Windows `.old` swap with 0/0.5/1/2/4s backoff and errors clearly on final failure; no more silent "rename failed but reported success". |
 | MFI-CMD-08 | Info | Fixed | pending | dirSizeBytes validates dumpsys-derived dataDir/codePath via safeDumpsysPath before splicing into an adb-shell argv; rejects space / control / shell metacharacters. |
 | MFI-CMD-09 | Info | Fixed | pending | bundleIDRe (`^[A-Za-z][A-Za-z0-9._$-]*$`) validates bundle IDs before dumpsys / run-as / (future) simctl calls. |
 | MFI-CMD-10 | Info | Fixed | pending | adbCatRoot now single-quotes path for outer device shell and uses only `su 0 <argv>`; drops the vulnerable `su -c 'cat <path>'` fallback. |

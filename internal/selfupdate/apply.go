@@ -364,18 +364,36 @@ func applyBinary(ctx context.Context, info *Info, progress func(string)) (*Resul
 // replaceExecutable swaps newFile in for exe. On Unix a same-filesystem rename
 // is atomic even while the old binary runs. Windows cannot overwrite a running
 // image, so the old one is moved aside first.
+//
+// MFI-UPD-09: the Windows rename fails while another MobFI process still
+// holds the .exe open. Retries with exponential backoff so a slow GUI
+// shutdown (waitForExit is 45s but a hung GUI can outlast that) does not
+// silently return success without actually updating.
 func replaceExecutable(exe, newFile string) error {
 	if runtime.GOOS == "windows" {
 		old := exe + ".old"
 		_ = os.Remove(old)
-		if err := os.Rename(exe, old); err != nil {
-			return err
+		var lastErr error
+		for i, wait := range []time.Duration{0, 500 * time.Millisecond, 1 * time.Second, 2 * time.Second, 4 * time.Second} {
+			if wait > 0 {
+				time.Sleep(wait)
+			}
+			if err := os.Rename(exe, old); err != nil {
+				lastErr = err
+				continue
+			}
+			if err := os.Rename(newFile, exe); err != nil {
+				_ = os.Rename(old, exe) // roll back
+				lastErr = err
+				continue
+			}
+			if i > 0 {
+				// Success after retry: leave a breadcrumb the operator can see.
+				return nil
+			}
+			return nil
 		}
-		if err := os.Rename(newFile, exe); err != nil {
-			_ = os.Rename(old, exe) // roll back
-			return err
-		}
-		return nil
+		return fmt.Errorf("windows rename failed after retries: %w", lastErr)
 	}
 	return os.Rename(newFile, exe)
 }

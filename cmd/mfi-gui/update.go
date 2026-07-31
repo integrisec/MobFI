@@ -86,7 +86,11 @@ func updateWorker() {
 	}
 	markWorkerRun()
 
-	relaunch := os.Getenv(envRelaunch)
+	// MFI-UPD-08: only relaunch a target that resolves to the same install
+	// prefix as the currently-running worker executable. An attacker with a
+	// stolen approval token would otherwise set envRelaunch to /tmp/evil
+	// and get the worker to exec their binary once the update completes.
+	relaunch := validateRelaunchTarget(os.Getenv(envRelaunch), lg)
 	// Guarantee a recorded status and a relaunch, even on panic, so clicking
 	// Update never leaves the user with a closed app and no explanation.
 	defer func() {
@@ -299,6 +303,39 @@ func relaunchEnv() []string {
 		out = append(out, e)
 	}
 	return out
+}
+
+// validateRelaunchTarget returns target if it resolves under the same
+// install prefix as the currently-running worker binary; empty string
+// otherwise. Prevents an attacker with a stolen approval token from
+// steering the post-update relaunch to their own executable.
+func validateRelaunchTarget(target string, lg *updateLog) string {
+	if target == "" {
+		return ""
+	}
+	self, err := os.Executable()
+	if err != nil {
+		lg.Printf("cannot resolve os.Executable, refusing relaunch: %v", err)
+		return ""
+	}
+	if resolved, err := filepath.EvalSymlinks(self); err == nil {
+		self = resolved
+	}
+	installPrefix := filepath.Dir(self) // usually /Applications/MobFI.app/Contents/MacOS or the install bindir
+	// On macOS the target is typically the .app bundle two levels up.
+	// Accept any target that starts with the install prefix's parent-of-
+	// parent (bundle root) or the install prefix itself.
+	bundleRoot := filepath.Dir(filepath.Dir(installPrefix))
+	tgt, err := filepath.EvalSymlinks(target)
+	if err != nil {
+		tgt = filepath.Clean(target)
+	}
+	if strings.HasPrefix(tgt+string(filepath.Separator), installPrefix+string(filepath.Separator)) ||
+		strings.HasPrefix(tgt+string(filepath.Separator), bundleRoot+string(filepath.Separator)) {
+		return target
+	}
+	lg.Printf("refusing relaunch to unrelated target %q (install prefix %q)", target, installPrefix)
+	return ""
 }
 
 // relaunchTarget is what launchApp should reopen: the .app bundle on macOS
