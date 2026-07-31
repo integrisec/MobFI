@@ -86,7 +86,7 @@ Baseline commit (main HEAD at audit time): `b9c42e3`.
 | LIC-01 | Medium | Open | | |
 | LIC-02 | Medium | Open | | |
 | LIC-03 | Medium | Open | | |
-| LIC-04 | Low | Open | | |
+| LIC-04 | Low | Fixed | pending | aeskw.go doc comment now includes an explicit RFC 3394 URL and pins the IV / variable names to the RFC pseudocode. |
 | LIC-05 | Low | Open | | |
 
 ## Notes
