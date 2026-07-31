@@ -11,6 +11,7 @@ import (
 
 	"github.com/integrisec/MobFI/internal/backup"
 	"github.com/integrisec/MobFI/internal/dbview"
+	"github.com/integrisec/MobFI/internal/decode"
 	"github.com/integrisec/MobFI/internal/device"
 	"github.com/integrisec/MobFI/internal/diff"
 	"github.com/integrisec/MobFI/internal/doctor"
@@ -256,6 +257,12 @@ func (a *App) DBRead(ctx context.Context, path, table string, limit int) (*dbvie
 // Render produces a human-readable view of a single file.
 func (a *App) Render(ctx context.Context, path string) (*render.View, error) {
 	return a.Renderers.Render(ctx, path)
+}
+
+// Decode runs the built-in string decoders (Base64, hex, URL) over s, for
+// inspecting encoded values found in files, databases, or secret findings.
+func (a *App) Decode(s string) []decode.Result {
+	return decode.All(s)
 }
 
 // CheckUpdate reports whether a newer MobFI release is available and/or the

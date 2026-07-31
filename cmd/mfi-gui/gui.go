@@ -13,6 +13,7 @@ import (
 
 	"github.com/integrisec/MobFI/internal/app"
 	"github.com/integrisec/MobFI/internal/dbview"
+	"github.com/integrisec/MobFI/internal/decode"
 	"github.com/integrisec/MobFI/internal/device"
 	"github.com/integrisec/MobFI/internal/diff"
 	"github.com/integrisec/MobFI/internal/doctor"
@@ -170,6 +171,9 @@ func saveGeometry(ctx context.Context) {
 }
 
 // DetectDevices lists reachable Android/iOS devices.
+// Decode runs the Base64/hex/URL decoders over s for the Decode tab.
+func (g *GUI) Decode(s string) []decode.Result { return g.app.Decode(s) }
+
 func (g *GUI) DetectDevices() ([]device.Device, error) {
 	devices, err := g.app.DetectDevices(g.ctx)
 	if err != nil {

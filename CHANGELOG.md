@@ -10,6 +10,13 @@ heading to the version and date and start a fresh `Unreleased` section.
 ## [Unreleased]
 
 ### Added
+- **String decoders** for inspecting encoded values found in files, database
+  cells, or secret findings: **Base64** (standard and URL-safe, padded or raw),
+  **ASCII hex** (tolerates spaces, `0x`, and `:`/`-` separators), and **URL**
+  percent-encoding. Available as a new GUI **Decode** tab (decodes as you type;
+  binary results also show a hex view) and the `mfi decode` CLI command (reads
+  from an argument, `-input`, or stdin). Scan findings gained a **Decode** action
+  that sends the value straight to the Decode tab.
 - **Find in a rendered file**: the Render tab has a search box that highlights
   every (case-insensitive) match, shows a live "current / total" count, and lets
   you step through matches (Enter / Shift+Enter or the up/down buttons, Esc to

@@ -39,6 +39,7 @@ Commands:
   report    Scan and/or diff, then summarise into a report
   db        Inspect a SQLite database file (read-only)
   render    Render a file (XML, JSON, plist, SQLite, text, hex)
+  decode    Decode a string (Base64, ASCII hex, URL percent-encoding)
   doctor    Check for the external device tools (adb, libimobiledevice)
   update    Check whether a newer MobFI release is available
   version   Print the MobFI version
@@ -476,6 +477,38 @@ func runRender(ctx context.Context, core *app.App, args []string) error {
 	fmt.Print(v.Text)
 	if !strings.HasSuffix(v.Text, "\n") {
 		fmt.Println()
+	}
+	return nil
+}
+
+// runDecode decodes a string as Base64, ASCII hex, and URL percent-encoding.
+// The input comes from -input, a positional argument, or stdin.
+func runDecode(_ context.Context, core *app.App, args []string) error {
+	fs := flag.NewFlagSet("decode", flag.ContinueOnError)
+	input := fs.String("input", "", "string to decode (or pass as an argument, or pipe via stdin)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	s := *input
+	if s == "" && fs.NArg() > 0 {
+		s = strings.Join(fs.Args(), " ")
+	}
+	if s == "" {
+		b, _ := io.ReadAll(os.Stdin)
+		s = strings.TrimRight(string(b), "\r\n")
+	}
+	if s == "" {
+		return fmt.Errorf("decode requires a string (argument, -input, or stdin)")
+	}
+	for _, r := range core.Decode(s) {
+		switch {
+		case !r.OK:
+			fmt.Printf("%-9s- %s\n", r.Name+":", r.Error)
+		case r.Binary:
+			fmt.Printf("%-9s(binary) %s\n", r.Name+":", r.Hex)
+		default:
+			fmt.Printf("%-9s%s\n", r.Name+":", r.Value)
+		}
 	}
 	return nil
 }

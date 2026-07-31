@@ -933,13 +933,15 @@ function scanRow(f) {
   });
   const renderBtn = el("button", { textContent: "Render", title: "Open this file in Render with the secret highlighted" });
   renderBtn.addEventListener("click", () => sendToRender(f.path, f.secret));
+  const decodeBtn = el("button", { textContent: "Decode", title: "Send this value to the Decode tab (Base64 / hex / URL)" });
+  decodeBtn.addEventListener("click", () => sendToDecode(f.secret || f.match));
   const statusCell = el("td", {});
   if (f.verified && f.verified !== "unsupported") {
     statusCell.append(el("span", { className: "v-" + f.verified, textContent: f.verified }));
   }
   // Space the action buttons like the Devices tab (append with " " spacers).
   const actions = el("td", { className: "col-actions" }, renderBtn);
-  actions.append(" ", copyBtn);
+  actions.append(" ", decodeBtn, " ", copyBtn);
   return el("tr", {},
     el("td", { textContent: f.rule_id }),
     el("td", { textContent: f.path }),
@@ -1621,6 +1623,85 @@ $("#btn-render-external").addEventListener("click", async () => {
   if (!currentRenderPath) return;
   try {
     await gui().OpenExternally(currentRenderPath);
+  } catch (e) {
+    fail(e);
+  }
+});
+
+// --- Decode (Base64 / ASCII hex / URL string decoder) -----------------------
+let decodeDebounce = null;
+
+async function runDecode() {
+  const box = $("#dec-results");
+  const input = $("#dec-input").value;
+  if (!input.trim()) {
+    box.replaceChildren();
+    return;
+  }
+  let results;
+  try {
+    results = await gui().Decode(input);
+  } catch (e) {
+    fail(e);
+    return;
+  }
+  box.replaceChildren(...(results || []).map(decodeCard));
+}
+
+function decodeCard(r) {
+  const card = el("div", { className: "decode-card" + (r.ok ? "" : " empty") });
+  const head = el("div", { className: "decode-head" });
+  head.append(el("span", { className: "decode-name", textContent: r.name }));
+  if (r.ok && r.binary) head.append(el("span", { className: "decode-badge", textContent: "binary" }));
+  if (r.ok) {
+    const copy = el("button", { className: "decode-copy", textContent: "Copy" });
+    copy.addEventListener("click", async () => {
+      try {
+        await gui().Copy(r.value);
+        toast("copied", true);
+      } catch (e) {
+        fail(e);
+      }
+    });
+    head.append(copy);
+  }
+  card.append(head);
+  if (!r.ok) {
+    card.append(el("div", { className: "decode-error", textContent: r.error || "no result" }));
+    return card;
+  }
+  card.append(el("pre", { className: "decode-value", textContent: r.value }));
+  if (r.binary && r.hex) {
+    card.append(el("pre", { className: "decode-hex", textContent: r.hex }));
+  }
+  return card;
+}
+
+// sendToDecode fills the Decode tab with a string (from a scan finding, a file,
+// or a database cell) and shows its decodings.
+function sendToDecode(text) {
+  showView("decode");
+  $("#dec-input").value = text || "";
+  runDecode();
+  $("#dec-input").focus();
+}
+
+$("#dec-input").addEventListener("input", () => {
+  clearTimeout(decodeDebounce);
+  decodeDebounce = setTimeout(runDecode, 120);
+});
+$("#btn-decode-clear").addEventListener("click", () => {
+  $("#dec-input").value = "";
+  $("#dec-results").replaceChildren();
+  $("#dec-input").focus();
+});
+$("#btn-decode-paste").addEventListener("click", async () => {
+  try {
+    const t = await gui().ClipboardGet();
+    if (t) {
+      $("#dec-input").value = t;
+      runDecode();
+    }
   } catch (e) {
     fail(e);
   }
