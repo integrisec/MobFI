@@ -307,6 +307,21 @@ let lastDevices = []; // most recent DetectDevices result, for form lookups
 let pendingConsoleDeviceID = null; // device to auto-select next Console populate
 let pendingConsoleConnect = false; // auto-connect after that selection
 
+// Surface a partial-detection failure (e.g. iOS Simulator detection erroring)
+// so a missing device is explainable rather than silently absent.
+if (window.runtime && window.runtime.EventsOn) {
+  window.runtime.EventsOn("detect:warning", (msg) => {
+    const el = document.getElementById("detect-warning");
+    if (!el) return;
+    if (msg && String(msg).trim()) {
+      el.textContent = "⚠ Some device detection failed: " + msg;
+      el.classList.remove("hidden");
+    } else {
+      el.classList.add("hidden");
+    }
+  });
+}
+
 function startDevicePolling() {
   refreshDevices();
   if (!devicePollTimer) devicePollTimer = setInterval(refreshDevices, 2500);

@@ -46,12 +46,16 @@ func (d *SimctlDetector) Detect(ctx context.Context) ([]Device, error) {
 	if runtime.GOOS != "darwin" {
 		return nil, nil
 	}
-	out, err := d.exec(ctx, "xcrun", "simctl", "list", "devices", "booted", "--json")
+	// List all devices and filter to Booted in code (parseSimctlDevices). This
+	// avoids relying on the "booted" positional filter, which some simctl
+	// versions handle inconsistently, and lets a partial/odd JSON still yield the
+	// booted entries.
+	out, err := d.exec(ctx, "xcrun", "simctl", "list", "devices", "--json")
 	if err != nil {
 		if simctlUnavailable(err) {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("xcrun simctl failed (is a full Xcode selected via xcode-select?): %w", err)
 	}
 	return parseSimctlDevices(out)
 }

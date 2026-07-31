@@ -99,6 +99,11 @@ heading to the version and date and start a fresh `Unreleased` section.
   Dismissing the banner stays quiet until a newer version appears.
 
 ### Fixed
+- iOS Simulator detection is more robust and no longer fails silently. The
+  detector now lists all simulators and filters to Booted in code (instead of
+  relying on simctl's `booted` positional filter), and when a detector fails the
+  GUI shows a notice in the Devices view with the reason (e.g. `xcrun simctl`
+  erroring) rather than just omitting the device with no explanation.
 - The GUI logo no longer intermittently fails to appear at launch. The bundled
   logo PNGs were oversized (~860 KB, 1448x1086) for their on-screen size, so they
   sometimes hadn't decoded by first paint; they're now downscaled (logo to

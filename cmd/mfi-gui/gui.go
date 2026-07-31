@@ -210,14 +210,18 @@ func (g *GUI) DumpKeys(platform, deviceID, transport, state, backupDir, password
 // DetectDevices lists reachable Android/iOS devices.
 func (g *GUI) DetectDevices() ([]device.Device, error) {
 	devices, err := g.app.DetectDevices(g.ctx)
+	// DetectAll returns partial results plus a joined error when some detectors
+	// fail (e.g. simctl can't reach CoreSimulator). Wails rejects the JS promise
+	// on any non-nil error, which would blank the list and hide the devices the
+	// other detectors DID find. So return what we have, but surface the reason
+	// (event -> a notice in the Devices view) so a missing device is explainable
+	// rather than silently absent.
+	warn := ""
 	if err != nil {
-		// DetectAll returns partial results plus a joined error when some
-		// detectors fail (e.g. simctl on a host without Xcode). Wails rejects
-		// the JS promise on any non-nil error, which would blank the list and
-		// hide the devices the other detectors DID find. Log it and still
-		// return what we have -- a detector failing is not user-actionable here.
+		warn = err.Error()
 		wailsruntime.LogWarningf(g.ctx, "device detection (partial): %v", err)
 	}
+	wailsruntime.EventsEmit(g.ctx, "detect:warning", warn)
 	return devices, nil
 }
 

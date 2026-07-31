@@ -193,6 +193,15 @@ main { padding: 22px; flex: 1; overflow-y: auto; position: relative; }
 
 h2 { margin: 0 0 6px; font-size: 17px; }
 .hint { color: var(--muted); margin: 0 0 16px; }
+.detect-warning {
+  color: var(--danger);
+  font-size: 13px;
+  margin: 0 0 14px;
+  padding: 8px 12px;
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  background: rgba(255, 107, 107, 0.08);
+}
 .row { display: flex; align-items: center; justify-content: space-between; }
 
 .form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin: 14px 0 18px; }
