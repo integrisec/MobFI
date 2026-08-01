@@ -1,0 +1,40 @@
+name: Security
+
+# Supply-chain gates (TODO.md CI-02 / CI-03). The weekly run matters: new
+# advisories and license changes arrive without any commit to this repo.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    name: govulncheck (known-vuln reachability)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          # Scan with the current Go release, not the module floor: stdlib
+          # advisories are keyed to patch releases, so pinning the floor
+          # would bury real dependency findings under already-fixed ones.
+          go-version: stable
+          check-latest: true
+      - run: make vuln
+
+  licenses:
+    name: License policy (go-licenses)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: make licenses

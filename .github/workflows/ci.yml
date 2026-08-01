@@ -30,3 +30,21 @@ jobs:
       - run: go build ./cmd/mfi
       - run: go vet ./cmd/mfi ./internal/...
       - run: go test ./internal/...
+
+  fmt:
+    name: gofmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: make fmt-check
+
+  shell:
+    name: Shell scripts pass shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # shellcheck is preinstalled on the ubuntu runner images.
+      - run: make lint-sh
