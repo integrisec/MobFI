@@ -269,11 +269,32 @@ function Ensure-AppleMobileDeviceSupport {
   }
 }
 
+# Get-BuildLdflags returns the -ldflags value shared by the CLI and GUI
+# builds: commit + date version stamps, plus the release-signing public key
+# from .mobfi-pubkey.b64 when the repo carries one (SIGNING.md section 2).
+# Binaries built without the key refuse to self-apply binary updates once
+# signature verification (MFI-UPD-01) is in the tree.
+function Get-BuildLdflags {
+  $vpkg = 'github.com/integrisec/MobFI/internal/version'
+  $upkg = 'github.com/integrisec/MobFI/internal/selfupdate'
+  $commit = ''
+  if (Have git) { $commit = (& git -C $Root rev-parse --short HEAD 2>$null) }
+  if (-not $commit) { $commit = '' }
+  $date = (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd')
+  $flags = "-X $vpkg.Commit=$commit -X $vpkg.Date=$date"
+  $anchor = Join-Path $Root '.mobfi-pubkey.b64'
+  if (Test-Path $anchor) {
+    $pub = (Get-Content $anchor -Raw) -replace '\s', ''
+    if ($pub) { $flags = "$flags -X $upkg.pubKeyBase64=$pub" }
+  }
+  return $flags
+}
+
 function Build-Cli {
   Step "Building the CLI -> bin\mfi.exe"
   Push-Location $Root
   try {
-    & go build -o bin\mfi.exe .\cmd\mfi
+    & go build -ldflags (Get-BuildLdflags) -o bin\mfi.exe .\cmd\mfi
     Ok "bin\mfi.exe"
     # Put `mfi` on PATH by adding the repo's bin dir (so rebuilds/updates are
     # reflected automatically). Applies to new terminals and this session.
@@ -301,8 +322,9 @@ function Build-Gui {
     $platformArgs = @('-platform', 'windows/amd64')
   }
 
+  $ldflags = Get-BuildLdflags
   Push-Location (Join-Path $Root 'cmd\mfi-gui')
-  try { Invoke-Native { & wails build @platformArgs } } finally { Pop-Location }
+  try { Invoke-Native { & wails build @platformArgs -ldflags $ldflags } } finally { Pop-Location }
   $exe = Get-ChildItem -Path $binDir -Filter *.exe -ErrorAction SilentlyContinue | Select-Object -First 1
   if ($exe) {
     $script:GuiExe = $exe.FullName
