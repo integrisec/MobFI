@@ -1,0 +1,84 @@
+name: Release
+
+# Pushing a tag v* builds the release assets and creates a DRAFT release.
+#
+# The draft is deliberate (SIGNING.md): the checksums signature is produced on
+# the offline signing machine -- the private key never exists in CI -- and the
+# self-updater ignores drafts, so no client can observe the release until the
+# maintainer has attached SHA256SUMS.sig and pressed publish. The unsigned
+# window simply never faces users.
+#
+# Maintainer flow:
+#   git tag v1.2.0 && git push origin v1.2.0
+#   ... this workflow drafts the release with binaries + SHA256SUMS.txt ...
+#   then follow the signing checklist in the run summary.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build assets and draft the release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # A tag push does not trigger ci.yml (it filters on branches), so run
+      # the same gates here: a release must never be cut from a red tree.
+      - run: go build ./cmd/mfi
+      - run: go vet ./cmd/mfi ./internal/...
+      - run: go test ./internal/...
+      - run: make check-ascii
+
+      # dist.sh enforces that the tag, internal/version/version.go and
+      # cmd/mfi-gui/wails.json all agree before anything is built.
+      - name: Build release assets
+        run: scripts/dist.sh --require-version "${GITHUB_REF_NAME#v}"
+
+      # Fails when CHANGELOG.md has no section for this version: the release
+      # checklist requires an operator-facing entry per release.
+      - name: Extract release notes from CHANGELOG.md
+        run: scripts/release-notes.sh "$GITHUB_REF_NAME" > /tmp/notes.md
+
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --draft \
+            --title "MobFI $GITHUB_REF_NAME" \
+            --notes-file /tmp/notes.md \
+            dist/mfi_v*_* dist/SHA256SUMS.txt
+
+      - name: Signing checklist (run summary)
+        run: |
+          {
+            echo "## Draft created -- sign before publishing"
+            echo
+            if [ -f .mobfi-pubkey.b64 ]; then
+              echo "Trust anchor: \`.mobfi-pubkey.b64\` present; the assets embed it."
+            else
+              echo "**No \`.mobfi-pubkey.b64\` in the repo**: these binaries cannot"
+              echo "verify release signatures and will refuse to self-apply binary"
+              echo "updates. Generate it with \`scripts/release-keygen.sh\` (SIGNING.md)."
+            fi
+            echo
+            echo "On the offline signing machine:"
+            echo
+            echo '```sh'
+            echo "gh release download $GITHUB_REF_NAME --pattern SHA256SUMS.txt"
+            echo "scripts/release-sign.sh -k <private-key> SHA256SUMS.txt"
+            echo "scripts/release-verify.sh SHA256SUMS.txt SHA256SUMS.sig"
+            echo "gh release upload $GITHUB_REF_NAME SHA256SUMS.sig"
+            echo '```'
+            echo
+            echo "Then publish the draft. The self-updater only consults the latest"
+            echo "*published* release, so publishing is the go-live switch."
+          } >> "$GITHUB_STEP_SUMMARY"

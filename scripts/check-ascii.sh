@@ -9,7 +9,7 @@
 # the bug, so keep .ps1 files pure ASCII to stay encoding-independent.
 set -eu
 
-root="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
 
 # Nothing to check?
 if [ -z "$(find "$root" -name '*.ps1' -not -path '*/.git/*' | head -n1)" ]; then
@@ -19,6 +19,7 @@ fi
 
 # LC_ALL=C makes perl treat input as raw bytes; close(ARGV) resets $. per file
 # so line numbers are correct across multiple files.
+# shellcheck disable=SC2016  # $ARGV and $. are Perl variables, not shell
 bad="$(
 	find "$root" -name '*.ps1' -not -path '*/.git/*' -print0 |
 		LC_ALL=C xargs -0 perl -ne 'print "$ARGV:$.: $_" if /[^\x00-\x7F]/; close ARGV if eof'

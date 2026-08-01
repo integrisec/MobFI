@@ -208,9 +208,28 @@ ensure_runtime_tools() {
 }
 
 # --- build -------------------------------------------------------------------
+# build_ldflags echoes the -ldflags value shared by the CLI and GUI builds:
+# commit + date version stamps, plus the release-signing public key from
+# .mobfi-pubkey.b64 when the repo carries one (SIGNING.md section 2). Binaries
+# built without the key refuse to self-apply binary updates once signature
+# verification (MFI-UPD-01) is in the tree.
+build_ldflags() {
+  local vpkg="github.com/integrisec/MobFI/internal/version"
+  local upkg="github.com/integrisec/MobFI/internal/selfupdate"
+  local commit date flags pubkey
+  commit="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || true)"
+  date="$(date -u +%Y-%m-%d)"
+  flags="-X ${vpkg}.Commit=${commit} -X ${vpkg}.Date=${date}"
+  if [ -f "$ROOT/.mobfi-pubkey.b64" ]; then
+    pubkey="$(tr -d ' \n\r\t' < "$ROOT/.mobfi-pubkey.b64")"
+    [ -n "$pubkey" ] && flags="${flags} -X ${upkg}.pubKeyBase64=${pubkey}"
+  fi
+  printf '%s' "$flags"
+}
+
 build_cli() {
   step "Building the CLI -> bin/mfi"
-  ( cd "$ROOT" && go build -o bin/mfi ./cmd/mfi )
+  ( cd "$ROOT" && go build -ldflags "$(build_ldflags)" -o bin/mfi ./cmd/mfi )
   ok "bin/mfi"
   link_cli
 }
@@ -271,8 +290,8 @@ build_gui() {
 
   local tags; tags="$(wails_tags)"
   [ -n "$tags" ] && ok "using webkit2gtk-4.1 (webkit2_41 build tag)"
-  # shellcheck disable=SC2086 -- word-splitting of $tags into flags is intended.
-  ( cd "$ROOT/cmd/mfi-gui" && wails build $tags )
+  # shellcheck disable=SC2086  # word-splitting of $tags into flags is intended
+  ( cd "$ROOT/cmd/mfi-gui" && wails build $tags -ldflags "$(build_ldflags)" )
   case "$OS" in
     Darwin) ok "cmd/mfi-gui/build/bin/MobFI.app"; set_macos_app_path; install_macos_app ;;
     *)      ok "cmd/mfi-gui/build/bin/"; install_linux_desktop_entry ;;
@@ -452,9 +471,9 @@ main() {
     cli) step "Launching the CLI"; ( cd "$ROOT" && exec ./bin/mfi ) ;;
     gui)
       step "Launching the GUI"
+      # shellcheck disable=SC2046,SC2086  # word-splitting of tags into flags is intended
       case "$OS" in
         Darwin) open "${MACOS_APP_DST:-/Applications/MobFI.app}" ;;
-        # shellcheck disable=SC2086 -- word-splitting of tags into flags is intended.
         *)      ( cd "$ROOT/cmd/mfi-gui" && exec wails dev $(wails_tags) ) ;;
       esac
       ;;

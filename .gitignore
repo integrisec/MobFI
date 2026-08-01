@@ -41,3 +41,11 @@ intial_claude_prompt.md
 /reports/
 *.mfi-report.json
 known-secrets*.txt
+
+# Release engineering: build output, and belt-and-braces guards so the
+# release-signing PRIVATE key can never be committed even if someone points
+# scripts/release-keygen.sh --out-dir into the checkout. The committed trust
+# anchor .mobfi-pubkey.b64 (public half only) is NOT ignored on purpose.
+/dist/
+/release-keys/
+mobfi-release*.private
