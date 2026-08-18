@@ -9,6 +9,7 @@
   --accent-2: #2b6fd6;
   --danger: #ff6b6b;
   --ok: #46c98b;
+  --warn: #f5a623;
 }
 
 * { box-sizing: border-box; }
@@ -127,13 +128,13 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   align-items: center;
   gap: 12px;
   padding: 8px 16px;
-  background: rgba(76, 159, 254, 0.12);
-  border-bottom: 1px solid var(--accent);
+  background: rgba(245, 166, 35, 0.16);
+  border-bottom: 1px solid var(--warn);
   color: var(--text);
   font-size: 13px;
 }
 .update-banner .update-msg { flex: 1; }
-.update-banner .update-msg strong { color: var(--accent); }
+.update-banner .update-msg strong { color: var(--warn); }
 .update-banner .update-actions { display: flex; gap: 8px; }
 .update-banner .topbar-action { margin-left: 0; }
 
