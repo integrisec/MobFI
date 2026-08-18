@@ -1464,6 +1464,18 @@ document.addEventListener("keydown", (e) => {
 });
 
 // --- Database ---
+
+// clearDbView resets the Database tab to an empty state: the selected table
+// name, the table-chip list, and any rendered rows. Called when a different
+// database is opened (e.g. from the Render tab's "Open in Database →") so no
+// stale tables or rows from the prior file linger.
+function clearDbView() {
+  $("#db-table").value = "";
+  $("#db-tables").replaceChildren();
+  $("#db-table-out thead").replaceChildren();
+  $("#db-table-out tbody").replaceChildren();
+}
+
 async function loadTables() {
   try {
     const tables = await gui().DBTables($("#db-file").value.trim());
@@ -1546,6 +1558,7 @@ function displayRender(res) {
   if (res.mime === "application/vnd.sqlite3" && currentRenderPath) {
     const openDb = el("button", { className: "primary", textContent: "Open in Database →" });
     openDb.addEventListener("click", () => {
+      clearDbView();
       $("#db-file").value = currentRenderPath;
       showView("db");
       loadTables();
